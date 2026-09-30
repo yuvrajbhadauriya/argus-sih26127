@@ -6,122 +6,164 @@
   "timezone": "+05:30",
   "routes_source": "osrm",
   "stats": {
-    "plates_in_detections": 2577,
-    "vehicles": 2577,
-    "journeys": 3763,
-    "sightings": 7753,
-    "multi_camera_journeys": 2725,
-    "avg_cameras_per_journey": 2.05,
-    "avg_sightings_per_journey": 2.06,
-    "total_distance_km": 41771.2,
+    "plates_in": 2600,
+    "plates_from_detections": 0,
+    "vehicles": 2600,
+    "journeys": 3471,
+    "sightings": 8523,
+    "multi_camera_journeys": 2620,
+    "avg_cameras_per_journey": 2.39,
+    "avg_sightings_per_journey": 2.46,
+    "total_distance_km": 24609.5,
     "hop_speed_kmph": {
-      "mean": 22.3,
-      "p10": 14.3,
-      "p50": 20.6,
-      "p90": 33.1,
+      "mean": 25.8,
+      "p10": 16.3,
+      "p50": 24.2,
+      "p90": 37.8,
       "min": 10.0,
-      "max": 55.0
+      "max": 55.2
     },
     "sightings_per_camera": {
-      "AI-01": 647,
-      "CC-01": 998,
-      "CP-01": 1086,
-      "DK-01": 893,
-      "DW-01": 1103,
-      "IG-01": 763,
-      "KB-01": 1254,
-      "LN-01": 588,
-      "NP-01": 421
+      "AN-01": 1425,
+      "BH-01": 594,
+      "DD-01": 714,
+      "JG-01": 929,
+      "KR-01": 713,
+      "SC-01": 1662,
+      "SN-01": 786,
+      "VP-01": 1700
+    },
+    "plate_variants": {
+      "commercial": 641,
+      "ev": 205,
+      "private": 1754
+    },
+    "plates_by_rto": {
+      "MH02": 432,
+      "MH01": 333,
+      "MH03": 329,
+      "MH04": 313,
+      "MH47": 260,
+      "MH43": 235,
+      "MH48": 148,
+      "MH05": 102,
+      "MH46": 98,
+      "GJ": 62,
+      "BH": 33,
+      "MH15": 30,
+      "KA": 26,
+      "MH14": 24,
+      "MH06": 24,
+      "MH12": 23,
+      "RJ": 21,
+      "MH20": 21,
+      "UP": 19,
+      "DL": 14,
+      "MH08": 14,
+      "KL": 13,
+      "MP": 11,
+      "GA": 10,
+      "TS": 5
     },
     "sightings_per_hour": [
-      171,
-      205,
-      212,
-      216,
-      233,
-      249,
-      306,
-      283,
-      453,
-      482,
-      443,
-      380,
-      352,
-      303,
-      298,
-      255,
-      332,
-      401,
-      444,
-      452,
-      438,
-      376,
-      248,
-      221
+      46,
+      49,
+      44,
+      40,
+      54,
+      106,
+      250,
+      300,
+      687,
+      854,
+      576,
+      360,
+      207,
+      206,
+      252,
+      326,
+      459,
+      683,
+      902,
+      781,
+      544,
+      318,
+      313,
+      166
     ]
   },
   "demo": {
     "watchlist": [
       {
-        "plate_text": "DL 04 RS 9598",
+        "plate_text": "MH 01 CS 0126",
         "vehicle_type": "car",
+        "plate_variant": "private",
         "category": "stolen",
         "priority": "critical",
-        "reason": "Reported stolen from Dwarka Sector 21 (simulated FIR)",
+        "reason": "Reported stolen from Jogeshwari East (simulated FIR, MIDC police station)",
         "cameras": [
-          "AI-01",
-          "DK-01",
-          "DW-01",
-          "LN-01",
-          "NP-01"
+          "AN-01",
+          "BH-01",
+          "DD-01",
+          "JG-01",
+          "KR-01",
+          "SC-01",
+          "SN-01",
+          "VP-01"
         ],
-        "sightings": 10
+        "sightings": 9
       },
       {
-        "plate_text": "DL 08 MN 8636",
+        "plate_text": "MH 02 EG 9588",
         "vehicle_type": "car",
+        "plate_variant": "private",
         "category": "wanted",
         "priority": "high",
-        "reason": "Linked to chain-snatching cases in Old Delhi (simulated)",
+        "reason": "Linked to chain-snatching cases along LBS Marg (simulated)",
         "cameras": [
-          "AI-01",
-          "CC-01",
-          "CP-01",
-          "IG-01",
-          "LN-01",
-          "NP-01"
+          "AN-01",
+          "BH-01",
+          "DD-01",
+          "JG-01",
+          "KR-01",
+          "SC-01",
+          "SN-01",
+          "VP-01"
         ],
-        "sightings": 10
+        "sightings": 11
       },
       {
-        "plate_text": "DL 05 MA 6069",
+        "plate_text": "MH 03 CM 7501",
         "vehicle_type": "car",
+        "plate_variant": "private",
         "category": "flagged",
         "priority": "medium",
-        "reason": "Repeated red-light violations on Ring Road (simulated)",
+        "reason": "Repeated signal-jumping e-challans at Sion Circle (simulated)",
         "cameras": [
-          "CC-01",
-          "CP-01",
-          "DK-01",
-          "DW-01",
-          "KB-01"
+          "AN-01",
+          "JG-01",
+          "KR-01",
+          "SC-01",
+          "SN-01",
+          "VP-01"
         ],
         "sightings": 7
       },
       {
-        "plate_text": "DL 55 UJ 4753",
+        "plate_text": "MH 47 EL 9660",
         "vehicle_type": "car",
+        "plate_variant": "private",
         "category": "missing",
         "priority": "high",
-        "reason": "Vehicle of a missing person report (simulated)",
+        "reason": "Vehicle of a missing person report, Dadar police (simulated)",
         "cameras": [
-          "AI-01",
-          "CP-01",
-          "DK-01",
-          "DW-01",
-          "IG-01",
-          "KB-01",
-          "LN-01"
+          "AN-01",
+          "BH-01",
+          "DD-01",
+          "JG-01",
+          "KR-01",
+          "SC-01",
+          "VP-01"
         ],
         "sightings": 11
       }
@@ -129,81 +171,81 @@
     "anomalies": [
       {
         "kind": "cloned_plate",
-        "plate_text": "DL 33 DV 8622",
-        "description": "DL 33 DV 8622 read at CP-01 and DW-01 3 min apart; 25.7 km by road needs ~51 min at city speeds",
+        "plate_text": "MH 04 AK 4356",
+        "description": "MH 04 AK 4356 read at DD-01 and BH-01 3 min apart; 18.2 km by road needs ~36 min at city speeds",
         "evidence": [
           {
-            "camera_code": "CP-01",
-            "timestamp": "2026-09-29T09:03:48+05:30"
+            "camera_code": "DD-01",
+            "timestamp": "2026-09-29T08:58:12+05:30"
           },
           {
-            "camera_code": "DW-01",
-            "timestamp": "2026-09-29T09:06:52+05:30"
+            "camera_code": "BH-01",
+            "timestamp": "2026-09-29T09:01:16+05:30"
           }
         ],
-        "road_distance_m": 25731,
+        "road_distance_m": 18222,
         "gap_seconds": 184,
-        "implied_speed_kmph": 503.4
+        "implied_speed_kmph": 356.5
       },
       {
         "kind": "circling",
-        "plate_text": "HR 98 CQ 5768",
-        "description": "HR 98 CQ 5768 looped Connaught Place ↔ India Gate 3 times in 45 min with no destination",
+        "plate_text": "MH 05 DN 0114",
+        "description": "MH 05 DN 0114 looped Vile Parle Flyover ↔ Santacruz Airport Approach 3 times in 19 min with no destination",
         "evidence": [
           {
-            "camera_code": "CP-01",
-            "timestamp": "2026-09-29T21:05:41+05:30"
+            "camera_code": "VP-01",
+            "timestamp": "2026-09-29T21:05:39+05:30"
           },
           {
-            "camera_code": "IG-01",
-            "timestamp": "2026-09-29T21:13:56+05:30"
+            "camera_code": "SC-01",
+            "timestamp": "2026-09-29T21:08:19+05:30"
           },
           {
-            "camera_code": "CP-01",
-            "timestamp": "2026-09-29T21:21:51+05:30"
+            "camera_code": "VP-01",
+            "timestamp": "2026-09-29T21:12:27+05:30"
           },
           {
-            "camera_code": "IG-01",
-            "timestamp": "2026-09-29T21:29:31+05:30"
+            "camera_code": "SC-01",
+            "timestamp": "2026-09-29T21:15:14+05:30"
           },
           {
-            "camera_code": "CP-01",
-            "timestamp": "2026-09-29T21:37:10+05:30"
+            "camera_code": "VP-01",
+            "timestamp": "2026-09-29T21:18:51+05:30"
           },
           {
-            "camera_code": "IG-01",
-            "timestamp": "2026-09-29T21:44:06+05:30"
+            "camera_code": "SC-01",
+            "timestamp": "2026-09-29T21:21:36+05:30"
           },
           {
-            "camera_code": "CP-01",
-            "timestamp": "2026-09-29T21:51:25+05:30"
+            "camera_code": "VP-01",
+            "timestamp": "2026-09-29T21:24:57+05:30"
           }
         ],
         "visits": {
-          "CP-01": 4,
-          "IG-01": 3
+          "VP-01": 4,
+          "SC-01": 3
         }
       }
     ],
     "suggested_plates": [
-      "DL 04 RS 9598",
-      "DL 08 MN 8636",
-      "DL 05 MA 6069",
-      "DL 55 UJ 4753",
-      "DL 33 DV 8622",
-      "HR 98 CQ 5768",
-      "MH 54 AY 4610",
-      "WB 49 MZ 1615",
-      "MH 09 FV 2608",
-      "WB 99 IP 7985",
-      "DL 04 VZ 5176",
-      "PB 52 QW 6945",
-      "TN 61 JQ 4881",
-      "HR 29 CY 3164",
-      "WB 77 HG 3751",
-      "PB 19 RW 8469",
-      "DL 80 IT 7386",
-      "HR 45 BP 4985"
+      "MH 01 CS 0126",
+      "MH 02 EG 9588",
+      "MH 03 CM 7501",
+      "MH 47 EL 9660",
+      "MH 04 AK 4356",
+      "MH 05 DN 0114",
+      "MH 03 AH 3145",
+      "MH 47 VX 3951",
+      "MH 14 MX 3861",
+      "MH 04 YP 0674",
+      "MH 02 XZ 2532",
+      "MH 47 W 5612",
+      "MH 04 YN 0591",
+      "RJ 19 KC 0048",
+      "MP 04 KS 7031",
+      "RJ 19 BD 2052",
+      "MH 04 GE 1922",
+      "MH 43 NP 6881"
     ]
   }
 }

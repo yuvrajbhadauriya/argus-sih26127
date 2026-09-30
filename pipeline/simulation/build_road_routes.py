@@ -18,6 +18,12 @@ Each route is simplified with Douglas-Peucker and written to
   ``--via-radius`` metres of, ordered by distance along the route. The
   simulator uses this so a vehicle driving A→B is also seen at those cameras.
 
+Divided roads: a camera over a dual carriageway may set ``road_bearing`` (the
+road axis in degrees) in the config. OSRM then snaps each endpoint once per
+carriageway (``bearings=<axis>,60`` and ``<axis+180>,60``) and the shortest of
+the candidate routes wins, so a vehicle never "U-turns past" a camera just
+because the plain nearest-road snap picked the opposite carriageway.
+
 If the network is unavailable the script falls back to straight lines with
 haversine distance (``"source": "straight-line"``) so the rest of the pipeline
 still works offline.
@@ -72,17 +78,33 @@ def route_key(a: str, b: str) -> str:
     return f"{a}>{b}"
 
 
-def fetch_osrm(a: dict, b: dict, cache_dir: Path, delay_s: float, timeout_s: float) -> Optional[dict]:
+BEARING_RANGE_DEG = 60
+
+
+def snap_bearings(cam: dict) -> List[Optional[int]]:
+    """Candidate travel bearings to snap `cam` with (None = plain nearest-road snap)."""
+    axis = cam.get("road_bearing")
+    if axis is None:
+        return [None]
+    axis = int(round(float(axis))) % 360
+    return [axis, (axis + 180) % 360]
+
+
+def fetch_osrm(a: dict, b: dict, cache_dir: Path, delay_s: float, timeout_s: float,
+               bearing_a: Optional[int] = None, bearing_b: Optional[int] = None) -> Optional[dict]:
     """Return the raw OSRM response for a→b (cached), or None on failure."""
     cache_dir.mkdir(parents=True, exist_ok=True)
-    cache_file = cache_dir / f"{a['camera_code']}__{b['camera_code']}.json"
+    suffix = ""
+    params = "overview=full&geometries=geojson&alternatives=false&steps=false"
+    if bearing_a is not None or bearing_b is not None:
+        suffix = f"__b{'' if bearing_a is None else bearing_a}_{'' if bearing_b is None else bearing_b}"
+        fmt = lambda br: "" if br is None else f"{br},{BEARING_RANGE_DEG}"  # noqa: E731
+        params += f"&bearings={fmt(bearing_a)};{fmt(bearing_b)}"
+    cache_file = cache_dir / f"{a['camera_code']}__{b['camera_code']}{suffix}.json"
     if cache_file.exists():
         return json.loads(cache_file.read_text(encoding="utf-8"))
 
-    url = (
-        f"{OSRM_BASE}/{a['lng']},{a['lat']};{b['lng']},{b['lat']}"
-        "?overview=full&geometries=geojson&alternatives=false&steps=false"
-    )
+    url = f"{OSRM_BASE}/{a['lng']},{a['lat']};{b['lng']},{b['lat']}?{params}"
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     for attempt in range(3):
         try:
@@ -137,7 +159,13 @@ def build_all(cameras: List[dict], cache_dir: Path, offline: bool, tolerance_m: 
         for b in cameras:
             if a is b:
                 continue
-            data = None if offline else fetch_osrm(a, b, cache_dir, delay_s, timeout_s)
+            data = None
+            if not offline:
+                for ba in snap_bearings(a):
+                    for bb in snap_bearings(b):
+                        cand = fetch_osrm(a, b, cache_dir, delay_s, timeout_s, ba, bb)
+                        if cand and (data is None or cand["routes"][0]["distance"] < data["routes"][0]["distance"]):
+                            data = cand
             if data:
                 r = data["routes"][0]
                 coords = [(lat, lng) for lng, lat in r["geometry"]["coordinates"]]

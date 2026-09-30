@@ -1,17 +1,22 @@
 #!/usr/bin/env python3
 """
-Simulate one day of vehicle journeys across the Delhi camera network.
+Simulate one day of vehicle journeys across the Mumbai camera network.
 
-Why: the nine camera clips are stock footage with no real location, and the
-team has no access to live city cameras. To demonstrate the Trajectory
-Reconstruction Engine (SIH26127) we pin each camera to a real Delhi junction
-(see pipeline/camera_config.json) and simulate how the vehicles *actually
-detected in those clips* would be re-sighted as they drive across the city.
+Why: the camera clips are real Mumbai traffic footage (Pexels) but have no
+exact location, and the team has no access to live city cameras. To
+demonstrate the Trajectory Reconstruction Engine (SIH26127) we pin each clip
+to the Mumbai junction it was plausibly shot at (see
+pipeline/camera_config.json) and simulate how vehicles are re-sighted as they
+drive across the city.
 
 Inputs
-  * public/detections/detections_<code>.json – the plates the pipeline read
-    (one plate per tracked vehicle; each plate's source camera is kept in its
-    journey so the video evidence and the trajectory agree)
+  * Plates: by default a synthetic but realistic Mumbai fleet (see
+    ``generate_fleet``: MH01/02/03/47 city RTOs, MH04/05/43/46/48 MMR RTOs, a
+    share of out-of-state and BH-series plates, yellow commercial plates for
+    taxis/buses/trucks and green EV plates). With ``--plates-from DIR`` the
+    plates the ANPR pipeline actually read (``DIR/detections_<code>.json``)
+    seed the fleet first, keeping each plate's source camera so the video
+    evidence and the trajectory agree; synthetic plates top up to --vehicles.
   * public/sim/road_routes.json – road-snapped OSRM routes between cameras
     (build with build_road_routes.py)
 
@@ -19,10 +24,11 @@ Model
   * Every hop between consecutive sightings is a road route with no other
     camera on it: if the A→B route passes camera C the vehicle is seen at C too.
   * Hop duration = OSRM distance / speed, where speed = OSRM free-flow speed x
-    a Delhi time-of-day congestion factor x a vehicle-class factor x noise,
+    a Mumbai time-of-day congestion factor x a vehicle-class factor x noise,
     clamped to 10–55 km/h (morning / evening peaks ~15–22 km/h, nights ~35–45).
   * Trip start times follow commuter peaks for cars/two-wheelers, all-day for
-    buses and mostly night hours for trucks (Delhi no-entry 07:00–23:00).
+    buses and mostly off-peak hours for heavy goods vehicles (Mumbai Traffic
+    Police peak-hour no-entry 07:00–11:00 and 17:00–21:00).
   * Curated demo cases: watchlist plates with long multi-camera journeys, a
     cloned plate (same plate at two far-apart cameras within an impossible
     time) and a vehicle circling the same junctions.
@@ -30,7 +36,8 @@ Model
 Outputs (all deterministic for a given --seed)
   * public/sim/journeys.json – compact journeys; each sighting is
     [camera_code, timestamp (ISO, +05:30), heading, speed_kmph_from_prev,
-     distance_m_from_prev] and the plate is stored once per journey.
+     distance_m_from_prev] and the plate (with its plate_variant: private /
+     commercial / ev) is stored once per journey.
   * public/sim/summary.json  – stats, curated plates and anomaly evidence.
   * --supabase-rows PATH     – optional detections-table rows (never inserted).
 """
@@ -57,7 +64,6 @@ sys.path.insert(0, str(HERE))
 from geo import compass8, haversine_m  # noqa: E402
 
 ROOT = HERE.parents[1]
-DEFAULT_DETECTIONS = ROOT / "public" / "detections"
 DEFAULT_ROUTES = ROOT / "public" / "sim" / "road_routes.json"
 DEFAULT_CONFIG = ROOT / "pipeline" / "camera_config.json"
 DEFAULT_OUT_DIR = ROOT / "public" / "sim"
@@ -68,46 +74,156 @@ SIGHTING_FIELDS = ["camera_code", "timestamp", "heading", "speed_kmph_from_prev"
 MIN_SPEED_KMPH = 10.0
 MAX_SPEED_KMPH = 55.0
 
-# Delhi congestion factor applied to OSRM free-flow speed, per hour of day (IST).
+# Mumbai congestion factor applied to OSRM free-flow speed, per hour of day (IST).
+# WEH / EEH free-flow is high, so Mumbai peaks sit well below Delhi's.
 TOD_FACTOR = [
-    0.82, 0.84, 0.85, 0.85, 0.82, 0.76,   # 00-05  night
-    0.66, 0.52, 0.40, 0.37, 0.42, 0.50,   # 06-11  morning peak 08-10
-    0.52, 0.50, 0.50, 0.48, 0.44, 0.39,   # 12-17
-    0.35, 0.36, 0.42, 0.55, 0.66, 0.76,   # 18-23  evening peak 18-20
+    0.78, 0.80, 0.80, 0.80, 0.77, 0.70,   # 00-05  night
+    0.58, 0.44, 0.33, 0.30, 0.34, 0.42,   # 06-11  morning peak 08-11
+    0.44, 0.42, 0.42, 0.40, 0.36, 0.32,   # 12-17
+    0.29, 0.29, 0.33, 0.44, 0.56, 0.68,   # 18-23  evening peak 18-21
 ]
 VEHICLE_FACTOR = {"car": 1.0, "motorcycle": 1.06, "bus": 0.84, "truck": 0.8, "unknown": 0.95}
 DIRECTION_TO_COMPASS = {"northbound": "N", "southbound": "S", "eastbound": "E", "westbound": "W"}
 
 WATCHLIST_SPECS = [
     # (source camera, category, priority, reason, [(start "HH:MM", [camera plan]), ...])
-    ("DW-01", "stolen", "critical", "Reported stolen from Dwarka Sector 21 (simulated FIR)",
-     [("08:05", ["DW-01", "DK-01", "AI-01", "LN-01", "NP-01"]),
-      ("18:40", ["NP-01", "LN-01", "AI-01", "DK-01", "DW-01"])]),
-    ("CC-01", "wanted", "high", "Linked to chain-snatching cases in Old Delhi (simulated)",
-     [("07:30", ["CC-01", "CP-01", "IG-01", "AI-01", "LN-01"]),
-      ("13:10", ["LN-01", "NP-01"]),
-      ("20:15", ["NP-01", "IG-01", "CC-01"])]),
-    ("DK-01", "flagged", "medium", "Repeated red-light violations on Ring Road (simulated)",
-     [("10:20", ["DK-01", "KB-01", "CC-01"]),
-      ("16:45", ["CC-01", "CP-01", "DK-01", "DW-01"])]),
-    ("LN-01", "missing", "high", "Vehicle of a missing person report (simulated)",
-     [("06:50", ["LN-01", "AI-01", "DK-01", "DW-01"]),
-      ("11:30", ["DW-01", "KB-01", "CP-01", "IG-01"]),
-      ("19:05", ["IG-01", "LN-01"])]),
+    ("JG-01", "stolen", "critical", "Reported stolen from Jogeshwari East (simulated FIR, MIDC police station)",
+     [("08:05", ["JG-01", "AN-01", "VP-01", "SC-01", "DD-01"]),
+      ("18:40", ["DD-01", "SN-01", "KR-01", "BH-01"])]),
+    ("BH-01", "wanted", "high", "Linked to chain-snatching cases along LBS Marg (simulated)",
+     [("07:30", ["BH-01", "KR-01", "SN-01", "DD-01"]),
+      ("13:10", ["DD-01", "SC-01", "VP-01"]),
+      ("20:15", ["VP-01", "AN-01", "JG-01", "BH-01"])]),
+    ("SN-01", "flagged", "medium", "Repeated signal-jumping e-challans at Sion Circle (simulated)",
+     [("10:20", ["SN-01", "KR-01", "SC-01"]),
+      ("16:45", ["SC-01", "VP-01", "AN-01", "JG-01"])]),
+    ("DD-01", "missing", "high", "Vehicle of a missing person report, Dadar police (simulated)",
+     [("06:50", ["DD-01", "SC-01", "VP-01", "AN-01"]),
+      ("11:30", ["AN-01", "KR-01", "BH-01"]),
+      ("19:05", ["BH-01", "JG-01"])]),
 ]
-CLONE_SOURCE = "KB-01"
-CIRCLING_SOURCE = "CP-01"
+# Cloned plate: genuine car Sion → Dadar while a clone with the same plate is
+# read on LBS Marg at Bhandup minutes later.
+CLONE_SOURCE = "SN-01"
+CLONE_GENUINE_PLAN = ["SN-01", "DD-01"]
+CLONE_SUSPECT_PLAN = ["BH-01", "KR-01"]
+CLONE_AT = "DD-01"
+# Circling: looping the Vile Parle flyover ↔ Santacruz (airport approach) late evening.
+CIRCLING_SOURCE = "VP-01"
+CIRCLING_LOOP = ["VP-01", "SC-01", "VP-01", "SC-01", "VP-01", "SC-01", "VP-01"]
 
 
 # ──────────────────────────────────────────────────────────────────────
 # Data loading
 # ──────────────────────────────────────────────────────────────────────
 
+PLATE_VARIANTS = ("private", "commercial", "ev")
+
+
 @dataclass
 class Vehicle:
     plate_text: str
     vehicle_type: str
     source_cameras: List[str]
+    # Plate colour: private (white), commercial (yellow: taxis, buses, goods), ev (green).
+    plate_variant: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.plate_variant:
+            self.plate_variant = "commercial" if self.vehicle_type in ("bus", "truck") else "private"
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Synthetic Mumbai fleet (HSRP plate formats)
+# ──────────────────────────────────────────────────────────────────────
+
+# Mumbai city RTOs, then the wider MMR (Mumbai Metropolitan Region) RTOs.
+MUMBAI_RTOS = {
+    "MH01": 0.14,  # Mumbai (Central) – Tardeo
+    "MH02": 0.20,  # Mumbai (West) – Andheri
+    "MH03": 0.15,  # Mumbai (East) – Wadala
+    "MH47": 0.12,  # Mumbai (North) – Borivali
+    "MH04": 0.14,  # Thane
+    "MH05": 0.05,  # Kalyan
+    "MH43": 0.10,  # Navi Mumbai – Vashi
+    "MH46": 0.04,  # Panvel
+    "MH48": 0.06,  # Vasai-Virar
+}
+# Out-of-state plates commonly seen in Mumbai, with plausible RTO numbers.
+OUT_OF_STATE = {
+    "GJ": ([1, 5, 6, 15, 16, 21, 27], 0.30),
+    "KA": ([1, 2, 3, 4, 5, 51, 53], 0.12),
+    "DL": ([1, 2, 3, 4, 8, 9, 12], 0.10),
+    "RJ": ([14, 19, 27, 45], 0.12),
+    "MP": ([4, 9, 20], 0.08),
+    "UP": ([14, 16, 32, 65], 0.10),
+    "TS": ([7, 8, 9], 0.06),
+    "GA": ([3, 7], 0.06),
+    "KL": ([7, 43], 0.06),
+}
+# Other Maharashtra RTOs (Pune, Nashik, Aurangabad...) seen on Mumbai roads.
+OTHER_MH = ["MH12", "MH14", "MH15", "MH20", "MH06", "MH08"]
+
+# vehicle class → (vehicle_type, weight, commercial?, EV share)
+FLEET_MIX = [
+    ("car", 0.44, False, 0.06),         # private cars
+    ("taxi", 0.12, True, 0.18),         # kaali-peeli taxis and app cabs
+    ("motorcycle", 0.28, False, 0.07),  # two-wheelers
+    ("bus", 0.05, True, 0.30),          # BEST (large e-bus fleet), private & school buses
+    ("truck", 0.11, True, 0.02),        # goods vehicles / tempos
+]
+# Relative traffic volume per camera (WEH carries the most).
+CAMERA_VOLUME = {"JG-01": 1.25, "AN-01": 1.35, "VP-01": 1.35, "SC-01": 1.2,
+                 "DD-01": 0.95, "SN-01": 1.05, "KR-01": 0.8, "BH-01": 0.85}
+SERIES_LETTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ"  # HSRP series skip I and O
+
+
+def _series(rng: random.Random, n: int) -> str:
+    return "".join(rng.choice(SERIES_LETTERS) for _ in range(n))
+
+
+def synth_plate(rng: random.Random, vehicle_class: str) -> str:
+    """One plate in HSRP display format, e.g. 'MH 02 FX 1802', '24 BH 5283 G'."""
+    commercial = vehicle_class in ("taxi", "bus", "truck")
+    r = rng.random()
+    out_of_state = 0.22 if vehicle_class == "truck" else 0.07
+    if not commercial and r < 0.015:  # Bharat series (private, transferable jobs)
+        return f"{rng.choice([21, 22, 23, 24, 25])} BH {rng.randint(1, 9999):04d} {_series(rng, rng.choice([1, 2]))}"
+    if r < out_of_state:
+        states = list(OUT_OF_STATE)
+        st = rng.choices(states, weights=[OUT_OF_STATE[k][1] for k in states])[0]
+        return f"{st} {rng.choice(OUT_OF_STATE[st][0]):02d} {_series(rng, 2)} {rng.randint(1, 9999):04d}"
+    if r < out_of_state + 0.05:
+        rto = rng.choice(OTHER_MH)
+    else:
+        rtos = list(MUMBAI_RTOS)
+        rto = rng.choices(rtos, weights=[MUMBAI_RTOS[k] for k in rtos])[0]
+    # Older kaali-peeli taxis and BEST-era buses often carry single-letter series.
+    letters = 1 if commercial and rng.random() < 0.3 else 2
+    return f"{rto[:2]} {rto[2:]} {_series(rng, letters)} {rng.randint(1, 9999):04d}"
+
+
+def generate_fleet(n: int, codes: Sequence[str], seed: int, taken: Sequence[str] = ()) -> List[Vehicle]:
+    """Deterministic synthetic fleet of `n` distinct plates spread over `codes`."""
+    rng = random.Random(f"fleet:{seed}")
+    seen = {normalize_plate(p) for p in taken}
+    classes = [c[0] for c in FLEET_MIX]
+    cls_w = [c[1] for c in FLEET_MIX]
+    info = {c[0]: c for c in FLEET_MIX}
+    cam_w = [CAMERA_VOLUME.get(c, 1.0) for c in codes]
+    out: List[Vehicle] = []
+    while len(out) < n:
+        cls = rng.choices(classes, weights=cls_w)[0]
+        _, _, commercial, ev_share = info[cls]
+        plate = synth_plate(rng, cls)
+        key = normalize_plate(plate)
+        if key in seen:
+            continue
+        seen.add(key)
+        variant = "ev" if rng.random() < ev_share else ("commercial" if commercial else "private")
+        vtype = "car" if cls == "taxi" else cls
+        out.append(Vehicle(plate, vtype, [rng.choices(list(codes), weights=cam_w)[0]], variant))
+    return out
 
 
 def load_vehicles(detections_dir: Path) -> List[Vehicle]:
@@ -203,6 +319,7 @@ class Journey:
     vehicle_type: str
     sightings: List[Sighting]
     tags: List[str] = field(default_factory=list)
+    plate_variant: str = "private"
 
     @property
     def start(self) -> datetime:
@@ -243,7 +360,7 @@ class Simulator:
         return DIRECTION_TO_COMPASS.get(str(cam.get("direction", "")).lower(), "N")
 
     def drive(self, plate: str, vtype: str, seq: List[str], start: datetime,
-              tags: Optional[List[str]] = None, noise: bool = True) -> Journey:
+              tags: Optional[List[str]] = None, noise: bool = True, variant: str = "") -> Journey:
         t = start
         out: List[Sighting] = []
         for i, code in enumerate(seq):
@@ -257,7 +374,9 @@ class Simulator:
             t = t + timedelta(seconds=secs)
             actual = dist / secs * 3.6
             out.append(Sighting(code, t, self.heading_at(seq, i), round(actual, 1), int(dist)))
-        return Journey(plate, vtype, out, list(tags or []))
+        if not variant:
+            variant = "commercial" if vtype in ("bus", "truck") else "private"
+        return Journey(plate, vtype, out, list(tags or []), variant)
 
     # ── trip generation ──
     def sample_start_hour(self, vtype: str) -> float:
@@ -269,9 +388,12 @@ class Simulator:
                 return self.rng.gauss(18.4, 1.2)
             return self.rng.uniform(6.0, 23.0)
         if vtype == "truck":
-            if r < 0.75:  # Delhi no-entry for heavy goods 07:00-23:00
-                return (23.0 + self.rng.uniform(0.0, 7.5)) % 24
-            return self.rng.uniform(7.0, 22.0)
+            # Mumbai peak-hour no-entry for heavy goods: 07:00-11:00 and 17:00-21:00.
+            if r < 0.55:
+                return (21.0 + self.rng.uniform(0.0, 10.0)) % 24
+            if r < 0.85:
+                return self.rng.uniform(11.0, 17.0)
+            return self.rng.uniform(5.0, 7.0)
         # bus: roughly uniform service day with mild peaks
         if r < 0.25:
             return self.rng.gauss(9.0, 1.2)
@@ -314,7 +436,8 @@ class Simulator:
         journeys: List[Journey] = []
         first_plan = self.random_plan(src)
         for _ in range(5):
-            j = self.drive(v.plate_text, vt, first_plan, self.at(self.sample_start_hour(vt)))
+            j = self.drive(v.plate_text, vt, first_plan, self.at(self.sample_start_hour(vt)),
+                           variant=v.plate_variant)
             if self.fits(j):
                 journeys.append(j)
                 break
@@ -329,7 +452,8 @@ class Simulator:
             else:
                 plan = self.random_plan(self.rng.choice([last.sightings[-1].camera_code, src]))
                 dwell_h = self.rng.uniform(0.5, 4.0)
-            j = self.drive(v.plate_text, vt, plan, last.end + timedelta(hours=dwell_h, seconds=self.rng.randint(0, 900)))
+            j = self.drive(v.plate_text, vt, plan, last.end + timedelta(hours=dwell_h, seconds=self.rng.randint(0, 900)),
+                           variant=v.plate_variant)
             if not self.fits(j):
                 break
             journeys.append(j)
@@ -346,11 +470,16 @@ def pick_plate(vehicles: List[Vehicle], camera: str, taken: set) -> Vehicle:
     def score(v: Vehicle):
         return (
             v.vehicle_type != "car",
-            not v.plate_text.startswith("DL"),
-            not v.plate_text.startswith(("HR", "UP")),
+            v.plate_variant != "private",
+            not v.plate_text.startswith(("MH 01", "MH 02", "MH 03", "MH 47")),
+            not v.plate_text.startswith("MH"),
             v.plate_text,
         )
     cands = [v for v in vehicles if camera in v.source_cameras and v.plate_text not in taken]
+    # Spread the demo plates over RTOs so the cases don't all look alike.
+    rtos = {t.split(" ")[0] + t.split(" ")[1] for t in taken if t.startswith("MH")}
+    fresh = [v for v in cands if v.plate_text.replace(" ", "")[:4] not in rtos]
+    cands = fresh or cands
     if not cands:
         cands = [v for v in vehicles if v.plate_text not in taken]
     if not cands:
@@ -370,27 +499,29 @@ def build_curated(sim: Simulator, vehicles: List[Vehicle]) -> Tuple[List[Journey
         cams: set = set()
         for start, plan in trips:
             j = sim.drive(v.plate_text, v.vehicle_type, net.expand_plan(plan), hhmm(day, start, rng),
-                          tags=["watchlist"])
+                          tags=["watchlist"], variant=v.plate_variant)
             journeys.append(j)
             cams.update(s.camera_code for s in j.sightings)
         watchlist.append({
-            "plate_text": v.plate_text, "vehicle_type": v.vehicle_type, "category": category,
+            "plate_text": v.plate_text, "vehicle_type": v.vehicle_type, "plate_variant": v.plate_variant,
+            "category": category,
             "priority": priority, "reason": reason, "cameras": sorted(cams),
             "sightings": sum(len(j.sightings) for j in journeys if j.plate_text == v.plate_text),
         })
 
     anomalies = []
 
-    # Cloned plate: genuine car on Pusa Road → CP → India Gate, while a clone with
-    # the same plate is read on the Dwarka Expressway minutes later.
+    # Cloned plate: the genuine car is read at one camera while a clone with the
+    # same plate is read far across the city minutes later.
     v = pick_plate(vehicles, CLONE_SOURCE, taken)
     taken.add(v.plate_text)
-    genuine = sim.drive(v.plate_text, v.vehicle_type, net.expand_plan(["KB-01", "CP-01", "IG-01"]),
-                        hhmm(day, "08:50", rng), tags=["anomaly:cloned_plate", "clone:genuine"])
-    at_cp = next(s for s in genuine.sightings if s.camera_code == "CP-01")
-    clone = sim.drive(v.plate_text, v.vehicle_type, net.expand_plan(["DW-01", "DK-01"]),
+    genuine = sim.drive(v.plate_text, v.vehicle_type, net.expand_plan(CLONE_GENUINE_PLAN),
+                        hhmm(day, "08:50", rng), tags=["anomaly:cloned_plate", "clone:genuine"],
+                        variant=v.plate_variant)
+    at_cp = next(s for s in genuine.sightings if s.camera_code == CLONE_AT)
+    clone = sim.drive(v.plate_text, v.vehicle_type, net.expand_plan(CLONE_SUSPECT_PLAN),
                       at_cp.t + timedelta(minutes=3, seconds=rng.randint(0, 40)),
-                      tags=["anomaly:cloned_plate", "clone:suspect"])
+                      tags=["anomaly:cloned_plate", "clone:suspect"], variant=v.plate_variant)
     journeys += [genuine, clone]
     a, b = at_cp, clone.sightings[0]
     road_m = net.route(a.camera_code, b.camera_code)["distance_m"]
@@ -410,19 +541,20 @@ def build_curated(sim: Simulator, vehicles: List[Vehicle]) -> Tuple[List[Journey
         "implied_speed_kmph": round(road_m / max(gap_s, 1) * 3.6, 1),
     })
 
-    # Circling: repeatedly looping Connaught Place ↔ India Gate late evening.
+    # Circling: repeatedly looping the same two junctions late evening.
     v = pick_plate(vehicles, CIRCLING_SOURCE, taken)
     taken.add(v.plate_text)
-    loop = ["CP-01", "IG-01", "CP-01", "IG-01", "CP-01", "IG-01", "CP-01"]
+    loop = CIRCLING_LOOP
     circ = sim.drive(v.plate_text, v.vehicle_type, net.expand_plan(loop), hhmm(day, "21:05", rng),
-                     tags=["anomaly:circling"])
+                     tags=["anomaly:circling"], variant=v.plate_variant)
     journeys.append(circ)
     visits = Counter(s.camera_code for s in circ.sightings)
+    name = lambda c: net.cameras[c].get("camera_name", c)  # noqa: E731
     anomalies.append({
         "kind": "circling",
         "plate_text": v.plate_text,
-        "description": (f"{v.plate_text} looped Connaught Place ↔ India Gate "
-                        f"{visits['CP-01'] - 1} times in "
+        "description": (f"{v.plate_text} looped {name(loop[0])} ↔ {name(loop[1])} "
+                        f"{visits[loop[0]] - 1} times in "
                         f"{int((circ.end - circ.start).total_seconds() // 60)} min with no destination"),
         "evidence": [{"camera_code": s.camera_code, "timestamp": s.t.isoformat()} for s in circ.sightings],
         "visits": dict(visits),
@@ -459,6 +591,7 @@ def journeys_doc(journeys: List[Journey], seed: int, day: datetime, routes_sourc
             "plate_text": j.plate_text,
             "vehicle_type": j.vehicle_type,
             "trip": per_plate[j.plate_text],
+            "plate_variant": j.plate_variant,
             **({"tags": j.tags} if j.tags else {}),
             "sightings": [
                 [s.camera_code, s.t.isoformat(), s.heading, s.speed_kmph_from_prev, s.distance_m_from_prev]
@@ -479,7 +612,7 @@ def journeys_doc(journeys: List[Journey], seed: int, day: datetime, routes_sourc
 
 
 def summarize(journeys: List[Journey], meta: dict, net: Network, seed: int, day: datetime,
-              vehicles_in: int, routes_source: str) -> dict:
+              vehicles_in: int, routes_source: str, plates_from_detections: int = 0) -> dict:
     sightings = [s for j in journeys for s in j.sightings]
     speeds = sorted(s.speed_kmph_from_prev for s in sightings if s.speed_kmph_from_prev is not None)
     per_cam = Counter(s.camera_code for s in sightings)
@@ -488,6 +621,10 @@ def summarize(journeys: List[Journey], meta: dict, net: Network, seed: int, day:
         hourly[s.t.hour] += 1
     distinct = [len({s.camera_code for s in j.sightings}) for j in journeys]
     plates = {j.plate_text for j in journeys}
+    variants = Counter(v for v in {j.plate_text: j.plate_variant for j in journeys}.values())
+    prefixes = Counter()
+    for p in plates:
+        prefixes["BH" if " BH " in p else (p[:5].replace(" ", "") if p.startswith("MH") else p[:2])] += 1
     total_m = sum(s.distance_m_from_prev or 0 for s in sightings)
 
     def pct(p: float) -> Optional[float]:
@@ -506,7 +643,8 @@ def summarize(journeys: List[Journey], meta: dict, net: Network, seed: int, day:
         "timezone": "+05:30",
         "routes_source": routes_source,
         "stats": {
-            "plates_in_detections": vehicles_in,
+            "plates_in": vehicles_in,
+            "plates_from_detections": plates_from_detections,
             "vehicles": len(plates),
             "journeys": len(journeys),
             "sightings": len(sightings),
@@ -518,6 +656,8 @@ def summarize(journeys: List[Journey], meta: dict, net: Network, seed: int, day:
                                "p10": pct(0.10), "p50": pct(0.50), "p90": pct(0.90),
                                "min": speeds[0] if speeds else None, "max": speeds[-1] if speeds else None},
             "sightings_per_camera": dict(sorted(per_cam.items())),
+            "plate_variants": dict(sorted(variants.items())),
+            "plates_by_rto": dict(prefixes.most_common()),
             "sightings_per_hour": hourly,
         },
         "demo": {
@@ -531,8 +671,8 @@ def summarize(journeys: List[Journey], meta: dict, net: Network, seed: int, day:
 
 def supabase_rows(journeys: List[Journey], cameras: Dict[str, dict], seed: int) -> List[dict]:
     """Rows shaped like public.detections (see supabase/migrations). Never inserted here."""
-    ids = {"IG-01": "cam-001", "CP-01": "cam-002", "KB-01": "cam-003", "LN-01": "cam-004", "AI-01": "cam-005",
-           "NP-01": "cam-006", "CC-01": "cam-007", "DW-01": "cam-008", "DK-01": "cam-009"}
+    # Camera ids follow the registry order (cam-001 = first entry of camera_config.json).
+    ids = {code: f"cam-{i:03d}" for i, code in enumerate(cameras, 1)}
     rng = random.Random(seed + 1)
     rows = []
     for j in journeys:
@@ -558,7 +698,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--seed", type=int, default=26127)
     ap.add_argument("--date", default="2026-09-29", help="simulated day (IST), YYYY-MM-DD")
-    ap.add_argument("--detections", type=Path, default=DEFAULT_DETECTIONS)
+    ap.add_argument("--plates-from", "--detections", dest="plates_from", type=Path, default=None,
+                    help="seed the fleet with real ANPR reads from DIR/detections_<code>.json "
+                         "(plates whose camera is not in the registry are ignored)")
+    ap.add_argument("--vehicles", type=int, default=2600,
+                    help="fleet size; synthetic Mumbai plates top up any real reads")
     ap.add_argument("--routes", type=Path, default=DEFAULT_ROUTES)
     ap.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     ap.add_argument("--out-dir", type=Path, default=DEFAULT_OUT_DIR)
@@ -568,13 +712,22 @@ def main(argv: Optional[List[str]] = None) -> int:
     args = ap.parse_args(argv)
 
     day = datetime.strptime(args.date, "%Y-%m-%d").replace(tzinfo=IST)
-    vehicles = load_vehicles(args.detections)
-    if not vehicles:
-        print(f"[!] no plates found in {args.detections}")
-        return 1
     routes_doc = load_routes(args.routes)
     cameras = load_cameras(args.config)
     net = Network(routes_doc, cameras)
+    real: List[Vehicle] = []
+    if args.plates_from is not None:
+        real = load_vehicles(args.plates_from)
+        for v in real:
+            v.source_cameras = [c for c in v.source_cameras if c in cameras]
+        real = [v for v in real if v.source_cameras]
+        if not real:
+            print(f"[!] no plates for registry cameras found in {args.plates_from}")
+            return 1
+        print(f"Seeding {len(real)} plates from real reads in {args.plates_from}")
+    synthetic = generate_fleet(max(0, args.vehicles - len(real)), list(cameras), args.seed,
+                               taken=[v.plate_text for v in real])
+    vehicles = real + synthetic
 
     journeys, meta = simulate(vehicles, net, args.seed, day, args.max_vehicles)
     source = routes_doc.get("source", "unknown")
@@ -582,7 +735,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     jdoc = journeys_doc(journeys, args.seed, day, source)
     (args.out_dir / "journeys.json").write_text(json.dumps(jdoc, separators=(",", ":"), ensure_ascii=False),
                                                 encoding="utf-8")
-    summary = summarize(journeys, meta, net, args.seed, day, len(vehicles), source)
+    summary = summarize(journeys, meta, net, args.seed, day, len(vehicles), source, len(real))
     (args.out_dir / "summary.json").write_text(json.dumps(summary, indent=2, ensure_ascii=False) + "\n",
                                                encoding="utf-8")
     st = summary["stats"]
