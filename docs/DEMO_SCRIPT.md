@@ -116,8 +116,9 @@ then *PM peak*.
 > condition — night, rain, blur, angle. The figures shown are a sample run; the harness points at
 > the trained GPU model's API and regenerates this page."
 
-Then `/cameras`: the night clip (KR-01) and rain clip (BH-01) are the adverse-condition cameras.
-With the model API configured, **Run AI detection on this frame** draws live boxes and plates.
+Then `/accuracy`: the golden set's night-IR, night-visible, dusk/dawn and glare rows are the
+adverse-condition proof (no openly licensed night or rain street clip gave readable plates). On
+`/cameras`, SC-01 (Santacruz) is the densest feed: roadside on the flyover, front plates read live.
 
 ## 6:00 — Production-grade (45 s)
 

@@ -110,18 +110,22 @@ Eight cameras play real Mumbai traffic clips (Pexels; credits in
 `pipeline/data/candidate_clips/SOURCES.md`). Each clip is pinned to the junction it was plausibly
 shot at, on a connected corridor network: the Western Express Highway (Jogeshwari–Andheri–Vile
 Parle–Santacruz), Dadar TT and Sion Circle in the island city, and LBS Marg at Kurla and Bhandup.
-The rain (Bhandup) and night (Kurla) clips are the adverse-condition cameras.
+Every clip was chosen by scoring candidates on the real ANPR model API (good read = OCR confidence
+≥ 75 and grammar-valid); the 30-clip search behind SC-01, KR-01 and BH-01 is in
+`pipeline/data/candidate_clips_v2/SOURCES.md` and `SCORES.md`. No openly licensed night or rain
+clip gave a single good read at 1080p, so all eight feeds are daytime; night accuracy is shown on
+`/accuracy` (golden set: night-IR, night-visible, dusk/dawn and glare crops).
 
 | Code | Camera | Road | Zone |
 | --- | --- | --- | --- |
 | JG-01 | Jogeshwari JVLR Junction | Western Express Highway at the JVLR interchange | Western Suburbs |
 | AN-01 | Andheri Flyover (Gundavali) | WEH at Andheri–Kurla Road | Western Suburbs |
 | VP-01 | Vile Parle Flyover | WEH at Vile Parle Flyover (the sign is visible in the clip) | Western Suburbs |
-| SC-01 | Santacruz Airport Approach | WEH near Airport Terminal 1 (signposted in the clip) | Western Suburbs |
+| SC-01 | Santacruz Airport Approach | WEH near Airport Terminal 1, roadside on the flyover | Western Suburbs |
 | DD-01 | Dadar TT Junction | Dr Babasaheb Ambedkar Road beside Dadar TT Flyover | Island City |
 | SN-01 | Sion Circle | Sion Circle at Sion–Panvel Highway | Island City |
-| KR-01 | Kurla Depot Junction | LBS Marg, Kurla West (night clip) | Eastern Suburbs |
-| BH-01 | Bhandup LBS Marg | LBS Marg, Bhandup West, Metro Line 4 (rain clip) | Eastern Suburbs |
+| KR-01 | Kurla Depot Junction | LBS Marg, Kurla West (flyover approach) | Eastern Suburbs |
+| BH-01 | Bhandup LBS Marg | LBS Marg, Bhandup West, Metro Line 4 (roadside, BEST buses) | Eastern Suburbs |
 
 The registry lives in `pipeline/camera_config.json`, `src/mocks/fixtures/mockCameras.ts` and
 `supabase/migrations/20261001000200_mumbai_camera_network.sql`; `pipeline/tests/test_simulation_registry.py`
