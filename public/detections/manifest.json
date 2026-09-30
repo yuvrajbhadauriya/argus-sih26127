@@ -1,0 +1,4 @@
+{
+  "note": "Camera codes whose current clip has pipeline output in detections_<code>.json. Add a code here after copying the ANPR pipeline output for that camera (pipeline/detect/run_remote_detection.py) into this folder.",
+  "cameras": []
+}

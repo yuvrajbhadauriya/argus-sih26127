@@ -2,23 +2,50 @@
 // Detections Data Access
 // Loads pipeline detection data (bboxes + plates) for a camera.
 // Priority: 1. Supabase `detections` table  2. Static JSON in /public/detections
+//
+// Static JSON only exists for clips the ANPR pipeline has actually been run
+// on: /detections/manifest.json lists those camera codes. Every other camera
+// has no detections (the UI shows "No detections yet — run the AI pipeline")
+// rather than borrowing boxes recorded on a different clip.
 // ═══════════════════════════════════════════════════
 
 import type { Detection } from '@/types';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase/client';
+import { mockCameras } from '@/mocks/fixtures/mockCameras';
 
-/** Legacy CAM-X codes → pipeline camera codes (used for the static JSON files). */
-export const CODE_ALIAS_MAP: Record<string, string> = {
-  'CAM-A': 'IG-01',
-  'CAM-B': 'CP-01',
-  'CAM-C': 'KB-01',
-  'CAM-D': 'DW-01',
-  'CAM-E': 'LN-01',
-  'CAM-F': 'DK-01',
-  'CAM-G': 'AI-01',
-  'CAM-H': 'NP-01',
-  'CAM-I': 'CC-01',
-};
+/** Legacy CAM-X codes → camera codes, in registry order (CAM-A = first camera). Mirrors pipeline/insert_detections.py. */
+export const CODE_ALIAS_MAP: Record<string, string> = Object.fromEntries(
+  mockCameras.map((c, i) => [`CAM-${String.fromCharCode(65 + i)}`, c.code]),
+);
+
+export const DETECTIONS_MANIFEST_URL = '/detections/manifest.json';
+
+/** Shape of /detections/manifest.json (written when pipeline output is published). */
+export interface DetectionsManifest {
+  /** Camera codes with a detections_<code>.json file for their current clip. */
+  cameras: string[];
+}
+
+let manifestPromise: Promise<Set<string>> | null = null;
+
+/** Camera codes that have static detections (memoised; empty when the manifest is missing). */
+export function loadDetectionsManifest(): Promise<Set<string>> {
+  if (!manifestPromise) {
+    manifestPromise = fetch(DETECTIONS_MANIFEST_URL)
+      .then(async (res) => {
+        if (!res.ok) return new Set<string>();
+        const doc = (await res.json()) as Partial<DetectionsManifest>;
+        return new Set(Array.isArray(doc.cameras) ? doc.cameras : []);
+      })
+      .catch(() => new Set<string>());
+  }
+  return manifestPromise;
+}
+
+/** Test hook: forget the memoised manifest. */
+export function resetDetectionsManifest() {
+  manifestPromise = null;
+}
 
 /** Options shared by the detection fetchers. */
 export interface FetchDetectionsOptions {
@@ -59,12 +86,17 @@ export async function fetchDetectionsFromSupabase(
   }));
 }
 
-/** Detections for a camera from the precomputed static file /detections/detections_<code>.json. */
+/**
+ * Detections for a camera from the precomputed static file /detections/detections_<code>.json.
+ * Returns [] (without requesting the file) when the manifest does not list the camera.
+ */
 export async function fetchDetectionsFromStaticJson(
   cameraCode?: string,
   options: FetchDetectionsOptions = {},
 ): Promise<Detection[]> {
-  const effectiveCode = CODE_ALIAS_MAP[cameraCode || ''] || cameraCode || 'IG-01';
+  const effectiveCode = CODE_ALIAS_MAP[cameraCode || ''] || cameraCode || '';
+  if (!effectiveCode || !(await loadDetectionsManifest()).has(effectiveCode)) return [];
+  options.signal?.throwIfAborted();
   try {
     const url = `/detections/detections_${effectiveCode}.json`;
     const res = options.signal ? await fetch(url, { signal: options.signal }) : await fetch(url);

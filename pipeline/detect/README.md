@@ -58,7 +58,7 @@ Shapes accepted today: detection lists under `detections` / `predictions` /
 
 ## Normalised contract
 
-`POST /api/detect` with `{"image_base64": "<jpeg/png>", "camera_code": "IG-01", "frame_timestamp_sec": 12.4}`
+`POST /api/detect` with `{"image_base64": "<jpeg/png>", "camera_code": "VP-01", "frame_timestamp_sec": 12.4}`
 (or multipart with an `image` file) returns:
 
 ```json
@@ -95,9 +95,16 @@ DETECTION_API_KEY=dev-key
 npx vercel dev            # http://localhost:3000, curl http://localhost:3000/api/health
 
 # 4. batch pipeline (needs opencv-python, numpy, python-dotenv)
-python pipeline/detect/run_remote_detection.py --videos_dir ./videos \
+python pipeline/detect/run_remote_detection.py --videos_dir ./pipeline/data/videos_1080p \
     --output_dir ./public/detections --sample_interval 0.2 --conf_threshold 0.4 --workers 4
 ```
+
+`pipeline/camera_config.json` maps each Mumbai camera to its clip (`<slug>.mp4`; the 1080p analysis
+renditions come from `pipeline/tools/prepare_videos.py`). The dashboard overlay draws boxes in the
+640×360 frame space of `useDetectionOverlay.ts`, whatever the source resolution. After a run, list the camera codes
+that now have output in `public/detections/manifest.json` so the dashboard draws them, and re-seed the
+simulation from the real reads:
+`python3 pipeline/simulation/simulate_city_network.py --plates-from public/detections`.
 
 The pipeline exits with code 2 if the API is not configured, unreachable,
 or rejects the key — there is no silent fallback. Extra flags: `--workers`,
