@@ -1,5 +1,5 @@
-// Loads the evaluation outputs published under public/eval/ (static files) and
-// (the live model API's state is the AI engine status, not probed here).
+// Loads the evaluation outputs published under public/eval/ (static files).
+// The live model API's state is the AI engine status (model_status), not probed here.
 
 import { parseEvalResults, parseVideoConsistency, type EvalResults, type VideoConsistency } from './lib/results';
 
