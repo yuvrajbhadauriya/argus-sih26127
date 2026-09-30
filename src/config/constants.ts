@@ -32,5 +32,3 @@ export const MAP_TILE_ATTRIBUTION = 'Tiles &copy; Esri &mdash; Esri, HERE, Garmi
 /** Canvas service detail ends around z16; Leaflet upscales beyond. */
 export const MAP_TILE_MAX_NATIVE_ZOOM = 16;
 export const MAP_TILE_MAX_ZOOM = 19;
-/** @deprecated use MAP_TILES[theme].base (kept until all maps use BaseTileLayer). */
-export const MAP_TILE_URL = MAP_TILES.dark.base;

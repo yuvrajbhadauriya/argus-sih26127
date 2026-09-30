@@ -152,27 +152,6 @@
   --color-overlay-fg: var(--overlay-fg);
   --color-scrim: var(--scrim);
   --shadow-pop: var(--shadow-pop);
-
-  /* LEGACY ALIASES — keep until WP-B/WP-C finish migrating; WP-A removes them in final cleanup */
-  --color-nero-bg: var(--canvas);
-  --color-nero-surface: var(--surface);
-  --color-nero-surface-elevated: var(--surface-2);
-  --color-nero-surface-hover: var(--surface-3);
-  --color-nero-border: var(--line);
-  --color-nero-border-light: var(--line-strong);
-  --color-nero-text-primary: var(--fg);
-  --color-nero-text-secondary: var(--fg-muted);
-  --color-nero-text-muted: var(--fg-subtle);
-  --color-nero-accent: var(--primary);
-  --color-nero-accent-hover: var(--primary-solid-hover);
-  --color-nero-cyan: var(--info);
-  --color-nero-online: var(--success);
-  --color-nero-offline: var(--danger);
-  --color-nero-warning: var(--warning);
-  --color-nero-priority-low: var(--sev-low);
-  --color-nero-priority-medium: var(--sev-medium);
-  --color-nero-priority-high: var(--sev-high);
-  --color-nero-priority-critical: var(--sev-critical);
 }
 
 @theme {
@@ -184,12 +163,6 @@
   --radius-lg: 8px;
   --text-2xs: 0.6875rem;
   --text-2xs--line-height: 1rem;
-
-  /* legacy radius names (WP-B/C) */
-  --radius-nero-sm: 4px;
-  --radius-nero-md: 6px;
-  --radius-nero-lg: 6px;
-  --radius-nero-xl: 8px;
 
   --animate-live-pulse: live-pulse 1.6s ease-in-out infinite;
   --animate-fade-in: fade-in 150ms ease-out;
@@ -239,11 +212,6 @@ body {
 
 .tabular { font-variant-numeric: tabular-nums; }
 
-/* Legacy card class — neutralized (no glass, no hover lift). Remove usages over time. */
-.nero-card {}
-/* Legacy status dots (LiveMapPage) — tokenized, no glow. Remove with final cleanup. */
-.status-dot-online { background-color: var(--success); }
-.status-dot-offline { background-color: var(--danger); }
 
 @keyframes fade-in {
   from { opacity: 0; }

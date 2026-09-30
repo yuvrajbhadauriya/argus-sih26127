@@ -44,7 +44,8 @@ const BASE = process.argv[2] || 'http://localhost:4173';
 const ONLY = process.env.ROUTES?.split(',');
 const ROUTES = [
   { path: '/', ready: '.leaflet-container' },
-  { path: '/cameras', ready: 'text=Camera Feeds', clickFirstCard: true },
+  // The primary feed autoplays on load (no card click needed); the wall tiles do not stream.
+  { path: '/cameras', ready: 'text=Camera Network' },
   { path: '/analytics', ready: 'main h1, main h2' },
 ].filter((r) => !ONLY || ONLY.includes(r.path));
 const PROFILES = {

@@ -76,6 +76,14 @@ export function KpiTile({ label, value, unit, icon, hint, tone = 'default', delt
   return <div className={base}>{body}</div>;
 }
 
-export function KpiStrip({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={cn('grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5', className)}>{children}</div>;
+const STRIP_COLS: Record<3 | 4 | 5 | 6, string> = {
+  3: 'md:grid-cols-3',
+  4: 'md:grid-cols-2 xl:grid-cols-4',
+  5: 'md:grid-cols-3 xl:grid-cols-5',
+  6: 'md:grid-cols-3 xl:grid-cols-6',
+};
+
+/** Grid of KpiTiles. `cols` sets the column count at xl (default 5); className can still override. */
+export function KpiStrip({ children, className, cols = 5 }: { children: ReactNode; className?: string; cols?: 3 | 4 | 5 | 6 }) {
+  return <div className={cn('grid grid-cols-2 gap-3', STRIP_COLS[cols], className)}>{children}</div>;
 }
