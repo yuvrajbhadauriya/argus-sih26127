@@ -1,0 +1,46 @@
+/* Leaflet base styles + NERO dark theme overrides.
+   Imported only by map components, so this CSS ships in the lazily loaded
+   map chunk instead of blocking first paint on every page. */
+@import 'leaflet/dist/leaflet.css';
+
+/* ── Leaflet dark theme overrides ── */
+.leaflet-container {
+  background-color: #000000 !important;
+  font-family: var(--font-sans) !important;
+}
+
+.leaflet-control-zoom a {
+  background-color: rgba(10, 10, 10, 0.9) !important;
+  color: var(--color-nero-text-primary) !important;
+  border-color: var(--color-nero-border) !important;
+  backdrop-filter: blur(8px) !important;
+}
+
+.leaflet-control-zoom a:hover {
+  background-color: var(--color-nero-surface-hover) !important;
+  color: var(--color-nero-accent) !important;
+}
+
+.leaflet-control-attribution {
+  background-color: rgba(0, 0, 0, 0.85) !important;
+  color: var(--color-nero-text-muted) !important;
+  font-size: 10px !important;
+  backdrop-filter: blur(4px);
+}
+
+.leaflet-control-attribution a {
+  color: var(--color-nero-accent) !important;
+}
+
+.leaflet-popup-content-wrapper {
+  background-color: rgba(14, 14, 14, 0.95) !important;
+  color: var(--color-nero-text-primary) !important;
+  border-radius: var(--radius-nero-lg) !important;
+  border: 1px solid var(--color-nero-border-light) !important;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.9), 0 0 20px rgba(255, 255, 255, 0.05) !important;
+  backdrop-filter: blur(12px) !important;
+}
+
+.leaflet-popup-tip {
+  background-color: rgba(14, 14, 14, 0.95) !important;
+}

@@ -1,30 +1,24 @@
 // ═══════════════════════════════════════════════════
 // App — Root component with router setup
-// All routes rendered inside DashboardLayout
+// All routes rendered inside DashboardLayout; pages are code-split
+// (see ./routes.ts) and suspend inside the layout's content area.
 // ═══════════════════════════════════════════════════
 
+import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { DashboardLayout } from '@/shared/layout/DashboardLayout';
-import { LiveMapPage } from '@/features/live-map/pages/LiveMapPage';
-import { CamerasPage } from '@/features/cameras/pages/CamerasPage';
-import { VehiclesPage } from '@/features/vehicles/pages/VehiclesPage';
-import { AlertsPage } from '@/features/alerts/pages/AlertsPage';
-import { AnalyticsPage } from '@/features/analytics/pages/AnalyticsPage';
-import { AdminPage } from '@/features/admin/pages/AdminPage';
-import { DetectionsPage } from '@/features/detections/pages/DetectionsPage';
+import { routes, prefetchRoutesWhenIdle } from './routes';
 
 export default function App() {
+  useEffect(() => prefetchRoutesWhenIdle(), []);
+
   return (
     <BrowserRouter>
       <Routes>
         <Route element={<DashboardLayout />}>
-          <Route path="/" element={<LiveMapPage />} />
-          <Route path="/cameras" element={<CamerasPage />} />
-          <Route path="/vehicles" element={<VehiclesPage />} />
-          <Route path="/alerts" element={<AlertsPage />} />
-          <Route path="/analytics" element={<AnalyticsPage />} />
-          <Route path="/detections" element={<DetectionsPage />} />
-          <Route path="/admin" element={<AdminPage />} />
+          {routes.map(({ path, page: { Component } }) => (
+            <Route key={path} path={path} element={<Component />} />
+          ))}
         </Route>
       </Routes>
     </BrowserRouter>

@@ -3,6 +3,8 @@
 // ═══════════════════════════════════════════════════
 
 import { TileLayer } from 'react-leaflet';
+// Leaflet CSS lives with the map code so it only loads with the (lazy) map chunks.
+import './leaflet-theme.css';
 import { MAP_TILE_ATTRIBUTION, MAP_TILE_MAX_ZOOM, MAP_TILE_URL } from '@/config/constants';
 
 export function BaseTileLayer() {

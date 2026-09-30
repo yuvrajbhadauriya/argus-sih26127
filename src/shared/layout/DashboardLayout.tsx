@@ -3,7 +3,9 @@
 // Sidebar + TopBar + scrollable content area
 // ═══════════════════════════════════════════════════
 
+import { Suspense } from 'react';
 import { Outlet } from 'react-router-dom';
+import { LoadingState } from '@/shared/ui/LoadingState';
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
 
@@ -20,7 +22,10 @@ export function DashboardLayout() {
 
         {/* Page content */}
         <main className="flex-1 overflow-y-auto p-6">
-          <Outlet />
+          {/* Pages are lazy chunks: shell stays interactive while one loads */}
+          <Suspense fallback={<LoadingState message="Loading module..." />}>
+            <Outlet />
+          </Suspense>
         </main>
       </div>
     </div>

@@ -4,17 +4,22 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#000000" />
     <title>NERO — City Intelligence Dashboard</title>
     <meta name="description" content="NERO: Centralized AI-driven multi-camera ANPR and traffic intelligence dashboard" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-      crossorigin="" />
+    <!-- Warm up third-party origins used right after boot (map tiles, camera videos / Supabase). -->
+    <link rel="preconnect" href="https://server.arcgisonline.com" />
+    <link rel="preconnect" href="https://ngwrbxiaeressvmhfopb.supabase.co" crossorigin />
+    <style>
+      /* Paint the dark shell immediately, before any CSS/JS arrives (no white flash). */
+      html, body { background: #000; color: #fff; margin: 0; }
+      #boot { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+      #boot i { width: 36px; height: 36px; border-radius: 50%; border: 2px solid #1f1f1f; border-top-color: #38bdf8; animation: boot-spin .8s linear infinite; }
+      @keyframes boot-spin { to { transform: rotate(360deg); } }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root"><div id="boot" aria-label="Loading NERO"><i></i></div></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
