@@ -18,7 +18,7 @@ export interface RecordedCall {
 }
 
 const CHAIN_METHODS = [
-  'select', 'eq', 'order', 'limit', 'ilike', 'in', 'update', 'insert', 'single', 'maybeSingle',
+  'select', 'eq', 'order', 'limit', 'ilike', 'in', 'update', 'insert', 'single', 'maybeSingle', 'abortSignal', 'range',
 ];
 
 export function createFakeSupabase() {

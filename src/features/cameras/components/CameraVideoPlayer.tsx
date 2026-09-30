@@ -20,6 +20,7 @@ import { useDetectionOverlay } from '@/features/detections/hooks/useDetectionOve
 import { useCameraDetections } from '@/features/detections/hooks/useCameraDetections';
 import { resolveSupabaseVideoUrl } from '@/features/cameras/api';
 import { useInViewport } from '@/features/cameras/hooks/useInViewport';
+import { LiveDetectPanel } from '@/features/detections/components/LiveDetectPanel';
 
 interface CameraVideoPlayerProps {
   camera: Camera;
@@ -160,6 +161,8 @@ function PlayerInner({
         <span className="font-semibold text-nero-text-primary">{camera.name} ({camera.code})</span>
         <span>Zone: {camera.zone} • Direction: {camera.direction}</span>
       </div>
+
+      {status === 'playing' && <LiveDetectPanel videoRef={videoRef} cameraCode={camera.code} />}
     </div>
   );
 }

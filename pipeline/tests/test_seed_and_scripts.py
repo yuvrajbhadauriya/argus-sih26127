@@ -159,11 +159,8 @@ def test_public_detection_files_are_well_formed():
             assert 0 <= r["confidence"] <= 1
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "BUG legacy_local_model/run_detection.py:432-476 — every committed public/detections/*.json starts with a "
-    "full-frame 640x360 'bus' box (MOG2's first frame is all foreground) and confidences span "
-    "only 0.76–0.98 (the heuristic formula), i.e. the shipped data came from the background-"
-    "subtraction fallback, not YOLOv7. The frontend papers over this with hard-coded filters."))
+# Guards against re-shipping the MOG2 heuristic's full-frame 640x360 boxes
+# (scripts/perf/compact_detections.mjs strips them; the remote-model pipeline never emits them).
 def test_public_detections_have_no_full_frame_boxes():
     for code, dets in _load_public_dets():
         full = [r for r in dets if r["bbox"]["width"] >= 630 and r["bbox"]["height"] >= 350]
