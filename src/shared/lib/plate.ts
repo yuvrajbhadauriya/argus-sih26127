@@ -23,15 +23,8 @@ export function formatPlate(raw: string): string {
   return (raw ?? '').trim().toUpperCase();
 }
 
+/**
+ * Plate colour. Only shown when the data states it (the simulated fleet): it is
+ * never inferred from a vehicle class, which the model does not read reliably.
+ */
 export type PlateVariant = 'private' | 'commercial' | 'ev';
-
-/** Plate colour of a vehicle: its known colour, else derived from the class. */
-export function plateVariantOf(v: { vehicle_type: string; plate_variant?: PlateVariant }): PlateVariant {
-  return v.plate_variant ?? vehicleClassToPlateVariant(v.vehicle_type);
-}
-
-/** Vehicle class -> plate colour: trucks and buses carry commercial (yellow) plates. */
-export function vehicleClassToPlateVariant(t: string): 'private' | 'commercial' {
-  const v = (t ?? '').toLowerCase();
-  return v === 'truck' || v === 'bus' ? 'commercial' : 'private';
-}

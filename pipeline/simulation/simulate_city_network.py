@@ -227,7 +227,12 @@ def generate_fleet(n: int, codes: Sequence[str], seed: int, taken: Sequence[str]
 
 
 def load_vehicles(detections_dir: Path) -> List[Vehicle]:
-    """One vehicle per distinct plate across all detections_<code>.json files."""
+    """
+    One vehicle per distinct plate across all detections_<code>.json files.
+    The model's vehicle class is unreliable on the clips (sedans come out as
+    trucks), so it only drives the simulation (speeds, demo-plate picks) and
+    never the plate colour: real plates stay white.
+    """
     types: Dict[str, Counter] = defaultdict(Counter)
     sources: Dict[str, set] = defaultdict(set)
     for path in sorted(glob.glob(str(Path(detections_dir) / "detections_*.json"))):
@@ -241,7 +246,7 @@ def load_vehicles(detections_dir: Path) -> List[Vehicle]:
             types[plate][r.get("vehicle_type") or "unknown"] += 1
             sources[plate].add(r.get("camera_code") or code)
     return [
-        Vehicle(p, types[p].most_common(1)[0][0], sorted(sources[p]))
+        Vehicle(p, types[p].most_common(1)[0][0], sorted(sources[p]), plate_variant="private")
         for p in sorted(types)
     ]
 

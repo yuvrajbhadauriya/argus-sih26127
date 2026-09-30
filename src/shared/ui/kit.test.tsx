@@ -3,7 +3,7 @@ import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { useState } from 'react';
-import { formatPlate, normalizePlate, vehicleClassToPlateVariant } from '@/shared/lib/plate';
+import { formatPlate, normalizePlate } from '@/shared/lib/plate';
 import { formatIstDate, formatIstTime, istHour } from '@/shared/lib/time';
 import { PlateChip } from './PlateChip';
 import { Modal } from './Modal';
@@ -32,12 +32,6 @@ describe('plate helpers', () => {
 
   it('normalizePlate keeps uppercase alphanumerics only', () => {
     expect(normalizePlate('mh 01-cs.0126')).toBe('MH01CS0126');
-  });
-
-  it('maps trucks and buses to commercial plates', () => {
-    expect(vehicleClassToPlateVariant('truck')).toBe('commercial');
-    expect(vehicleClassToPlateVariant('Bus')).toBe('commercial');
-    expect(vehicleClassToPlateVariant('car')).toBe('private');
   });
 });
 

@@ -1,8 +1,7 @@
 // ═══════════════════════════════════════════════════
 // PlateChip — Indian HSRP number plate. A physical object, so its colours are
 // constant in both themes (see PLATE_COLORS in shared/theme/tokens.ts).
-// Helpers (formatPlate, normalizePlate, vehicleClassToPlateVariant) live in
-// '@/shared/lib/plate'.
+// Helpers (formatPlate, normalizePlate) live in '@/shared/lib/plate'.
 // ═══════════════════════════════════════════════════
 
 import type { CSSProperties } from 'react';
@@ -96,5 +95,5 @@ export function PlateChip({ plate, size = 'sm', variant = 'private', flag = null
 
 // Convenience re-exports so callers can import plate helpers alongside the chip.
 // oxlint-disable-next-line react/only-export-components -- helper re-exports (public API)
-export { formatPlate, normalizePlate, vehicleClassToPlateVariant } from '@/shared/lib/plate';
+export { formatPlate, normalizePlate } from '@/shared/lib/plate';
 export type { PlateVariant } from '@/shared/lib/plate';

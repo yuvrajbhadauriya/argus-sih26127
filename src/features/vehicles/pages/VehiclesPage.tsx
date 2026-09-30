@@ -26,7 +26,7 @@ import type { Trajectory, Vehicle } from '@/types';
 import { searchVehicles, fetchTrajectoryByPlate } from '@/features/vehicles/api';
 import { getPlateSuggestions, type PlateSuggestion } from '@/features/vehicles/sim';
 import { formatDistance, formatDuration, formatIstDate, formatIstHm, formatIstTime, formatSpeed, normalizePlate } from '@/features/vehicles/lib/geo';
-import { formatPlate, plateVariantOf } from '@/shared/lib/plate';
+import { formatPlate } from '@/shared/lib/plate';
 import { Page, PageHeader } from '@/shared/layout/Page';
 import { Panel } from '@/shared/ui/Card';
 import { Badge } from '@/shared/ui/Badge';
@@ -305,9 +305,9 @@ export function VehiclesPage() {
                       onClick={() => selectPlate(v.plate_text)}
                       className="flex w-full items-center justify-between gap-3 px-3 py-1.5 text-left hover:bg-surface-2"
                     >
-                      <PlateChip plate={v.plate_text} size="sm" variant={plateVariantOf(v)} />
+                      <PlateChip plate={v.plate_text} size="sm" variant={v.plate_variant} />
                       <span className="text-xs tabular-nums text-fg-muted">
-                        <span className="capitalize">{v.vehicle_type}</span> · {v.camera_count} camera{v.camera_count === 1 ? '' : 's'} · {v.detection_count} sightings
+                        {v.camera_count} camera{v.camera_count === 1 ? '' : 's'} · {v.detection_count} sightings
                       </span>
                     </button>
                   </li>
@@ -378,9 +378,8 @@ export function VehiclesPage() {
         <div className="flex min-w-0 flex-col gap-4">
           {hasJourney && (
             <Panel title="Target" id="vehicle-target">
-              <PlateChip plate={trajectory!.plate_text} size="lg" variant={plateVariantOf(trajectory!)} flag={plateFlag} />
+              <PlateChip plate={trajectory!.plate_text} size="lg" variant={trajectory!.plate_variant} flag={plateFlag} />
               <dl className="mt-3 divide-y divide-line">
-                <DetailRow label="Class"><span className="capitalize">{trajectory!.vehicle_type}</span></DetailRow>
                 {(chip?.kind === 'watchlist' || anomalies.length > 0) && (
                   <DetailRow label="Status">
                     <span className="inline-flex flex-wrap items-center justify-end gap-1.5">
