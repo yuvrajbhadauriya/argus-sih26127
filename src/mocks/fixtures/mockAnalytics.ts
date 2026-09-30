@@ -48,7 +48,7 @@ export const mockODPairs: ODPair[] = [
 export const mockCorridors: CorridorStats[] = [
   {
     id: 'corr-01',
-    name: 'India Gate ↔ Connaught Place Express',
+    name: 'India Gate – Connaught Place Express',
     from_zone: 'Central Delhi',
     to_zone: 'Central Delhi',
     trajectory_count: 640,
@@ -58,7 +58,7 @@ export const mockCorridors: CorridorStats[] = [
   },
   {
     id: 'corr-02',
-    name: 'Ring Road South Corridor (AIIMS ↔ Lajpat Nagar)',
+    name: 'Ring Road South Corridor (AIIMS – Lajpat Nagar)',
     from_zone: 'South Delhi',
     to_zone: 'South Delhi',
     trajectory_count: 510,
@@ -68,7 +68,7 @@ export const mockCorridors: CorridorStats[] = [
   },
   {
     id: 'corr-03',
-    name: 'West-Central Arterial (Karol Bagh ↔ CP)',
+    name: 'West-Central Arterial (Karol Bagh – CP)',
     from_zone: 'West Delhi',
     to_zone: 'Central Delhi',
     trajectory_count: 430,

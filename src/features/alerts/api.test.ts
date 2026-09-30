@@ -12,7 +12,7 @@ vi.mock('@/lib/supabase/client', async () => {
 });
 
 import { fetchAlerts, acknowledgeAlert, fetchBlacklistEntries } from './api';
-import { mockAlerts, mockBlacklistEntries } from '@/mocks/fixtures/mockAlerts';
+import { mockAlertFeed as mockAlerts, mockBlacklistEntries } from '@/mocks/fixtures/mockAlerts';
 
 const INIT_SQL = readFileSync(resolve(process.cwd(), 'supabase/migrations/20260925_init_schema.sql'), 'utf8');
 function tableColumns(table: string): string[] {

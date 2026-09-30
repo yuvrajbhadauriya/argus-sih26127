@@ -6,9 +6,13 @@
 import type { AlertRecord, BlacklistEntry, AlertPriority, WatchlistCategory } from '@/types';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase/client';
 import { DEFAULT_LOCATION } from '@/config/constants';
-import { mockAlerts, mockBlacklistEntries } from '@/mocks/fixtures/mockAlerts';
+import { mockAlertFeed as mockAlerts, mockBlacklistEntries } from '@/mocks/fixtures/mockAlerts';
 
-/** Fetch all alerts from Supabase or fallback */
+/**
+ * Fetch all alerts from Supabase or fallback. Without Supabase this is the
+ * simulated-network feed: watchlist hits plus route-anomaly alerts
+ * (rows carry the optional TriageAlert extras, see ./types).
+ */
 export async function fetchAlerts(): Promise<AlertRecord[]> {
   if (!isSupabaseConfigured()) {
     return mockAlerts;
