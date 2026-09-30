@@ -29,6 +29,7 @@ ROOT = HERE.parents[1]
 SIM_DIR = ROOT / "public" / "sim"
 CONFIG = ROOT / "pipeline" / "camera_config.json"
 OUT = ROOT / "src" / "mocks" / "fixtures" / "simDemo.generated.ts"
+DETECTIONS = ROOT / "public" / "detections"
 
 LIVE_FEED_SIZE = 8
 READS_PER_CAMERA = 3
@@ -43,7 +44,23 @@ def ts_literal(items: list) -> str:
     return "[\n" + "".join(f"  {json.dumps(x, ensure_ascii=False)},\n" for x in items) + "]"
 
 
-def build(summary: dict, journeys: List[dict], cameras: List[dict], seed: int) -> dict:
+def load_real_reads(detections_dir: Path) -> dict:
+    """camera code -> good ANPR reads on its clip [(plate, confidence 0-1, time_sec)] from events_<code>.json."""
+    out: dict = {}
+    for path in sorted(Path(detections_dir).glob("events_*.json")):
+        doc = json.loads(path.read_text(encoding="utf-8"))
+        reads = [(e["plate_text"], e["plate_confidence"], e["time_sec"])
+                 for e in doc.get("events", []) if e.get("good_read") and e.get("plate_text")]
+        best: dict = {}
+        for plate, conf, t in reads:  # one row per plate, its most confident read
+            if plate not in best or conf > best[plate][1]:
+                best[plate] = (plate, conf, t)
+        out[doc.get("camera_code") or path.stem.split("_", 1)[1]] = sorted(best.values(), key=lambda r: -r[1])
+    return out
+
+
+def build(summary: dict, journeys: List[dict], cameras: List[dict], seed: int,
+          real_reads: Optional[dict] = None) -> dict:
     rng = random.Random(f"fixtures:{seed}")
     names = {c["camera_code"]: c["camera_name"] for c in cameras}
     watch = summary["demo"]["watchlist"]
@@ -142,6 +159,18 @@ def build(summary: dict, journeys: List[dict], cameras: List[dict], seed: int) -
                   and j["plate_text"] not in shown_demo][:1]
         shown_demo.update(j["plate_text"] for j in chosen)
         used.update(j["plate_text"] for j in chosen)
+        # Then plates the ANPR model really read on this camera's clip (with their
+        # real confidence and clip time) when the simulation has them at this camera.
+        real = {}
+        by_plate = {j["plate_text"]: j for j in pool}
+        for plate, conf, t in (real_reads or {}).get(code, []):
+            if len(chosen) >= READS_PER_CAMERA:
+                break
+            j = by_plate.get(plate)
+            if j is not None and plate not in used:
+                chosen.append(j)
+                used.add(plate)
+                real[plate] = (conf, t)
         for j in rng.sample(pool, min(len(pool), 40)):
             if len(chosen) >= READS_PER_CAMERA:
                 break
@@ -149,14 +178,18 @@ def build(summary: dict, journeys: List[dict], cameras: List[dict], seed: int) -
                 chosen.append(j)
                 used.add(j["plate_text"])
         for n, j in enumerate(chosen):
+            conf = round(rng.uniform(0.72, 0.98), 2)
+            frame_sec = round(2.0 + n * 4.5 + rng.uniform(0, 2.5), 1)
+            if j["plate_text"] in real:
+                conf, frame_sec = round(real[j["plate_text"]][0], 2), round(real[j["plate_text"]][1], 1)
             reads.append({
                 "camera_id": f"cam-{idx:03d}",
                 "camera_code": code,
                 "plate_text": j["plate_text"],
                 "vehicle_type": j["vehicle_type"],
                 "plate_variant": j.get("plate_variant", "private"),
-                "confidence": round(rng.uniform(0.72, 0.98), 2),
-                "frame_sec": round(2.0 + n * 4.5 + rng.uniform(0, 2.5), 1),
+                "confidence": conf,
+                "frame_sec": frame_sec,
             })
 
     return {
@@ -197,7 +230,7 @@ export const SIM_ANOMALIES = {ts_literal(d['anomalies'])} as const;
 /** Newest ANPR reads up to {d['feed_now']} (the last watchlist hit), newest first. */
 export const SIM_LIVE_FEED = {ts_literal(d['feed'])} as const;
 
-/** Sample pipeline plate reads per camera (plates really seen at that camera). */
+/** Sample pipeline plate reads per camera (plates really seen at that camera; real ANPR reads of its clip first). */
 export const SIM_CAMERA_READS = {ts_literal(d['reads'])} as const;
 """
 
@@ -207,11 +240,14 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument("--sim-dir", type=Path, default=SIM_DIR)
     ap.add_argument("--config", type=Path, default=CONFIG)
     ap.add_argument("--out", type=Path, default=OUT)
+    ap.add_argument("--detections", type=Path, default=DETECTIONS,
+                    help="public/detections: real good reads per camera (events_<code>.json) seed the camera reads")
     args = ap.parse_args(argv)
     summary = json.loads((args.sim_dir / "summary.json").read_text(encoding="utf-8"))
     journeys = json.loads((args.sim_dir / "journeys.json").read_text(encoding="utf-8"))["journeys"]
     cameras = json.loads(args.config.read_text(encoding="utf-8"))
-    data = build(summary, journeys, cameras, summary.get("seed", 0))
+    real = load_real_reads(args.detections) if args.detections and args.detections.is_dir() else None
+    data = build(summary, journeys, cameras, summary.get("seed", 0), real)
     args.out.write_text(render(data), encoding="utf-8")
     print(f"Wrote {args.out} ({len(data['hits'])} watchlist hits, {len(data['anomalies'])} anomalies, "
           f"{len(data['feed'])} live reads, {len(data['reads'])} camera reads)")

@@ -6,6 +6,10 @@ import { useEffect } from 'react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { DetectionsPage } from './DetectionsPage';
 import { clearCamerasCache } from '@/features/cameras/hooks/useCameras';
+import { SIM_CAMERA_READS } from '@/mocks/fixtures/simDemo.generated';
+
+// A non-demo plate of the detection log (the generated per-camera reads change when re-simulated).
+const LOG_PLATE = SIM_CAMERA_READS[1].plate_text.replace(/\s+/g, '');
 
 let location = '';
 function LocationSpy() {
@@ -63,7 +67,7 @@ describe('DetectionsPage', () => {
   });
 
   it('opens a detail drawer on row click and traces the route', async () => {
-    renderAt('/detections?plate=MH43BM3816');
+    renderAt(`/detections?plate=${LOG_PLATE}`);
     const table = await screen.findByRole('table');
     const row = await waitFor(() => {
       const r = within(table).getAllByRole('row').slice(1)[0];
@@ -74,6 +78,6 @@ describe('DetectionsPage', () => {
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText('Raw OCR text')).toBeInTheDocument();
     await userEvent.click(within(dialog).getByRole('button', { name: /trace route/i }));
-    expect(location).toBe('/vehicles?plate=MH43BM3816');
+    expect(location).toBe(`/vehicles?plate=${LOG_PLATE}`);
   });
 });

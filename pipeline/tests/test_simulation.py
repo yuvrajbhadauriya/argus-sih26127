@@ -368,4 +368,5 @@ class TestCommittedDemo:
         kinds = {a["kind"]: a for a in summary["demo"]["anomalies"]}
         assert kinds["cloned_plate"]["implied_speed_kmph"] > 150
         assert max(kinds["circling"]["visits"].values()) >= 3
-        assert summary["stats"]["plates_from_detections"] == 0
+        # Seeded from the real ANPR reads in public/detections (run_remote_detection.py).
+        assert summary["stats"]["plates_from_detections"] > 0
