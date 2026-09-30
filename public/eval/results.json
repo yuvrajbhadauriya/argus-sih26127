@@ -1,0 +1,635 @@
+{
+  "schema_version": 1,
+  "status": "measured",
+  "note": "measured against the configured model API",
+  "generated_at": "2026-09-30T16:33:34Z",
+  "duration_s": 347.8,
+  "target": {
+    "plate_accuracy": 0.9,
+    "metric": "plate_accuracy",
+    "source": "BEL PS SIH26127 — OCR module > 90% recognition accuracy"
+  },
+  "model": {
+    "engine": "lpu_on_gpu",
+    "model_version": "deim50k+raw35",
+    "api": "live",
+    "health": {
+      "ok": true,
+      "engine": "lpu_on_gpu",
+      "model_version": "deim50k+raw35",
+      "model_loaded": true,
+      "gpu_busy": false
+    },
+    "source": "live ANPR API (/v1/frame)"
+  },
+  "model_card": {
+    "engine": "lpu_on_gpu",
+    "model_version": "deim50k+raw35",
+    "detector": "DEIM (deim50k) — vehicle + plate detection",
+    "ocr": "PARSeq (raw35) — plate text recognition",
+    "hardware": "RTX 5090 (shared GPU)",
+    "reported": [
+      {
+        "metric": "OCR accuracy, bench951",
+        "value": 0.964,
+        "scope": "ocr"
+      },
+      {
+        "metric": "OCR accuracy, golden v1 (1,419 plates)",
+        "value": 0.989,
+        "scope": "ocr"
+      },
+      {
+        "metric": "OCR accuracy, two-row plates",
+        "value": 0.925,
+        "scope": "ocr"
+      },
+      {
+        "metric": "End-to-end, deim50k + ocr_v9 (previous OCR)",
+        "value": 0.818,
+        "scope": "end_to_end"
+      },
+      {
+        "metric": "OCR latency per crop",
+        "value_ms": 17,
+        "scope": "latency"
+      }
+    ],
+    "reported_note": "Reported by the model team on their own benchmarks; not measured by this harness. deim50k+raw35 end-to-end accuracy is what evaluate.py measures."
+  },
+  "config": {
+    "endpoint": "POST /v1/frame",
+    "tiles": "1x1",
+    "scene_tiles": "2x2",
+    "min_conf": "server default",
+    "crop_pad": 1.5,
+    "max_side": 1920,
+    "workers": 2,
+    "normalisation": "upper-case, keep A-Z0-9 only",
+    "lenient": "strict + O->0, I->1",
+    "matching": "one-to-one greedy by edit distance among spatially compatible pairs (no box on either side, IoU >= 0.1 with the predicted plate box, or GT plate centre inside the predicted plate or vehicle box); unmatched GT = miss, unmatched read = false read"
+  },
+  "overall": {
+    "images": 1704,
+    "plates": 1709,
+    "detected": 1630,
+    "exact": 1162,
+    "lenient_exact": 1170,
+    "false_reads": 27,
+    "api_errors": 0,
+    "plate_accuracy": 0.6799,
+    "lenient_accuracy": 0.6846,
+    "ocr_accuracy": 0.7129,
+    "char_accuracy": 0.8927,
+    "detection_recall": 0.9538,
+    "plate_miss_rate": 0.0462,
+    "read_precision": 0.9837,
+    "latency_ms": {
+      "n": 1704,
+      "p50": 278.5,
+      "p95": 546.6,
+      "mean": 332.1
+    },
+    "inference_ms": {
+      "n": 1704,
+      "p50": 49.7,
+      "p95": 71.2,
+      "mean": 46.8
+    }
+  },
+  "per_dataset": [
+    {
+      "id": "datacluster",
+      "name": "DataCluster Labs Indian number plates (sample)",
+      "source_url": "https://huggingface.co/datasets/Dataclusterlabspvtltd/indian-number-plates-dataset",
+      "license": "CC BY-NC-ND 4.0",
+      "kind": "scene",
+      "notes": "Phone photos across India; only images with the number_plate_text attribute are scored.",
+      "images": 20,
+      "plates": 25,
+      "detected": 13,
+      "exact": 6,
+      "lenient_exact": 6,
+      "false_reads": 21,
+      "api_errors": 0,
+      "plate_accuracy": 0.24,
+      "lenient_accuracy": 0.24,
+      "ocr_accuracy": 0.4615,
+      "char_accuracy": 0.4069,
+      "detection_recall": 0.52,
+      "plate_miss_rate": 0.48,
+      "read_precision": 0.3824,
+      "latency_ms": {
+        "n": 20,
+        "p50": 1220.6,
+        "p95": 3187.9,
+        "mean": 1449.5
+      },
+      "inference_ms": {
+        "n": 20,
+        "p50": 139.4,
+        "p95": 228.0,
+        "mean": 130.5
+      }
+    },
+    {
+      "id": "hf-plate-crops",
+      "name": "Indian number plate crops (zenitsu09)",
+      "source_url": "https://huggingface.co/datasets/zenitsu09/indian-number-plate",
+      "license": "not stated (evaluation only)",
+      "kind": "crop",
+      "notes": "Roboflow plate crops with plate_text; augmented duplicates removed.",
+      "images": 1684,
+      "plates": 1684,
+      "detected": 1617,
+      "exact": 1156,
+      "lenient_exact": 1164,
+      "false_reads": 6,
+      "api_errors": 0,
+      "plate_accuracy": 0.6865,
+      "lenient_accuracy": 0.6912,
+      "ocr_accuracy": 0.7149,
+      "char_accuracy": 0.8996,
+      "detection_recall": 0.9602,
+      "plate_miss_rate": 0.0398,
+      "read_precision": 0.9963,
+      "latency_ms": {
+        "n": 1684,
+        "p50": 277.3,
+        "p95": 521.2,
+        "mean": 318.9
+      },
+      "inference_ms": {
+        "n": 1684,
+        "p50": 49.5,
+        "p95": 70.8,
+        "mean": 45.8
+      }
+    }
+  ],
+  "per_condition": [
+    {
+      "condition": "day",
+      "source": "heuristic",
+      "images": 1656,
+      "plates": 1661,
+      "detected": 1587,
+      "exact": 1142,
+      "lenient_exact": 1150,
+      "false_reads": 26,
+      "api_errors": 0,
+      "plate_accuracy": 0.6875,
+      "lenient_accuracy": 0.6924,
+      "ocr_accuracy": 0.7196,
+      "char_accuracy": 0.8959,
+      "detection_recall": 0.9554,
+      "plate_miss_rate": 0.0446,
+      "read_precision": 0.9839,
+      "latency_ms": {
+        "n": 1656,
+        "p50": 278.9,
+        "p95": 545.3,
+        "mean": 332.8
+      },
+      "inference_ms": {
+        "n": 1656,
+        "p50": 49.7,
+        "p95": 71.2,
+        "mean": 46.8
+      }
+    },
+    {
+      "condition": "night",
+      "source": "heuristic",
+      "images": 48,
+      "plates": 48,
+      "detected": 43,
+      "exact": 20,
+      "lenient_exact": 20,
+      "false_reads": 1,
+      "api_errors": 0,
+      "plate_accuracy": 0.4167,
+      "lenient_accuracy": 0.4167,
+      "ocr_accuracy": 0.4651,
+      "char_accuracy": 0.7807,
+      "detection_recall": 0.8958,
+      "plate_miss_rate": 0.1042,
+      "read_precision": 0.9773,
+      "latency_ms": {
+        "n": 48,
+        "p50": 263.4,
+        "p95": 624.3,
+        "mean": 308.8
+      },
+      "inference_ms": {
+        "n": 48,
+        "p50": 49.3,
+        "p95": 71.7,
+        "mean": 46.4
+      }
+    },
+    {
+      "condition": "blur",
+      "source": "heuristic",
+      "images": 42,
+      "plates": 47,
+      "detected": 35,
+      "exact": 18,
+      "lenient_exact": 18,
+      "false_reads": 4,
+      "api_errors": 0,
+      "plate_accuracy": 0.383,
+      "lenient_accuracy": 0.383,
+      "ocr_accuracy": 0.5143,
+      "char_accuracy": 0.6982,
+      "detection_recall": 0.7447,
+      "plate_miss_rate": 0.2553,
+      "read_precision": 0.8974,
+      "latency_ms": {
+        "n": 42,
+        "p50": 432.8,
+        "p95": 984.7,
+        "mean": 487.8
+      },
+      "inference_ms": {
+        "n": 42,
+        "p50": 50.9,
+        "p95": 73.6,
+        "mean": 47.8
+      }
+    },
+    {
+      "condition": "sharp",
+      "source": "heuristic",
+      "images": 1662,
+      "plates": 1662,
+      "detected": 1595,
+      "exact": 1144,
+      "lenient_exact": 1152,
+      "false_reads": 23,
+      "api_errors": 0,
+      "plate_accuracy": 0.6883,
+      "lenient_accuracy": 0.6931,
+      "ocr_accuracy": 0.7172,
+      "char_accuracy": 0.8981,
+      "detection_recall": 0.9597,
+      "plate_miss_rate": 0.0403,
+      "read_precision": 0.9858,
+      "latency_ms": {
+        "n": 1662,
+        "p50": 275.9,
+        "p95": 539.8,
+        "mean": 328.2
+      },
+      "inference_ms": {
+        "n": 1662,
+        "p50": 49.7,
+        "p95": 71.2,
+        "mean": 46.8
+      }
+    },
+    {
+      "condition": "low_res",
+      "source": "heuristic",
+      "images": 371,
+      "plates": 371,
+      "detected": 367,
+      "exact": 271,
+      "lenient_exact": 274,
+      "false_reads": 1,
+      "api_errors": 0,
+      "plate_accuracy": 0.7305,
+      "lenient_accuracy": 0.7385,
+      "ocr_accuracy": 0.7384,
+      "char_accuracy": 0.9475,
+      "detection_recall": 0.9892,
+      "plate_miss_rate": 0.0108,
+      "read_precision": 0.9973,
+      "latency_ms": {
+        "n": 371,
+        "p50": 249.6,
+        "p95": 309.9,
+        "mean": 256.0
+      },
+      "inference_ms": {
+        "n": 371,
+        "p50": 48.6,
+        "p95": 69.1,
+        "mean": 44.0
+      }
+    }
+  ],
+  "confusions": [
+    {
+      "gt": "M",
+      "pred": "1",
+      "count": 74
+    },
+    {
+      "gt": "",
+      "pred": "1",
+      "count": 59
+    },
+    {
+      "gt": "M",
+      "pred": "H",
+      "count": 39
+    },
+    {
+      "gt": "",
+      "pred": "0",
+      "count": 24
+    },
+    {
+      "gt": "H",
+      "pred": "1",
+      "count": 23
+    },
+    {
+      "gt": "M",
+      "pred": "",
+      "count": 21
+    },
+    {
+      "gt": "M",
+      "pred": "W",
+      "count": 20
+    },
+    {
+      "gt": "0",
+      "pred": "Q",
+      "count": 20
+    },
+    {
+      "gt": "T",
+      "pred": "",
+      "count": 14
+    },
+    {
+      "gt": "1",
+      "pred": "L",
+      "count": 12
+    },
+    {
+      "gt": "B",
+      "pred": "8",
+      "count": 12
+    },
+    {
+      "gt": "0",
+      "pred": "D",
+      "count": 12
+    },
+    {
+      "gt": "",
+      "pred": "B",
+      "count": 11
+    },
+    {
+      "gt": "M",
+      "pred": "A",
+      "count": 11
+    },
+    {
+      "gt": "6",
+      "pred": "8",
+      "count": 11
+    },
+    {
+      "gt": "",
+      "pred": "A",
+      "count": 11
+    },
+    {
+      "gt": "O",
+      "pred": "0",
+      "count": 11
+    },
+    {
+      "gt": "T",
+      "pred": "1",
+      "count": 10
+    },
+    {
+      "gt": "",
+      "pred": "9",
+      "count": 10
+    },
+    {
+      "gt": "4",
+      "pred": "1",
+      "count": 9
+    }
+  ],
+  "samples": [
+    {
+      "id": "image_0028",
+      "dataset": "datacluster",
+      "gt": "KL34A465",
+      "pred": null,
+      "correct": false,
+      "lenient_correct": false,
+      "edits": 8,
+      "confidence": null,
+      "conditions": [
+        "blur",
+        "day"
+      ],
+      "thumb": null
+    },
+    {
+      "id": "image_0028",
+      "dataset": "datacluster",
+      "gt": "KL34A465",
+      "pred": null,
+      "correct": false,
+      "lenient_correct": false,
+      "edits": 8,
+      "confidence": null,
+      "conditions": [
+        "blur",
+        "day"
+      ],
+      "thumb": null
+    },
+    {
+      "id": "images/00218",
+      "dataset": "hf-plate-crops",
+      "gt": "MH03AT3856",
+      "pred": "H103AT3856",
+      "correct": false,
+      "lenient_correct": false,
+      "edits": 2,
+      "confidence": 0.234,
+      "conditions": [
+        "day",
+        "sharp"
+      ],
+      "thumb": null
+    },
+    {
+      "id": "images/00461",
+      "dataset": "hf-plate-crops",
+      "gt": "MH01CT9150",
+      "pred": "AD01CT9150",
+      "correct": false,
+      "lenient_correct": false,
+      "edits": 2,
+      "confidence": 0.28,
+      "conditions": [
+        "day",
+        "sharp"
+      ],
+      "thumb": null
+    },
+    {
+      "id": "images/00655",
+      "dataset": "hf-plate-crops",
+      "gt": "MH12SF3212",
+      "pred": "MH12SF322",
+      "correct": false,
+      "lenient_correct": false,
+      "edits": 1,
+      "confidence": 0.723,
+      "conditions": [
+        "night",
+        "sharp"
+      ],
+      "thumb": null
+    },
+    {
+      "id": "images/00893",
+      "dataset": "hf-plate-crops",
+      "gt": "RJ27TC0530",
+      "pred": "ML27TC0530",
+      "correct": false,
+      "lenient_correct": false,
+      "edits": 2,
+      "confidence": 0.21,
+      "conditions": [
+        "day",
+        "low_res",
+        "sharp"
+      ],
+      "thumb": null
+    },
+    {
+      "id": "images/01322",
+      "dataset": "hf-plate-crops",
+      "gt": "HP3SG1539",
+      "pred": "HP38G1539",
+      "correct": false,
+      "lenient_correct": false,
+      "edits": 1,
+      "confidence": 0.807,
+      "conditions": [
+        "low_res",
+        "night",
+        "sharp"
+      ],
+      "thumb": null
+    },
+    {
+      "id": "image_0033",
+      "dataset": "datacluster",
+      "gt": "MP07L7524",
+      "pred": "MP07L7524",
+      "correct": true,
+      "lenient_correct": true,
+      "edits": 0,
+      "confidence": 0.679,
+      "conditions": [
+        "day",
+        "sharp"
+      ],
+      "thumb": null
+    },
+    {
+      "id": "images/00328",
+      "dataset": "hf-plate-crops",
+      "gt": "MH02DN8718",
+      "pred": "MH02DN8718",
+      "correct": true,
+      "lenient_correct": true,
+      "edits": 0,
+      "confidence": 0.932,
+      "conditions": [
+        "day",
+        "sharp"
+      ],
+      "thumb": null
+    },
+    {
+      "id": "images/00668",
+      "dataset": "hf-plate-crops",
+      "gt": "MH04CT3566",
+      "pred": "MH04CT3566",
+      "correct": true,
+      "lenient_correct": true,
+      "edits": 0,
+      "confidence": 0.69,
+      "conditions": [
+        "day",
+        "sharp"
+      ],
+      "thumb": null
+    },
+    {
+      "id": "images/00956",
+      "dataset": "hf-plate-crops",
+      "gt": "KL01CC50",
+      "pred": "KL01CC50",
+      "correct": true,
+      "lenient_correct": true,
+      "edits": 0,
+      "confidence": 0.956,
+      "conditions": [
+        "day",
+        "sharp"
+      ],
+      "thumb": null
+    },
+    {
+      "id": "images/01210",
+      "dataset": "hf-plate-crops",
+      "gt": "CG09JA2359",
+      "pred": "CG09JA2359",
+      "correct": true,
+      "lenient_correct": true,
+      "edits": 0,
+      "confidence": 0.941,
+      "conditions": [
+        "day",
+        "low_res",
+        "sharp"
+      ],
+      "thumb": null
+    },
+    {
+      "id": "images/01448",
+      "dataset": "hf-plate-crops",
+      "gt": "MH12NJ5838",
+      "pred": "MH12NJ5838",
+      "correct": true,
+      "lenient_correct": true,
+      "edits": 0,
+      "confidence": 0.664,
+      "conditions": [
+        "day",
+        "low_res",
+        "sharp"
+      ],
+      "thumb": null
+    }
+  ],
+  "skipped": [
+    {
+      "id": "anpr-benchmark",
+      "reason": "anpr-benchmark: /Users/yuvrajbhadauriya/Argus/pipeline/data/eval/anpr-benchmark does not exist — run `python pipeline/eval/datasets.py download anpr-benchmark`"
+    },
+    {
+      "id": "saisirishan",
+      "reason": "saisirishan: /Users/yuvrajbhadauriya/Argus/pipeline/data/eval/saisirishan missing — see `python pipeline/eval/datasets.py download saisirishan`"
+    }
+  ]
+}

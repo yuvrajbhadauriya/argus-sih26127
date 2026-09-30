@@ -11,6 +11,7 @@ import {
   PanelLeftOpenIcon,
   RouteIcon,
   ScanLineIcon,
+  ScanTextIcon,
   SettingsIcon,
   SirenIcon,
   type LucideIcon,
@@ -45,7 +46,7 @@ const NAV_GROUPS: { heading: string; items: NavItem[] }[] = [
       { path: '/detections', label: 'Detections', Icon: ScanLineIcon },
     ],
   },
-  { heading: 'Intelligence', items: [{ path: '/analytics', label: 'Analytics', Icon: ChartColumnIcon }] },
+  { heading: 'Intelligence', items: [{ path: '/analytics', label: 'Analytics', Icon: ChartColumnIcon }, { path: '/model', label: 'Model Performance', Icon: ScanTextIcon }] },
   { heading: 'System', items: [{ path: '/admin', label: 'Admin', Icon: SettingsIcon }] },
 ];
 

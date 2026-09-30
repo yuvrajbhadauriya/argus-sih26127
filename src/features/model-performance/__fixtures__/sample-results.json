@@ -1,0 +1,400 @@
+{
+  "schema_version": 1,
+  "status": "sample",
+  "note": "replace by running evaluate.py against the trained model",
+  "generated_at": "2026-09-30T15:35:49Z",
+  "duration_s": 0.3,
+  "target": {
+    "plate_accuracy": 0.9,
+    "metric": "plate_accuracy",
+    "source": "BEL PS SIH26127 — OCR module > 90% recognition accuracy"
+  },
+  "model": {
+    "engine": "mock-oracle",
+    "model_version": "mock-oracle-1",
+    "api": "mock",
+    "health": {
+      "ok": true,
+      "engine": "mock-oracle",
+      "model_version": "mock-oracle-1",
+      "model_loaded": true,
+      "gpu_busy": false
+    },
+    "source": "mock-oracle (noisy ground truth)"
+  },
+  "model_card": {
+    "engine": "lpu_on_gpu",
+    "model_version": "deim50k+raw35",
+    "detector": "DEIM (deim50k) — vehicle + plate detection",
+    "ocr": "PARSeq (raw35) — plate text recognition",
+    "hardware": "RTX 5090 (shared GPU)",
+    "reported": [
+      {
+        "metric": "OCR accuracy, bench951",
+        "value": 0.964,
+        "scope": "ocr"
+      },
+      {
+        "metric": "OCR accuracy, golden v1 (1,419 plates)",
+        "value": 0.989,
+        "scope": "ocr"
+      },
+      {
+        "metric": "OCR accuracy, two-row plates",
+        "value": 0.925,
+        "scope": "ocr"
+      },
+      {
+        "metric": "End-to-end, deim50k + ocr_v9 (previous OCR)",
+        "value": 0.818,
+        "scope": "end_to_end"
+      },
+      {
+        "metric": "OCR latency per crop",
+        "value_ms": 17,
+        "scope": "latency"
+      }
+    ],
+    "reported_note": "Reported by the model team on their own benchmarks; not measured by this harness. deim50k+raw35 end-to-end accuracy is what evaluate.py measures."
+  },
+  "config": {
+    "endpoint": "POST /v1/frame",
+    "tiles": "1x1",
+    "scene_tiles": "2x2",
+    "min_conf": "server default",
+    "crop_pad": 0.3,
+    "max_side": 1920,
+    "workers": 1,
+    "normalisation": "upper-case, keep A-Z0-9 only",
+    "lenient": "strict + O->0, I->1",
+    "matching": "one-to-one greedy by edit distance among spatially compatible pairs (no box on either side, IoU >= 0.1 with the predicted plate box, or GT plate centre inside the predicted plate or vehicle box); unmatched GT = miss, unmatched read = false read"
+  },
+  "overall": {
+    "images": 48,
+    "plates": 48,
+    "detected": 47,
+    "exact": 42,
+    "lenient_exact": 42,
+    "false_reads": 0,
+    "api_errors": 0,
+    "plate_accuracy": 0.875,
+    "lenient_accuracy": 0.875,
+    "ocr_accuracy": 0.8936,
+    "char_accuracy": 0.9688,
+    "detection_recall": 0.9792,
+    "plate_miss_rate": 0.0208,
+    "read_precision": 1.0,
+    "latency_ms": {
+      "n": 48,
+      "p50": 0.3,
+      "p95": 0.4,
+      "mean": 0.4
+    },
+    "inference_ms": {
+      "n": 48,
+      "p50": 8.9,
+      "p95": 11.9,
+      "mean": 9.0
+    }
+  },
+  "per_dataset": [
+    {
+      "id": "synthetic",
+      "name": "Synthetic rendered plates (plumbing test)",
+      "source_url": "local",
+      "license": "generated",
+      "kind": "crop",
+      "notes": "Rendered 5x7-font plates for the offline mock run. Not an accuracy benchmark.",
+      "images": 48,
+      "plates": 48,
+      "detected": 47,
+      "exact": 42,
+      "lenient_exact": 42,
+      "false_reads": 0,
+      "api_errors": 0,
+      "plate_accuracy": 0.875,
+      "lenient_accuracy": 0.875,
+      "ocr_accuracy": 0.8936,
+      "char_accuracy": 0.9688,
+      "detection_recall": 0.9792,
+      "plate_miss_rate": 0.0208,
+      "read_precision": 1.0,
+      "latency_ms": {
+        "n": 48,
+        "p50": 0.3,
+        "p95": 0.4,
+        "mean": 0.4
+      },
+      "inference_ms": {
+        "n": 48,
+        "p50": 8.9,
+        "p95": 11.9,
+        "mean": 9.0
+      }
+    }
+  ],
+  "per_condition": [
+    {
+      "condition": "day",
+      "source": "label",
+      "images": 32,
+      "plates": 32,
+      "detected": 32,
+      "exact": 29,
+      "lenient_exact": 29,
+      "false_reads": 0,
+      "api_errors": 0,
+      "plate_accuracy": 0.9062,
+      "lenient_accuracy": 0.9062,
+      "ocr_accuracy": 0.9062,
+      "char_accuracy": 0.9906,
+      "detection_recall": 1.0,
+      "plate_miss_rate": 0.0,
+      "read_precision": 1.0,
+      "latency_ms": {
+        "n": 32,
+        "p50": 0.3,
+        "p95": 0.4,
+        "mean": 0.4
+      },
+      "inference_ms": {
+        "n": 32,
+        "p50": 8.8,
+        "p95": 11.9,
+        "mean": 9.0
+      }
+    },
+    {
+      "condition": "night",
+      "source": "label",
+      "images": 16,
+      "plates": 16,
+      "detected": 15,
+      "exact": 13,
+      "lenient_exact": 13,
+      "false_reads": 0,
+      "api_errors": 0,
+      "plate_accuracy": 0.8125,
+      "lenient_accuracy": 0.8125,
+      "ocr_accuracy": 0.8667,
+      "char_accuracy": 0.925,
+      "detection_recall": 0.9375,
+      "plate_miss_rate": 0.0625,
+      "read_precision": 1.0,
+      "latency_ms": {
+        "n": 16,
+        "p50": 0.3,
+        "p95": 0.4,
+        "mean": 0.3
+      },
+      "inference_ms": {
+        "n": 16,
+        "p50": 9.1,
+        "p95": 11.5,
+        "mean": 9.1
+      }
+    },
+    {
+      "condition": "sharp",
+      "source": "heuristic",
+      "images": 48,
+      "plates": 48,
+      "detected": 47,
+      "exact": 42,
+      "lenient_exact": 42,
+      "false_reads": 0,
+      "api_errors": 0,
+      "plate_accuracy": 0.875,
+      "lenient_accuracy": 0.875,
+      "ocr_accuracy": 0.8936,
+      "char_accuracy": 0.9688,
+      "detection_recall": 0.9792,
+      "plate_miss_rate": 0.0208,
+      "read_precision": 1.0,
+      "latency_ms": {
+        "n": 48,
+        "p50": 0.3,
+        "p95": 0.4,
+        "mean": 0.4
+      },
+      "inference_ms": {
+        "n": 48,
+        "p50": 8.9,
+        "p95": 11.9,
+        "mean": 9.0
+      }
+    },
+    {
+      "condition": "low_res",
+      "source": "label",
+      "images": 9,
+      "plates": 9,
+      "detected": 8,
+      "exact": 6,
+      "lenient_exact": 6,
+      "false_reads": 0,
+      "api_errors": 0,
+      "plate_accuracy": 0.6667,
+      "lenient_accuracy": 0.6667,
+      "ocr_accuracy": 0.75,
+      "char_accuracy": 0.8667,
+      "detection_recall": 0.8889,
+      "plate_miss_rate": 0.1111,
+      "read_precision": 1.0,
+      "latency_ms": {
+        "n": 9,
+        "p50": 0.3,
+        "p95": 0.4,
+        "mean": 0.3
+      },
+      "inference_ms": {
+        "n": 9,
+        "p50": 9.8,
+        "p95": 11.6,
+        "mean": 9.4
+      }
+    }
+  ],
+  "confusions": [
+    {
+      "gt": "6",
+      "pred": "G",
+      "count": 2
+    },
+    {
+      "gt": "2",
+      "pred": "Z",
+      "count": 2
+    },
+    {
+      "gt": "G",
+      "pred": "6",
+      "count": 1
+    }
+  ],
+  "samples": [
+    {
+      "id": "syn_005",
+      "dataset": "synthetic",
+      "gt": "MH36WG2364",
+      "pred": "MH36W62364",
+      "correct": false,
+      "lenient_correct": false,
+      "edits": 1,
+      "confidence": 0.981,
+      "conditions": [
+        "night",
+        "sharp"
+      ],
+      "thumb": "/eval/samples/00_syn-005.jpg"
+    },
+    {
+      "id": "syn_009",
+      "dataset": "synthetic",
+      "gt": "UP44NU7629",
+      "pred": "UP44NU7G29",
+      "correct": false,
+      "lenient_correct": false,
+      "edits": 1,
+      "confidence": 0.901,
+      "conditions": [
+        "day",
+        "low_res",
+        "sharp"
+      ],
+      "thumb": "/eval/samples/01_syn-009.jpg"
+    },
+    {
+      "id": "syn_014",
+      "dataset": "synthetic",
+      "gt": "TN03ZB9144",
+      "pred": null,
+      "correct": false,
+      "lenient_correct": false,
+      "edits": 10,
+      "confidence": null,
+      "conditions": [
+        "low_res",
+        "night",
+        "sharp"
+      ],
+      "thumb": "/eval/samples/02_syn-014.jpg"
+    },
+    {
+      "id": "syn_037",
+      "dataset": "synthetic",
+      "gt": "RJ02EY5927",
+      "pred": "RJ02EY59Z7",
+      "correct": false,
+      "lenient_correct": false,
+      "edits": 1,
+      "confidence": 0.807,
+      "conditions": [
+        "day",
+        "sharp"
+      ],
+      "thumb": "/eval/samples/03_syn-037.jpg"
+    },
+    {
+      "id": "syn_000",
+      "dataset": "synthetic",
+      "gt": "GJ10KB8780",
+      "pred": "GJ10KB8780",
+      "correct": true,
+      "lenient_correct": true,
+      "edits": 0,
+      "confidence": 0.877,
+      "conditions": [
+        "day",
+        "sharp"
+      ],
+      "thumb": "/eval/samples/04_syn-000.jpg"
+    },
+    {
+      "id": "syn_012",
+      "dataset": "synthetic",
+      "gt": "UP19RB8388",
+      "pred": "UP19RB8388",
+      "correct": true,
+      "lenient_correct": true,
+      "edits": 0,
+      "confidence": 0.77,
+      "conditions": [
+        "day",
+        "sharp"
+      ],
+      "thumb": "/eval/samples/05_syn-012.jpg"
+    },
+    {
+      "id": "syn_023",
+      "dataset": "synthetic",
+      "gt": "RJ18TZ6234",
+      "pred": "RJ18TZ6234",
+      "correct": true,
+      "lenient_correct": true,
+      "edits": 0,
+      "confidence": 0.903,
+      "conditions": [
+        "night",
+        "sharp"
+      ],
+      "thumb": "/eval/samples/06_syn-023.jpg"
+    },
+    {
+      "id": "syn_033",
+      "dataset": "synthetic",
+      "gt": "MH14RD4133",
+      "pred": "MH14RD4133",
+      "correct": true,
+      "lenient_correct": true,
+      "edits": 0,
+      "confidence": 0.731,
+      "conditions": [
+        "day",
+        "sharp"
+      ],
+      "thumb": "/eval/samples/07_syn-033.jpg"
+    }
+  ],
+  "skipped": []
+}

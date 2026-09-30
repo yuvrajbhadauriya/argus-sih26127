@@ -54,7 +54,7 @@ describe('route smoke tests (mock data mode)', () => {
 
 describe('lazy route table (code-split pages)', () => {
   it('covers every sidebar route', () => {
-    expect(appRoutes.map((r) => r.path)).toEqual(['/', '/cameras', '/vehicles', '/alerts', '/analytics', '/detections', '/admin']);
+    expect(appRoutes.map((r) => r.path)).toEqual(['/', '/cameras', '/vehicles', '/alerts', '/analytics', '/model', '/detections', '/admin']);
   });
 
   it.each(appRoutes.map((r) => [r.path, r] as const))('lazy-loads and renders %s inside the layout', async (path, r) => {

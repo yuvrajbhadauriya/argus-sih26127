@@ -1,0 +1,429 @@
+{
+  "schema_version": 1,
+  "status": "measured",
+  "note": "measured against the configured model API",
+  "generated_at": "2026-09-30T16:05:46Z",
+  "duration_s": 441.3,
+  "metric": "per-track plate-read stability (reads agreeing with the track's majority plate); label-free proxy",
+  "model": {
+    "engine": "lpu_on_gpu",
+    "model_version": "deim50k+raw35",
+    "api": "live"
+  },
+  "params": {
+    "endpoint": "POST /v1/frame",
+    "tiles": "2x3",
+    "track_on": "plate",
+    "sample_interval": 0.2,
+    "min_reads": 3,
+    "max_frames": 40,
+    "stable_at": 0.8,
+    "conf_threshold": 0.3
+  },
+  "overall": {
+    "tracks_total": 177,
+    "tracks_scored": 65,
+    "reads_scored": 472,
+    "mean_stability": 0.2454,
+    "read_weighted_stability": 0.2119,
+    "lenient_mean_stability": 0.2454,
+    "stable_track_share": 0.0154,
+    "median_distinct_reads": 5.0,
+    "frames": 320,
+    "cameras": 8
+  },
+  "per_camera": [
+    {
+      "camera_code": "JG-01",
+      "camera_name": "Jogeshwari JVLR Junction",
+      "video": "mumbai_overhead-jam-6lane_pexels31046764.mp4",
+      "frames": 40,
+      "detections": 126,
+      "api_errors": 0,
+      "latency_p95_ms": 1323.665,
+      "tracks_total": 24,
+      "tracks_scored": 14,
+      "reads_scored": 110,
+      "mean_stability": 0.2474,
+      "read_weighted_stability": 0.2455,
+      "lenient_mean_stability": 0.2474,
+      "stable_track_share": 0.0,
+      "median_distinct_reads": 6.0,
+      "least_stable_tracks": [
+        {
+          "track": "plt_0009",
+          "reads": 15,
+          "majority_plate": "C1152",
+          "agree": 1,
+          "stability": 0.0667,
+          "lenient_stability": 0.0667,
+          "distinct_reads": 15
+        },
+        {
+          "track": "plt_0007",
+          "reads": 11,
+          "majority_plate": "MH01ER5731",
+          "agree": 1,
+          "stability": 0.0909,
+          "lenient_stability": 0.0909,
+          "distinct_reads": 11
+        },
+        {
+          "track": "plt_0001",
+          "reads": 10,
+          "majority_plate": "1121D11508",
+          "agree": 1,
+          "stability": 0.1,
+          "lenient_stability": 0.1,
+          "distinct_reads": 10
+        },
+        {
+          "track": "plt_0011",
+          "reads": 7,
+          "majority_plate": "MR32F14411",
+          "agree": 1,
+          "stability": 0.1429,
+          "lenient_stability": 0.1429,
+          "distinct_reads": 7
+        },
+        {
+          "track": "plt_0014",
+          "reads": 7,
+          "majority_plate": "MH0ZF11882",
+          "agree": 1,
+          "stability": 0.1429,
+          "lenient_stability": 0.1429,
+          "distinct_reads": 7
+        }
+      ],
+      "video_events": null
+    },
+    {
+      "camera_code": "AN-01",
+      "camera_name": "Andheri Flyover (Gundavali)",
+      "video": "mumbai_overhead-flyover-receding_pexels31048580.mp4",
+      "frames": 40,
+      "detections": 98,
+      "api_errors": 0,
+      "latency_p95_ms": 1430.2149999999986,
+      "tracks_total": 44,
+      "tracks_scored": 12,
+      "reads_scored": 62,
+      "mean_stability": 0.2127,
+      "read_weighted_stability": 0.1935,
+      "lenient_mean_stability": 0.2127,
+      "stable_track_share": 0.0,
+      "median_distinct_reads": 4.5,
+      "least_stable_tracks": [
+        {
+          "track": "plt_0030",
+          "reads": 9,
+          "majority_plate": "HR1716413",
+          "agree": 1,
+          "stability": 0.1111,
+          "lenient_stability": 0.1111,
+          "distinct_reads": 9
+        },
+        {
+          "track": "plt_0029",
+          "reads": 8,
+          "majority_plate": "M111F25111",
+          "agree": 1,
+          "stability": 0.125,
+          "lenient_stability": 0.125,
+          "distinct_reads": 8
+        },
+        {
+          "track": "plt_0010",
+          "reads": 6,
+          "majority_plate": "MA11ET8121",
+          "agree": 1,
+          "stability": 0.1667,
+          "lenient_stability": 0.1667,
+          "distinct_reads": 6
+        },
+        {
+          "track": "plt_0035",
+          "reads": 6,
+          "majority_plate": "MB43162293",
+          "agree": 1,
+          "stability": 0.1667,
+          "lenient_stability": 0.1667,
+          "distinct_reads": 6
+        },
+        {
+          "track": "plt_0001",
+          "reads": 5,
+          "majority_plate": "MR50LT151",
+          "agree": 1,
+          "stability": 0.2,
+          "lenient_stability": 0.2,
+          "distinct_reads": 5
+        }
+      ],
+      "video_events": null
+    },
+    {
+      "camera_code": "VP-01",
+      "camera_name": "Vile Parle Flyover",
+      "video": "mumbai_overhead-dense-jam-plates_pexels31048534.mp4",
+      "frames": 40,
+      "detections": 138,
+      "api_errors": 0,
+      "latency_p95_ms": 1495.2949999999992,
+      "tracks_total": 22,
+      "tracks_scored": 11,
+      "reads_scored": 124,
+      "mean_stability": 0.2057,
+      "read_weighted_stability": 0.1048,
+      "lenient_mean_stability": 0.2057,
+      "stable_track_share": 0.0,
+      "median_distinct_reads": 5.0,
+      "least_stable_tracks": [
+        {
+          "track": "plt_0001",
+          "reads": 39,
+          "majority_plate": "M000CZ1785",
+          "agree": 1,
+          "stability": 0.0256,
+          "lenient_stability": 0.0256,
+          "distinct_reads": 39
+        },
+        {
+          "track": "plt_0002",
+          "reads": 40,
+          "majority_plate": "MH82GD4920",
+          "agree": 3,
+          "stability": 0.075,
+          "lenient_stability": 0.075,
+          "distinct_reads": 37
+        },
+        {
+          "track": "plt_0021",
+          "reads": 9,
+          "majority_plate": "MA1F11181",
+          "agree": 1,
+          "stability": 0.1111,
+          "lenient_stability": 0.1111,
+          "distinct_reads": 9
+        },
+        {
+          "track": "plt_0020",
+          "reads": 8,
+          "majority_plate": "PM02FX9281",
+          "agree": 1,
+          "stability": 0.125,
+          "lenient_stability": 0.125,
+          "distinct_reads": 8
+        },
+        {
+          "track": "plt_0015",
+          "reads": 7,
+          "majority_plate": "U155455555",
+          "agree": 1,
+          "stability": 0.1429,
+          "lenient_stability": 0.1429,
+          "distinct_reads": 7
+        }
+      ],
+      "video_events": null
+    },
+    {
+      "camera_code": "SC-01",
+      "camera_name": "Santacruz Airport Approach",
+      "video": "mumbai_overhead-dense-bus-autos_pexels31046718.mp4",
+      "frames": 40,
+      "detections": 110,
+      "api_errors": 0,
+      "latency_p95_ms": 1402.0499999999997,
+      "tracks_total": 22,
+      "tracks_scored": 15,
+      "reads_scored": 99,
+      "mean_stability": 0.1856,
+      "read_weighted_stability": 0.1616,
+      "lenient_mean_stability": 0.1856,
+      "stable_track_share": 0.0,
+      "median_distinct_reads": 6.0,
+      "least_stable_tracks": [
+        {
+          "track": "plt_0012",
+          "reads": 11,
+          "majority_plate": "AA50LT8940",
+          "agree": 1,
+          "stability": 0.0909,
+          "lenient_stability": 0.0909,
+          "distinct_reads": 11
+        },
+        {
+          "track": "plt_0008",
+          "reads": 10,
+          "majority_plate": "F1BBFT6749",
+          "agree": 1,
+          "stability": 0.1,
+          "lenient_stability": 0.1,
+          "distinct_reads": 10
+        },
+        {
+          "track": "plt_0004",
+          "reads": 9,
+          "majority_plate": "LL1811111",
+          "agree": 1,
+          "stability": 0.1111,
+          "lenient_stability": 0.1111,
+          "distinct_reads": 9
+        },
+        {
+          "track": "plt_0007",
+          "reads": 9,
+          "majority_plate": "H1551A675",
+          "agree": 1,
+          "stability": 0.1111,
+          "lenient_stability": 0.1111,
+          "distinct_reads": 9
+        },
+        {
+          "track": "plt_0019",
+          "reads": 8,
+          "majority_plate": "U116111111",
+          "agree": 1,
+          "stability": 0.125,
+          "lenient_stability": 0.125,
+          "distinct_reads": 8
+        }
+      ],
+      "video_events": null
+    },
+    {
+      "camera_code": "DD-01",
+      "camera_name": "Dadar TT Junction",
+      "video": "mumbai_flyover-closeup-rear-plates_pexels30169858.mp4",
+      "frames": 40,
+      "detections": 86,
+      "api_errors": 0,
+      "latency_p95_ms": 1462.0999999999995,
+      "tracks_total": 23,
+      "tracks_scored": 12,
+      "reads_scored": 73,
+      "mean_stability": 0.3862,
+      "read_weighted_stability": 0.4247,
+      "lenient_mean_stability": 0.3862,
+      "stable_track_share": 0.0833,
+      "median_distinct_reads": 3.0,
+      "least_stable_tracks": [
+        {
+          "track": "plt_0003",
+          "reads": 14,
+          "majority_plate": "U1141T4L41",
+          "agree": 1,
+          "stability": 0.0714,
+          "lenient_stability": 0.0714,
+          "distinct_reads": 14
+        },
+        {
+          "track": "plt_0004",
+          "reads": 7,
+          "majority_plate": "M1011Y2017",
+          "agree": 1,
+          "stability": 0.1429,
+          "lenient_stability": 0.1429,
+          "distinct_reads": 7
+        },
+        {
+          "track": "plt_0001",
+          "reads": 4,
+          "majority_plate": "111111111111",
+          "agree": 1,
+          "stability": 0.25,
+          "lenient_stability": 0.25,
+          "distinct_reads": 4
+        },
+        {
+          "track": "plt_0005",
+          "reads": 4,
+          "majority_plate": "M1111Y2013",
+          "agree": 1,
+          "stability": 0.25,
+          "lenient_stability": 0.25,
+          "distinct_reads": 4
+        },
+        {
+          "track": "plt_0011",
+          "reads": 3,
+          "majority_plate": "111111111",
+          "agree": 1,
+          "stability": 0.3333,
+          "lenient_stability": 0.3333,
+          "distinct_reads": 3
+        }
+      ],
+      "video_events": null
+    },
+    {
+      "camera_code": "SN-01",
+      "camera_name": "Sion Circle",
+      "video": "mumbai_overhead-signal-multilane_pexels30609021.mp4",
+      "frames": 40,
+      "detections": 2,
+      "api_errors": 0,
+      "latency_p95_ms": 1281.7199999999998,
+      "tracks_total": 2,
+      "tracks_scored": 0,
+      "reads_scored": 0,
+      "mean_stability": null,
+      "read_weighted_stability": null,
+      "lenient_mean_stability": null,
+      "stable_track_share": null,
+      "median_distinct_reads": null,
+      "least_stable_tracks": [],
+      "video_events": null
+    },
+    {
+      "camera_code": "KR-01",
+      "camera_name": "Kurla Depot Junction",
+      "video": "india_night-overhead-junction_pexels34766759.mp4",
+      "frames": 40,
+      "detections": 4,
+      "api_errors": 0,
+      "latency_p95_ms": 1755.3549999999993,
+      "tracks_total": 1,
+      "tracks_scored": 1,
+      "reads_scored": 4,
+      "mean_stability": 0.25,
+      "read_weighted_stability": 0.25,
+      "lenient_mean_stability": 0.25,
+      "stable_track_share": 0.0,
+      "median_distinct_reads": 4.0,
+      "least_stable_tracks": [
+        {
+          "track": "plt_0001",
+          "reads": 4,
+          "majority_plate": "1110111111",
+          "agree": 1,
+          "stability": 0.25,
+          "lenient_stability": 0.25,
+          "distinct_reads": 4
+        }
+      ],
+      "video_events": null
+    },
+    {
+      "camera_code": "BH-01",
+      "camera_name": "Bhandup LBS Marg",
+      "video": "india_rain-overhead-wet-road_pexels33588922.mp4",
+      "frames": 40,
+      "detections": 41,
+      "api_errors": 0,
+      "latency_p95_ms": 1196.1599999999999,
+      "tracks_total": 39,
+      "tracks_scored": 0,
+      "reads_scored": 0,
+      "mean_stability": null,
+      "read_weighted_stability": null,
+      "lenient_mean_stability": null,
+      "stable_track_share": null,
+      "median_distinct_reads": null,
+      "least_stable_tracks": [],
+      "video_events": null
+    }
+  ]
+}

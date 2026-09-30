@@ -26,6 +26,7 @@ export const routes = [
   { path: '/vehicles', page: pages.vehicles },
   { path: '/alerts', page: pages.alerts },
   { path: '/analytics', page: pages.analytics },
+  { path: '/model', page: lazyPage(() => import('@/features/model-performance/pages/ModelPerformancePage'), 'ModelPerformancePage') },
   { path: '/detections', page: pages.detections },
   { path: '/admin', page: pages.admin },
 ] as const;
