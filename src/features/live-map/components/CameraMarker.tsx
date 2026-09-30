@@ -9,6 +9,7 @@ import L from 'leaflet';
 import type { Camera } from '@/types/camera';
 import { StatusBadge } from '@/shared/ui/StatusBadge';
 import { useNavigate } from 'react-router-dom';
+import { useMemo } from 'react';
 
 interface CameraMarkerProps {
   camera: Camera;
@@ -16,7 +17,7 @@ interface CameraMarkerProps {
 }
 
 /** Create a custom circle icon colored by camera status */
-function createCameraIcon(status: Camera['status']): L.DivIcon {
+function buildCameraIcon(status: Camera['status']): L.DivIcon {
   const colorMap: Record<Camera['status'], string> = {
     online: '#22c55e',
     offline: '#ef4444',
@@ -51,17 +52,29 @@ function createCameraIcon(status: Camera['status']): L.DivIcon {
   });
 }
 
+// One DivIcon per status, shared by every marker. A new icon object on each
+// render makes react-leaflet call setIcon() and rebuild the marker DOM.
+const iconCache = new Map<Camera['status'], L.DivIcon>();
+function getCameraIcon(status: Camera['status']): L.DivIcon {
+  let icon = iconCache.get(status);
+  if (!icon) {
+    icon = buildCameraIcon(status);
+    iconCache.set(status, icon);
+  }
+  return icon;
+}
+
 export function CameraMarker({ camera, onClick }: CameraMarkerProps) {
-  const icon = createCameraIcon(camera.status);
+  const icon = getCameraIcon(camera.status);
   const navigate = useNavigate();
+  const position = useMemo<[number, number]>(() => [camera.latitude, camera.longitude], [camera.latitude, camera.longitude]);
+  const eventHandlers = useMemo(() => ({ click: () => onClick?.(camera) }), [onClick, camera]);
 
   return (
     <Marker
-      position={[camera.latitude, camera.longitude]}
+      position={position}
       icon={icon}
-      eventHandlers={{
-        click: () => onClick?.(camera),
-      }}
+      eventHandlers={eventHandlers}
     >
       <Popup>
         <div className="min-w-[200px] space-y-2.5 p-1">

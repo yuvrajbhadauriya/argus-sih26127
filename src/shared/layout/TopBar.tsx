@@ -4,22 +4,12 @@
 // ═══════════════════════════════════════════════════
 
 import { SearchIcon, BellIcon, ShieldCheckIcon, ClockIcon } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { LiveClock } from './LiveClock';
 import { StatusBadge } from '@/shared/ui/StatusBadge';
 
 export function TopBar() {
   const [searchValue, setSearchValue] = useState('');
-  const [currentTime, setCurrentTime] = useState<string>('');
-
-  useEffect(() => {
-    const updateClock = () => {
-      const now = new Date();
-      setCurrentTime(now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
-    };
-    updateClock();
-    const timer = setInterval(updateClock, 1000);
-    return () => clearInterval(timer);
-  }, []);
 
   return (
     <header className="flex h-16 items-center justify-between border-b border-nero-border bg-nero-surface/90 backdrop-blur-md px-6 z-20">
@@ -47,9 +37,8 @@ export function TopBar() {
         {/* Real-time Ticking System Clock */}
         <div className="hidden md:flex items-center gap-2 rounded-lg bg-nero-surface-elevated/60 border border-nero-border px-3 py-1.5">
           <ClockIcon size={14} className="text-nero-accent" />
-          <span className="font-mono text-xs font-bold text-nero-text-primary tracking-wider">
-            {currentTime || '00:00:00'}
-          </span>
+          {/* Isolated 1 Hz component: only this span re-renders each second */}
+          <LiveClock className="font-mono text-xs font-bold text-nero-text-primary tracking-wider" />
           <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest ml-1">
             IST
           </span>
