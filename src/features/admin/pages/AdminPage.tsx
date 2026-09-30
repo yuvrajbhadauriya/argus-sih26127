@@ -23,8 +23,9 @@ import { DEFAULT_MAP_CENTER } from '@/config/constants';
 import { useDataSource } from '@/lib/dataSource';
 import { createCamera, fetchCameras, updateCamera } from '@/features/cameras/api';
 import { clearCamerasCache } from '@/features/cameras/hooks/useCameras';
-import { createWatchlistEntry, fetchBlacklistEntries, updateWatchlistEntry } from '@/features/alerts/api';
-import { fetchAuditLog } from '@/features/admin/api';
+import { createWatchlistEntry, fetchBlacklistEntries, isWatchlistFallbackActive, updateWatchlistEntry } from '@/features/alerts/api';
+import { fetchAuditLog, type AuditTrail } from '@/features/admin/api';
+import { SimulationBadge } from '@/features/vehicles/components/SimulationBadge';
 import { ROLE_LABEL, useAuth } from '@/features/auth/session';
 import { useOperatorAction } from '@/features/auth/guard';
 import { DETECT_ENDPOINT } from '@/features/detections/remote/detectFrame';
@@ -103,7 +104,10 @@ export function AdminPage() {
   const [cameras, setCameras] = useState<Camera[]>([]);
   const [watchlist, setWatchlist] = useState<BlacklistEntry[]>([]);
   const [audit, setAudit] = useState<AuditLogEntry[]>([]);
-  const [auditNote, setAuditNote] = useState<string | null>(null);
+  const [auditError, setAuditError] = useState<string | null>(null);
+  const [auditSim, setAuditSim] = useState<Pick<AuditTrail, 'simulated' | 'reason'>>({ simulated: false });
+  const [auditNonce, setAuditNonce] = useState(0);
+  const [watchlistSim, setWatchlistSim] = useState(false);
   const { user } = useAuth();
   const guard = useOperatorAction();
   const ds = useDataSource();
@@ -132,15 +136,7 @@ export function AdminPage() {
       const [c, w] = await Promise.all([fetchCameras(), fetchBlacklistEntries()]);
       setCameras(c);
       setWatchlist(w);
-      fetchAuditLog()
-        .then((a) => {
-          setAudit(a);
-          setAuditNote(null);
-        })
-        .catch((err: unknown) => {
-          setAudit([]);
-          setAuditNote(err instanceof Error ? err.message : 'Audit trail unavailable');
-        });
+      setWatchlistSim(isWatchlistFallbackActive());
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load admin data');
     } finally {
@@ -153,11 +149,33 @@ export function AdminPage() {
     load();
   }, [load]);
 
+  // Audit trail: re-read when the operator signs in or out (guests never query
+  // the table — see features/admin/api.ts).
+  const userId = user?.id ?? null;
+  useEffect(() => {
+    let active = true;
+    fetchAuditLog()
+      .then((t) => {
+        if (!active) return;
+        setAudit(t.entries);
+        setAuditSim({ simulated: t.simulated, reason: t.reason });
+        setAuditError(null);
+      })
+      .catch((err: unknown) => {
+        if (!active) return;
+        setAudit([]);
+        setAuditError(err instanceof Error ? err.message : 'Audit trail unavailable');
+      });
+    return () => {
+      active = false;
+    };
+  }, [userId, auditNonce]);
+
   // Live mode: the database audit trigger records writes (reloaded below);
   // simulated/demo mode keeps a session-local trail.
   const logAction = (action: string, entity_type: string, entity_id: string, details: string) => {
-    if (ds.source === 'live') {
-      fetchAuditLog().then(setAudit).catch(() => {});
+    if (ds.source === 'live' && !auditSim.simulated) {
+      setAuditNonce((n) => n + 1);
       return;
     }
     setAudit((prev) => [
@@ -246,7 +264,14 @@ export function AdminPage() {
         reason: wlForm.reason.trim(),
         valid_to: wlForm.validTo ? new Date(`${wlForm.validTo}T23:59:59+05:30`).toISOString() : null,
       });
-      setWatchlist((prev) => [entry, ...prev.filter((w) => w.id !== entry.id)]);
+      if (watchlistSim && ds.source === 'live') {
+        // The entry is now in the database: switch from the simulated list to the live one.
+        const live = await fetchBlacklistEntries().catch(() => [entry]);
+        setWatchlist(live);
+        setWatchlistSim(isWatchlistFallbackActive());
+      } else {
+        setWatchlist((prev) => [entry, ...prev.filter((w) => w.id !== entry.id)]);
+      }
       logAction('WATCHLIST_ADD', 'blacklist_entry', entry.id, `Added ${entry.priority} priority watchlist entry for ${entry.plate_text} (${entry.category})`);
       toast({ tone: 'success', title: 'Plate added to watchlist', description: `${entry.plate_text} · alerts will fire on the next camera read` });
       setWlOpen(false);
@@ -351,7 +376,7 @@ export function AdminPage() {
   ];
 
   const system: [string, React.ReactNode][] = [
-    ['ANPR model', 'LPU ANPR on GPU — DEIM detector (deim50k) + PARSeq OCR (raw35); LAN/VPN-only API'],
+    ['ANPR model', "AI ANPR engine (trained Indian-plate model) on the team's GPU server; LAN/VPN-only API"],
     ['Detection endpoint', <span key="e" className="font-mono">{DETECT_ENDPOINT}</span>],
     ['Data source', `${ds.label} — ${ds.description}`],
     ['Signed in as', user ? `${user.name} (${user.email}) · ${ROLE_LABEL[user.role]}${user.demo ? ' · demo identity' : ''}` : 'Not signed in (read-only)'],
@@ -411,7 +436,12 @@ export function AdminPage() {
             title="Watchlist"
             subtitle="A camera read of an active plate raises an alert"
             flush
-            actions={<Button size="sm" variant="primary" icon={<PlusIcon size={14} />} onClick={() => guard('edit the watchlist', () => { setWlErrors({}); setWlOpen(true); })}>Add plate</Button>}
+            actions={
+              <>
+                {watchlistSim && <SimulationBadge compact />}
+                <Button size="sm" variant="primary" icon={<PlusIcon size={14} />} onClick={() => guard('edit the watchlist', () => { setWlErrors({}); setWlOpen(true); })}>Add plate</Button>
+              </>
+            }
           >
             <Toolbar className="border-b border-line px-4 py-2.5">
               <Input uiSize="sm" icon={<SearchIcon size={14} />} placeholder="Search plate or reason" aria-label="Search watchlist" value={wlQuery} onChange={(e) => setWlQuery(e.target.value)} className="w-full max-w-xs" />
@@ -445,7 +475,23 @@ export function AdminPage() {
         </TabPanel>
 
         <TabPanel id="audit" active={tab === 'audit'} className="mt-4">
-          <Panel title="Audit log" subtitle="Every search, acknowledgement and configuration change" flush>
+          <Panel
+            title="Audit log"
+            subtitle="Every search, acknowledgement and configuration change"
+            flush
+            actions={auditSim.simulated ? <SimulationBadge compact /> : undefined}
+          >
+            {auditSim.reason && (
+              <p className="border-b border-line px-4 py-2 text-xs text-fg-muted">
+                {auditSim.reason === 'guest'
+                  ? 'Sign in to see the live audit trail. Showing the simulated day’s trail.'
+                  : 'No actions recorded in the database yet. Showing the simulated day’s trail.'}
+              </p>
+            )}
+            {auditError ? (
+              <ErrorState title="Audit trail unavailable" message={auditError} onRetry={() => setAuditNonce((n) => n + 1)} />
+            ) : (
+            <>
             <Toolbar className="border-b border-line px-4 py-2.5">
               <Select uiSize="sm" label="User" value={auditUser} onChange={(e) => setAuditUser(e.target.value)} aria-label="Filter by user">
                 <option value="all">All users</option>
@@ -463,8 +509,10 @@ export function AdminPage() {
               rowKey={(a) => a.id}
               pageSize={20}
               initialSort={{ key: 'ts', dir: 'desc' }}
-              empty={<EmptyState compact icon={<HistoryIcon size={20} />} title="No audit entries" description={auditNote ?? (ds.source === 'live' && !user ? 'The audit trail is visible to signed-in operators and admins.' : 'Nothing recorded for these filters.')} />}
+              empty={<EmptyState compact icon={<HistoryIcon size={20} />} title="No audit entries" description="Nothing recorded for these filters." />}
             />
+            </>
+            )}
           </Panel>
         </TabPanel>
 

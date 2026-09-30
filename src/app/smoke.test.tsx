@@ -76,3 +76,17 @@ describe('lazy route table (code-split pages)', () => {
     vi.unstubAllGlobals();
   });
 });
+
+describe('unknown routes', () => {
+  it('renders a 404 page inside the dashboard shell with a way back', async () => {
+    const { default: App } = await import('./App');
+    window.history.pushState({}, '', '/does-not-exist');
+    render(<App />);
+    expect(await screen.findByRole('heading', { name: 'Page not found' })).toBeInTheDocument();
+    expect(screen.getByText('/does-not-exist')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /back to live map/i })).toHaveAttribute('href', '/');
+    // the shell (sidebar nav) is still there
+    expect(screen.getAllByRole('link', { name: /cameras/i }).length).toBeGreaterThan(0);
+    window.history.pushState({}, '', '/');
+  });
+});

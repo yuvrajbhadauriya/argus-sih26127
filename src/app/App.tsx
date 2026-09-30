@@ -8,6 +8,7 @@ import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { DashboardLayout } from '@/shared/layout/DashboardLayout';
 import { routes, loginRoute, prefetchRoutesWhenIdle } from './routes';
+import { NotFoundPage } from './NotFoundPage';
 
 export default function App() {
   useEffect(() => prefetchRoutesWhenIdle(), []);
@@ -21,6 +22,7 @@ export default function App() {
           {routes.map(({ path, page: { Component } }) => (
             <Route key={path} path={path} element={<Component />} />
           ))}
+          <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

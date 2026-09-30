@@ -24,6 +24,25 @@ import type { TriageAlert } from './types';
 const demoAcks = new Set<string>();
 
 /**
+ * Live mode with an empty `alerts` table: the simulated feed is shown instead
+ * (tagged `simulated`, pages show the SimulationBadge). Set by fetchAlerts so
+ * acknowledging one of those alerts stays local instead of hitting the DB.
+ */
+let liveFallbackActive = false;
+
+/** True while live mode is showing the simulated alert feed (empty table). */
+export function isAlertFallbackActive(): boolean {
+  return liveFallbackActive;
+}
+
+/** Watchlist fallback flag (live mode, empty `blacklist_entries`). */
+let watchlistFallbackActive = false;
+
+export function isWatchlistFallbackActive(): boolean {
+  return watchlistFallbackActive;
+}
+
+/**
  * The simulated feed as seen at replay time `clock`: alerts that have not fired
  * yet are hidden, and acknowledgements that happen later in the day are undone.
  */
@@ -86,6 +105,7 @@ export async function fetchAlerts(): Promise<AlertRecord[]> {
 
     if (!error && data && data.length > 0) {
       reportLiveOk();
+      liveFallbackActive = false;
       return data.map(rowToAlert);
     }
 
@@ -93,7 +113,14 @@ export async function fetchAlerts(): Promise<AlertRecord[]> {
     const { data: rawAlerts, error: rawErr } = await supabase.from('alerts').select('*').order('created_at', { ascending: false });
     if (rawErr) throw new Error(`Failed to load alerts: ${rawErr.message}`);
     reportLiveOk();
-    return (rawAlerts ?? []).map(rowToAlert);
+    if (rawAlerts && rawAlerts.length > 0) {
+      liveFallbackActive = false;
+      return rawAlerts.map(rowToAlert);
+    }
+    // Connected but nothing recorded yet: show the simulated network's feed
+    // (labelled) rather than an empty control room.
+    liveFallbackActive = true;
+    return simAlertsAt(getReplayClock()).map((a) => ({ ...a, simulated: true }));
   } catch (err) {
     reportLiveError(err);
     throw err instanceof Error ? err : new Error(String(err));
@@ -102,7 +129,7 @@ export async function fetchAlerts(): Promise<AlertRecord[]> {
 
 /** Fetch one alert (with joins) by id — used by the realtime subscription. */
 export async function fetchAlertById(id: string): Promise<TriageAlert | null> {
-  if (!isSupabaseConfigured()) return (mockAlerts.find((a) => a.id === id) as TriageAlert | undefined) ?? null;
+  if (!isSupabaseConfigured() || (liveFallbackActive && mockAlerts.some((a) => a.id === id))) return (mockAlerts.find((a) => a.id === id) as TriageAlert | undefined) ?? null;
   const supabase = await getSupabase();
   const { data, error } = await supabase.from('alerts').select(ALERT_SELECT).eq('id', id).maybeSingle();
   if (error) throw new Error(`Failed to load alert: ${error.message}`);
@@ -114,7 +141,8 @@ export async function fetchAlertById(id: string): Promise<TriageAlert | null> {
  * stamps acknowledged_by/at from the JWT, the name sent here is informative.
  */
 export async function acknowledgeAlert(alertId: string, operatorName: string = 'Admin'): Promise<void> {
-  if (!isSupabaseConfigured()) {
+  const simulatedAlert = liveFallbackActive && mockAlerts.some((a) => a.id === alertId);
+  if (!isSupabaseConfigured() || simulatedAlert) {
     const alert = mockAlerts.find((a) => a.id === alertId);
     if (alert) {
       alert.acknowledged = true;
@@ -171,7 +199,13 @@ export async function fetchBlacklistEntries(): Promise<BlacklistEntry[]> {
     reportLiveError(error.message);
     throw new Error(`Failed to fetch blacklist entries: ${error.message}`);
   }
-  return (data || []).map(rowToEntry);
+  if (!data || data.length === 0) {
+    // Empty table: the simulated network's watchlist (pages show the badge).
+    watchlistFallbackActive = true;
+    return mockBlacklistEntries;
+  }
+  watchlistFallbackActive = false;
+  return data.map(rowToEntry);
 }
 
 export interface NewWatchlistEntry {
@@ -225,6 +259,11 @@ export async function updateWatchlistEntry(
   const supabase = await getSupabase();
   const row: Record<string, unknown> = { ...patch, updated_at: ts };
   if (patch.reason !== undefined) row.notes = patch.reason;
+  if (watchlistFallbackActive && mockBlacklistEntries.some((w) => w.id === id)) {
+    const e = mockBlacklistEntries.find((w) => w.id === id)!;
+    Object.assign(e, patch, { updated_at: ts });
+    return;
+  }
   const { error } = await supabase.from('blacklist_entries').update(row).eq('id', id);
   if (error) throw new Error(`Failed to update watchlist entry: ${error.message}`);
 }

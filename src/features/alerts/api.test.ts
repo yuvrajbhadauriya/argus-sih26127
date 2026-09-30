@@ -10,7 +10,7 @@ vi.mock('@/lib/supabase/client', async () => {
   return { getSupabase: async () => h.fake.client, isSupabaseConfigured: () => h.configured };
 });
 
-import { fetchAlerts, acknowledgeAlert, fetchBlacklistEntries, simAlertsAt, createWatchlistEntry, updateWatchlistEntry, rowToAlert } from './api';
+import { fetchAlerts, acknowledgeAlert, fetchBlacklistEntries, simAlertsAt, createWatchlistEntry, updateWatchlistEntry, rowToAlert, isAlertFallbackActive, isWatchlistFallbackActive } from './api';
 import { resetReplay, startReplay, stopReplay, istOnDay } from '@/features/replay/clock';
 import { mockAlertFeed as mockAlerts, mockBlacklistEntries } from '@/mocks/fixtures/mockAlerts';
 
@@ -86,9 +86,40 @@ describe('alerts — Supabase configured (mocked client)', () => {
     expect(h.fake.calls).toHaveLength(2);
   });
 
-  it('returns an empty list (not the fixtures) when the database has no alerts', async () => {
+  it('falls back to the simulated feed (tagged simulated) when the table is empty', async () => {
     h.fake.enqueue('alerts', { data: [] }, { data: [] });
-    expect(await fetchAlerts()).toEqual([]);
+    const alerts = await fetchAlerts();
+    expect(alerts.length).toBe(mockAlerts.length);
+    expect(alerts.every((a) => (a as { simulated?: boolean }).simulated)).toBe(true);
+    expect(isAlertFallbackActive()).toBe(true);
+  });
+
+  it('acknowledges a simulated fallback alert locally (no database write)', async () => {
+    h.fake.enqueue('alerts', { data: [] }, { data: [] });
+    const [first] = await fetchAlerts();
+    const writesBefore = h.fake.calls.length;
+    await acknowledgeAlert(first.id, 'Operator');
+    expect(h.fake.calls.length).toBe(writesBefore);
+    expect(mockAlerts.find((a) => a.id === first.id)?.acknowledged).toBe(true);
+  });
+
+  it('shows real rows again (fallback off) once the table has alerts', async () => {
+    h.fake.enqueue('alerts', { data: [] }, { data: [] });
+    await fetchAlerts();
+    h.fake.enqueue('alerts', { data: [{ id: 'live-1', created_at: '2026-01-01T00:00:00Z' }] });
+    const [a] = await fetchAlerts();
+    expect(a.id).toBe('live-1');
+    expect(isAlertFallbackActive()).toBe(false);
+  });
+
+  it('falls back to the simulated watchlist when blacklist_entries is empty', async () => {
+    h.fake.enqueue('blacklist_entries', { data: [] });
+    expect(await fetchBlacklistEntries()).toBe(mockBlacklistEntries);
+    expect(isWatchlistFallbackActive()).toBe(true);
+    h.fake.enqueue('blacklist_entries', { data: [{ id: 'bl-live', plate_text: 'MH01AB1234', created_at: 't' }] });
+    const [e] = await fetchBlacklistEntries();
+    expect(e.id).toBe('bl-live');
+    expect(isWatchlistFallbackActive()).toBe(false);
   });
 
   it('maps rows from the plain-select fallback', async () => {
