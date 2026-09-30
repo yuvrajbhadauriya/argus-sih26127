@@ -8,7 +8,7 @@ const TIME_FMT = new Intl.DateTimeFormat('en-GB', {
   hour12: false,
 });
 const HM_FMT = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: false });
-const DATE_FMT = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata', weekday: 'short', day: '2-digit', month: 'short' });
+const DATE_FMT = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Kolkata', weekday: 'short', day: '2-digit', month: 'short' });
 const HOUR_FMT = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', hour12: false });
 
 const toDate = (d: Date | string | number): Date => (d instanceof Date ? d : new Date(d));
@@ -21,9 +21,10 @@ export function formatIstTime(d: Date | string | number): string {
 export function formatIstHm(d: Date | string | number): string {
   return HM_FMT.format(toDate(d));
 }
-/** 'Wed 30 Sept' style short date in IST. */
+/** 'EEE dd MMM' in IST, e.g. 'Wed 30 Sep'. */
 export function formatIstDate(d: Date | string | number): string {
-  return DATE_FMT.format(toDate(d)).replace(',', '');
+  const parts = Object.fromEntries(DATE_FMT.formatToParts(toDate(d)).map((p) => [p.type, p.value]));
+  return `${parts.weekday} ${parts.day} ${parts.month}`;
 }
 /** Hour of day 0..23 in IST. */
 export function istHour(d: Date | string | number = new Date()): number {

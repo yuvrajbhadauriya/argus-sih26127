@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { useState } from 'react';
 import { formatPlate, normalizePlate, vehicleClassToPlateVariant } from '@/shared/lib/plate';
-import { formatIstTime, istHour } from '@/shared/lib/time';
+import { formatIstDate, formatIstTime, istHour } from '@/shared/lib/time';
 import { PlateChip } from './PlateChip';
 import { Modal } from './Modal';
 import { DataTable, type Column } from './DataTable';
@@ -46,6 +46,7 @@ describe('IST time helpers', () => {
     // 2026-09-30T00:00:00Z == 05:30:00 IST
     expect(formatIstTime(new Date('2026-09-30T00:00:00Z'))).toBe('05:30:00');
     expect(istHour('2026-09-30T20:00:00Z')).toBe(1);
+    expect(formatIstDate('2026-09-30T20:00:00Z')).toBe('Thu 01 Oct');
   });
 });
 
