@@ -30,6 +30,7 @@ dist-ssr
 # Media & Videos
 public/videos/*
 !public/videos/.gitkeep
+public/videos-local/
 *.mp4
 *.zip
 
