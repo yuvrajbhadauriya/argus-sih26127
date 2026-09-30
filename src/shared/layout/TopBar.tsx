@@ -24,7 +24,7 @@ export function TopBar() {
   const { alerts } = useNavBadges();
 
   return (
-    <header className="z-20 flex h-[52px] shrink-0 items-center gap-3 border-b border-line bg-surface px-3 lg:px-4">
+    <header className="relative z-[1100] flex h-[52px] shrink-0 items-center gap-3 border-b border-line bg-surface px-3 lg:px-4">
       <GlobalPlateSearch />
       <div className="flex-1" />
       <div className="hidden md:block">

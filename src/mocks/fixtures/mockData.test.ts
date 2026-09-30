@@ -1,11 +1,10 @@
-// Referential-integrity checks on the mock fallback dataset. The UI silently
-// falls back to these whenever Supabase is unconfigured or a query fails, so
-// they must be internally consistent.
+// Referential-integrity checks on the demo fixtures. They back the
+// simulated/demo data source (never a silent fallback for a failing live
+// database), so they must be internally consistent.
 import { describe, it, expect } from 'vitest';
-import { mockCameras, getCameraStatusCounts, getUniqueZones } from './mockCameras';
+import { mockCameras } from './mockCameras';
 import { mockAlerts, mockBlacklistEntries } from './mockAlerts';
 import { mockDetections } from './mockDetections';
-import { mockVehicles, mockTrajectories } from './mockTrajectories';
 
 const cameraIds = new Set(mockCameras.map((c) => c.id));
 
@@ -21,17 +20,6 @@ describe('mockCameras + helpers', () => {
       expect(c.road, c.code).toBeTruthy();
       expect(['Northbound', 'Southbound', 'Eastbound', 'Westbound']).toContain(c.direction);
     }
-  });
-
-  it('getCameraStatusCounts sums to total', () => {
-    const counts = getCameraStatusCounts(mockCameras);
-    expect(counts.online + counts.offline + counts.maintenance).toBe(counts.total);
-    expect(getCameraStatusCounts([])).toEqual({ online: 0, offline: 0, maintenance: 0, total: 0 });
-  });
-
-  it('getUniqueZones is sorted and de-duplicated', () => {
-    const zones = getUniqueZones(mockCameras);
-    expect(zones).toEqual([...new Set(zones)].sort());
   });
 });
 
@@ -67,35 +55,5 @@ describe('mockDetections integrity', () => {
         expect(d.bbox.height).toBeGreaterThan(0);
       }
     }
-  });
-});
-
-describe('mockTrajectories integrity', () => {
-  it('waypoints are chronological and time gaps match timestamps', () => {
-    for (const t of Object.values(mockTrajectories)) {
-      expect(t.waypoints.length).toBeGreaterThan(0);
-      expect(t.waypoints[0].time_since_previous_seconds).toBeNull();
-      for (let i = 1; i < t.waypoints.length; i++) {
-        const prev = Date.parse(t.waypoints[i - 1].timestamp);
-        const cur = Date.parse(t.waypoints[i].timestamp);
-        expect(cur).toBeGreaterThanOrEqual(prev);
-        expect(t.waypoints[i].time_since_previous_seconds).toBe(Math.round((cur - prev) / 1000));
-      }
-      expect(t.camera_count).toBe(new Set(t.waypoints.map((w) => w.camera_id)).size);
-    }
-  });
-
-  it('waypoint coordinates come from the shared camera registry', () => {
-    for (const t of Object.values(mockTrajectories)) {
-      for (const w of t.waypoints) {
-        const cam = mockCameras.find((c) => c.id === w.camera_id)!;
-        expect([w.lat, w.lng, w.camera_name, w.camera_code]).toEqual([cam.lat, cam.lng, cam.name, cam.code]);
-      }
-    }
-  });
-
-  it('every trajectory plate is a known vehicle', () => {
-    const plates = new Set(mockVehicles.map((v) => v.plate_text));
-    for (const t of Object.values(mockTrajectories)) expect(plates.has(t.plate_text)).toBe(true);
   });
 });

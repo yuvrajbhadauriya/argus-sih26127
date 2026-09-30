@@ -14,7 +14,11 @@ export const pages = {
   analytics: lazyPage(() => import('@/features/analytics/pages/AnalyticsPage'), 'AnalyticsPage'),
   detections: lazyPage(() => import('@/features/detections/pages/DetectionsPage'), 'DetectionsPage'),
   admin: lazyPage(() => import('@/features/admin/pages/AdminPage'), 'AdminPage'),
+  login: lazyPage(() => import('@/features/auth/LoginPage'), 'LoginPage'),
 };
+
+/** Operator sign-in — rendered outside the dashboard shell (see App.tsx). */
+export const loginRoute = { path: '/login', page: pages.login } as const;
 
 export const routes = [
   { path: '/', page: pages.liveMap },
@@ -29,6 +33,7 @@ export const routes = [
 /** Normalised pathname → route (matches the build-time preload map in vite.config.ts). */
 export function findRoute(pathname: string) {
   const p = pathname.replace(/\/+$/, '') || '/';
+  if (p === loginRoute.path) return loginRoute;
   return routes.find((r) => r.path === p);
 }
 

@@ -133,16 +133,3 @@ export const mockCameras: CameraFeed[] = [
     updated_at: '2026-09-30T08:00:00Z',
   },
 ];
-
-export function getCameraStatusCounts(cameras: CameraFeed[]) {
-  return {
-    online: cameras.filter((c) => c.status === 'online').length,
-    offline: cameras.filter((c) => c.status === 'offline').length,
-    maintenance: cameras.filter((c) => c.status === 'maintenance').length,
-    total: cameras.length,
-  };
-}
-
-export function getUniqueZones(cameras: CameraFeed[]): string[] {
-  return [...new Set(cameras.map((c) => c.zone))].sort();
-}

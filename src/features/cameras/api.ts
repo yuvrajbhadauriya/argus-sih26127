@@ -6,7 +6,8 @@
 
 import type { Camera } from '@/types/camera';
 import type { CameraFeed } from '@/types';
-import { supabase, isSupabaseConfigured } from '@/lib/supabase/client';
+import { getSupabase, isSupabaseConfigured } from '@/lib/supabase/client';
+import { reportLiveError, reportLiveOk } from '@/lib/dataSource';
 import { mockCameras } from '@/mocks/fixtures/mockCameras';
 import { LOCAL_VIDEO_BASE, SUPABASE_STORAGE_BASE, SUPABASE_VIDEO_PREFIX } from '@/config/constants';
 import { env, type VideoSource } from '@/config/env';
@@ -138,18 +139,21 @@ function rowToCamera(row: any): Camera {
 /** Fetch all cameras, ordered by code */
 export async function getCameras(): Promise<Camera[]> {
   if (!isSupabaseConfigured()) {
-    // Fallback to mock data when Supabase isn't set up
-    return mockCameras.map(cameraFeedToCamera);
+    // Simulated / demo mode: the camera registry fixture (+ session edits).
+    return withDemoEdits(mockCameras.map(cameraFeedToCamera));
   }
 
+  const supabase = await getSupabase();
   const { data, error } = await supabase
     .from('cameras')
     .select('*')
     .order('code');
 
   if (error) {
+    reportLiveError(error.message);
     throw new Error(`Failed to fetch cameras: ${error.message}`);
   }
+  reportLiveOk();
 
   return (data ?? []).map(rowToCamera);
 }
@@ -161,6 +165,7 @@ export async function getCameraById(id: string): Promise<Camera | null> {
     return found ? cameraFeedToCamera(found) : null;
   }
 
+  const supabase = await getSupabase();
   const { data, error } = await supabase
     .from('cameras')
     .select('*')
@@ -182,6 +187,7 @@ export async function getCamerasByZone(zone: string): Promise<Camera[]> {
       .map(cameraFeedToCamera);
   }
 
+  const supabase = await getSupabase();
   const { data, error } = await supabase
     .from('cameras')
     .select('*')
@@ -193,6 +199,76 @@ export async function getCamerasByZone(zone: string): Promise<Camera[]> {
   }
 
   return (data ?? []).map(rowToCamera);
+}
+
+// ── Writes (live: operator/admin session required by RLS) ──
+
+export interface CameraInput {
+  name: string;
+  code: string;
+  zone: string;
+  direction: string;
+  road?: string;
+  latitude: number;
+  longitude: number;
+  status?: Camera['status'];
+}
+
+/** Session-local camera registry edits in simulated/demo mode. */
+const demoCameras: Camera[] = [];
+
+/** Register a camera. Live: inserted into `cameras`; otherwise kept for this session. */
+export async function createCamera(input: CameraInput): Promise<Camera> {
+  const now = new Date().toISOString();
+  if (!isSupabaseConfigured()) {
+    const cam: Camera = { id: `cam-${Date.now()}`, ...input, status: input.status ?? 'offline', video_url: '', created_at: now };
+    demoCameras.push(cam);
+    return cam;
+  }
+  const supabase = await getSupabase();
+  const { data, error } = await supabase
+    .from('cameras')
+    .insert({
+      id: `cam-${input.code.toLowerCase()}`,
+      name: input.name,
+      code: input.code,
+      lat: input.latitude,
+      lng: input.longitude,
+      latitude: input.latitude,
+      longitude: input.longitude,
+      zone: input.zone,
+      direction: input.direction,
+      road: input.road ?? null,
+      status: input.status ?? 'offline',
+      video_url: '',
+    })
+    .select('*')
+    .single();
+  if (error) throw new Error(`Failed to register camera: ${error.message}`);
+  return rowToCamera(data);
+}
+
+/** Edit a camera's registry fields. */
+export async function updateCamera(id: string, patch: Partial<Omit<CameraInput, 'code'>>): Promise<void> {
+  if (!isSupabaseConfigured()) {
+    const c = demoCameras.find((d) => d.id === id);
+    if (c) Object.assign(c, patch);
+    else demoEdits.set(id, { ...demoEdits.get(id), ...patch });
+    return;
+  }
+  const row: Record<string, unknown> = { ...patch, updated_at: new Date().toISOString() };
+  if (patch.latitude !== undefined) row.lat = patch.latitude;
+  if (patch.longitude !== undefined) row.lng = patch.longitude;
+  const supabase = await getSupabase();
+  const { error } = await supabase.from('cameras').update(row).eq('id', id);
+  if (error) throw new Error(`Failed to update camera: ${error.message}`);
+}
+
+/** Edits to registry (fixture) cameras in simulated/demo mode. */
+const demoEdits = new Map<string, Partial<Omit<CameraInput, 'code'>>>();
+
+function withDemoEdits(cams: Camera[]): Camera[] {
+  return [...cams.map((c) => (demoEdits.has(c.id) ? { ...c, ...demoEdits.get(c.id) } : c)), ...demoCameras];
 }
 
 // ── Legacy aliases (keep existing callers working) ──

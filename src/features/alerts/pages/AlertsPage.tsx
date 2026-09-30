@@ -5,7 +5,7 @@
 // ═══════════════════════════════════════════════════
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   CheckIcon,
   CircleCheckIcon,
@@ -41,12 +41,17 @@ import { EmptyState } from '@/shared/ui/EmptyState';
 import { ErrorState } from '@/shared/ui/ErrorState';
 import { toast } from '@/shared/ui/toast';
 import { cn } from '@/shared/lib/cn';
+import { useAuth } from '@/features/auth/session';
+import { useOperatorAction } from '@/features/auth/guard';
+import { ReplayControls } from '@/features/replay/ReplayControls';
+import { subscribeReplay } from '@/features/replay/clock';
+import { applyAlertEvent, subscribeAlertEvents } from '../live';
 import { ALERT_KIND_LABEL, alertKind, type TriageAlert } from '../types';
 import { medianAckSeconds, newAlertIds, relativeTime, sortForTriage } from '../lib/triage';
 import { AlertMiniMap, type MiniMapPoint } from '../components/AlertMiniMap';
 
+/** Fallback poll; new alerts normally arrive instantly via Realtime / replay events. */
 const POLL_MS = 30_000;
-const OPERATOR = 'Admin Operator';
 
 const SEV_BAR: Record<AlertRecord['priority'], string> = {
   critical: 'bg-sev-critical',
@@ -206,7 +211,15 @@ function AlertDetail({ alert, entry, onAcknowledge }: { alert: TriageAlert; entr
 
 export function AlertsPage() {
   const navigate = useNavigate();
+  const [params] = useSearchParams();
   const reduced = usePrefersReducedMotion();
+  const { user } = useAuth();
+  const guard = useOperatorAction();
+  const operator = user?.name ?? 'Operator';
+  const operatorRef = useRef(operator);
+  useEffect(() => {
+    operatorRef.current = operator;
+  }, [operator]);
   const [alerts, setAlerts] = useState<TriageAlert[]>([]);
   const [entries, setEntries] = useState<BlacklistEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -215,7 +228,7 @@ export function AlertsPage() {
   const [statusFilter, setStatusFilter] = useState('unack');
   const [cameraFilter, setCameraFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(() => params.get('id'));
   const [flash, setFlash] = useState<Set<string>>(new Set());
   const alertsRef = useRef<TriageAlert[]>([]);
   const pendingAcks = useRef(new Set<string>());
@@ -223,7 +236,7 @@ export function AlertsPage() {
   const apply = useCallback((data: TriageAlert[], announce: boolean) => {
     // Keep optimistic acknowledgements that the server has not reflected yet.
     const merged = data.map((a) => (pendingAcks.current.has(a.id) && !a.acknowledged
-      ? { ...a, acknowledged: true, acknowledged_by: OPERATOR, acknowledged_at: new Date().toISOString() }
+      ? { ...a, acknowledged: true, acknowledged_by: operatorRef.current, acknowledged_at: new Date().toISOString() }
       : a));
     if (announce) {
       const fresh = newAlertIds(alertsRef.current, merged);
@@ -254,7 +267,7 @@ export function AlertsPage() {
     fetchBlacklistEntries().then(setEntries).catch(() => setEntries([]));
   }, [load]);
 
-  // Poll for new alerts; newly arrived rows flash briefly.
+  // Poll for new alerts (fallback); newly arrived rows flash briefly.
   useEffect(() => {
     const id = setInterval(() => {
       fetchAlerts().then((d) => apply(d as TriageAlert[], true)).catch(() => {});
@@ -262,7 +275,30 @@ export function AlertsPage() {
     return () => clearInterval(id);
   }, [apply]);
 
-  const handleAcknowledge = async (target: TriageAlert) => {
+  // Live events (Supabase Realtime / replay): merge immediately.
+  useEffect(
+    () =>
+      subscribeAlertEvents((e) => {
+        apply(applyAlertEvent(alertsRef.current, e), e.type === 'insert');
+        if (e.type === 'insert') setSelectedId((cur) => cur ?? e.alert.id);
+      }),
+    [apply],
+  );
+
+  // Replay started / stopped / scrubbed: the set of alerts that exist changes.
+  useEffect(
+    () =>
+      subscribeReplay((prev, next, change) => {
+        if (change === 'tick' || (prev.active === next.active && prev.clock === next.clock)) return;
+        fetchAlerts().then((d) => apply(d as TriageAlert[], false)).catch(() => {});
+      }),
+    [apply],
+  );
+
+  const handleAcknowledge = (target: TriageAlert) => guard('acknowledge alerts', () => void acknowledge(target));
+
+  const acknowledge = async (target: TriageAlert) => {
+    const OPERATOR = operator;
     const id = target.id;
     const before = alertsRef.current;
     pendingAcks.current.add(id);
@@ -356,6 +392,7 @@ export function AlertsPage() {
             {simulated && <SimulationBadge />}
           </>
         }
+        actions={<ReplayControls />}
       />
 
       <Toolbar>{filters}</Toolbar>

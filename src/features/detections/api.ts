@@ -10,15 +10,25 @@
 // ═══════════════════════════════════════════════════
 
 import type { Detection } from '@/types';
-import { supabase, isSupabaseConfigured } from '@/lib/supabase/client';
+import { getSupabase, isSupabaseConfigured } from '@/lib/supabase/client';
+import { reportLiveError } from '@/lib/dataSource';
 import { mockCameras } from '@/mocks/fixtures/mockCameras';
 
-/** Legacy CAM-X codes → camera codes, in registry order (CAM-A = first camera). Mirrors pipeline/insert_detections.py. */
+/**
+ * Legacy CAM-X codes → camera codes, in registry order (CAM-A = first camera
+ * of mockCameras, CAM-B = second, …). Only old pipeline outputs named
+ * detections_CAM-A.json etc. use these; current files are keyed by the real
+ * camera code (VP-01, SC-01, …) and pass through unchanged.
+ */
 export const CODE_ALIAS_MAP: Record<string, string> = Object.fromEntries(
   mockCameras.map((c, i) => [`CAM-${String.fromCharCode(65 + i)}`, c.code]),
 );
 
 export const DETECTIONS_MANIFEST_URL = '/detections/manifest.json';
+
+/** Rows per Supabase request (PostgREST max_rows) and the per-camera ceiling. */
+export const DETECTIONS_PAGE_SIZE = 1000;
+export const DETECTIONS_MAX_ROWS = 20_000;
 
 /** Shape of /detections/manifest.json (written when pipeline output is published). */
 export interface DetectionsManifest {
@@ -62,14 +72,30 @@ export async function fetchDetectionsFromSupabase(
   cameraId: string,
   options: FetchDetectionsOptions = {},
 ): Promise<Detection[] | null> {
-  let query = supabase
-    .from('detections')
-    .select('*')
-    .eq('camera_id', cameraId);
-  if (options.signal) query = query.abortSignal(options.signal);
-  const { data, error } = await query;
+  const supabase = await getSupabase();
+  // PostgREST caps a response at 1000 rows (supabase/config.toml max_rows), and
+  // one clip holds thousands of reads: page through in frame order.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const data: any[] = [];
+  for (let from = 0; from < DETECTIONS_MAX_ROWS; from += DETECTIONS_PAGE_SIZE) {
+    let query = supabase
+      .from('detections')
+      .select('*')
+      .eq('camera_id', cameraId)
+      .order('frame_timestamp_sec', { ascending: true })
+      .order('event_id', { ascending: true })
+      .range(from, from + DETECTIONS_PAGE_SIZE - 1);
+    if (options.signal) query = query.abortSignal(options.signal);
+    const { data: page, error } = await query;
+    if (error) {
+      if (from === 0) return null;
+      break;
+    }
+    data.push(...(page ?? []));
+    if (!page || page.length < DETECTIONS_PAGE_SIZE) break;
+  }
 
-  if (error || !data || data.length === 0) return null;
+  if (data.length === 0) return null;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return data.map((item: any) => ({
@@ -140,7 +166,11 @@ export async function fetchCameraDetections(
       const rows = await fetchDetectionsFromSupabase(cameraId, options);
       if (rows) return rows;
     } catch (err) {
-      console.warn('Supabase detection fetch failed, falling back to local JSON:', err);
+      // Pipeline output shipped as static JSON is real model output (not a
+      // fixture), so it is an acceptable fallback — but the failure is
+      // reported to the data-source indicator instead of being swallowed.
+      reportLiveError(err);
+      console.warn('Supabase detection fetch failed, falling back to published pipeline output:', err);
     }
   }
   options?.signal?.throwIfAborted();

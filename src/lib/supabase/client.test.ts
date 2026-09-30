@@ -10,11 +10,11 @@ import * as analytics from '@/features/analytics/api';
 describe('data-access API surface', () => {
   it('exposes the public data-access API from the feature modules', () => {
     const expected: [object, string[]][] = [
-      [client, ['supabase', 'isSupabaseConfigured']],
+      [client, ['getSupabase', 'isSupabaseConfigured']],
       [cameras, ['getCameras', 'getCameraById', 'getCamerasByZone', 'fetchCameras']],
       [vehicles, ['searchVehicles', 'fetchTrajectoryByPlate']],
       [alerts, ['fetchAlerts', 'acknowledgeAlert', 'fetchBlacklistEntries']],
-      [analytics, ['fetchCongestionMetrics', 'fetchODPairs', 'fetchCorridors']],
+      [analytics, ['fetchNetworkAnalytics', 'fetchSimSummaryStats']],
     ];
     for (const [mod, names] of expected) {
       for (const name of names) expect(mod).toHaveProperty(name);
@@ -24,5 +24,9 @@ describe('data-access API surface', () => {
 
   it('isSupabaseConfigured() is false in the test env (no network)', () => {
     expect(client.isSupabaseConfigured()).toBe(false);
+  });
+
+  it('getSupabase() refuses to create a client when not configured (never loads the SDK)', async () => {
+    await expect(client.getSupabase()).rejects.toThrow('Supabase is not configured');
   });
 });

@@ -2,13 +2,11 @@
 // Data layer — Traffic Analytics
 //
 // Network analytics are aggregated client-side from the simulated city
-// network (public/sim, loaded lazily and shared with Vehicle Trace). The
-// legacy zone/OD/corridor fetchers remain as a mock fallback API.
+// network (public/sim, loaded lazily and shared with Vehicle Trace).
+// Production: the same aggregates come from Postgres materialised views over
+// `detections` (see docs/ARCHITECTURE.md).
 // ═══════════════════════════════════════════════════
 
-import type { CongestionMetric, ODPair, CorridorStats } from '@/types';
-import { isSupabaseConfigured } from '@/lib/supabase/client';
-import { mockCongestionMetrics, mockODPairs, mockCorridors } from '@/mocks/fixtures/mockAnalytics';
 import { mockCameras } from '@/mocks/fixtures/mockCameras';
 import { loadSimNetwork, loadSimSummary, type SimSummaryDoc } from '@/features/vehicles/sim';
 import { aggregateNetwork, type CameraMeta, type NetworkAnalytics, type TimeWindowId } from './lib/aggregate';
@@ -36,25 +34,4 @@ export function fetchSimSummaryStats(): Promise<SimSummaryDoc> {
 /** Test hook. */
 export function clearAnalyticsCache() {
   cache.clear();
-}
-
-export async function fetchCongestionMetrics(): Promise<CongestionMetric[]> {
-  if (!isSupabaseConfigured()) {
-    return mockCongestionMetrics;
-  }
-  return mockCongestionMetrics;
-}
-
-export async function fetchODPairs(): Promise<ODPair[]> {
-  if (!isSupabaseConfigured()) {
-    return mockODPairs;
-  }
-  return mockODPairs;
-}
-
-export async function fetchCorridors(): Promise<CorridorStats[]> {
-  if (!isSupabaseConfigured()) {
-    return mockCorridors;
-  }
-  return mockCorridors;
 }

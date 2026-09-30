@@ -17,7 +17,7 @@ vi.mock('@/lib/supabase/client', async () => {
       return b;
     },
   };
-  return { supabase: client, isSupabaseConfigured: () => h.configured };
+  return { getSupabase: async () => client, isSupabaseConfigured: () => h.configured };
 });
 
 import { useCameraDetections } from './useCameraDetections';
@@ -199,16 +199,16 @@ describe('useCameraDetections', () => {
     expect(detectionCalls().at(-1)![0]).toBe('/detections/detections_SC-01.json');
   });
 
-  // BUG: the Supabase query has no .range()/.limit() and no ordering. PostgREST caps
-  // responses at 1000 rows by default, while the shipped detection files hold
-  // thousands of rows per camera, so DB mode silently truncates to an arbitrary
-  // 1000-row subset (features/detections/api.ts fetchDetectionsFromSupabase).
-  it.fails('BUG: DB query paginates or orders by frame_timestamp_sec to avoid 1000-row truncation', async () => {
+  // Regression: PostgREST caps a response at 1000 rows; the query used to have no
+  // ordering/paging and silently truncated to an arbitrary 1000-row subset.
+  it('orders by frame_timestamp_sec and pages through more than 1000 rows', async () => {
     h.configured = true;
-    h.fake.enqueue('detections', { data: [{ event_id: 'x', bbox: {} }] });
+    const page = (n: number, from: number) => Array.from({ length: n }, (_, i) => ({ event_id: `e${from + i}`, bbox: {}, frame_timestamp_sec: from + i }));
+    h.fake.enqueue('detections', { data: page(1000, 0) }, { data: page(250, 1000) });
     const { result } = renderHook(() => useCameraDetections('VP-01', 'cam-003'));
-    await waitFor(() => expect(result.current.detections).toHaveLength(1));
-    const methods = h.fake.calls[0].ops.map((o) => o.method);
-    expect(methods.some((m) => m === 'order' || m === 'range')).toBe(true);
+    await waitFor(() => expect(result.current.detections).toHaveLength(1250));
+    expect(h.fake.opsFor(h.fake.calls[0], 'order')[0]).toEqual(['frame_timestamp_sec', { ascending: true }]);
+    expect(h.fake.opsFor(h.fake.calls[0], 'range')[0]).toEqual([0, 999]);
+    expect(h.fake.opsFor(h.fake.calls[1], 'range')[0]).toEqual([1000, 1999]);
   });
 });

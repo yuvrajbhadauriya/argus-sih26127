@@ -5,6 +5,7 @@
 
 import type { Trajectory, Vehicle } from '@/types';
 import { mockCameras } from '@/mocks/fixtures/mockCameras';
+import { reportSimUnavailable } from '@/lib/dataSource';
 import { SIM_JOURNEYS_URL, SIM_ROUTES_URL, SIM_SUMMARY_URL } from './config';
 import { normalizePlate } from './lib/geo';
 import {
@@ -54,9 +55,15 @@ export interface PlateSuggestion {
 }
 
 async function getJson<T>(url: string): Promise<T> {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Failed to load ${url} (HTTP ${res.status})`);
-  return (await res.json()) as T;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Failed to load ${url} (HTTP ${res.status})`);
+    return (await res.json()) as T;
+  } catch (err) {
+    // Tell the data-source indicator (top bar) that only fixtures are left.
+    reportSimUnavailable();
+    throw err;
+  }
 }
 
 /** Memoise an async loader; a failed load is forgotten so it can be retried. */

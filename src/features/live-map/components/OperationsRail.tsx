@@ -33,6 +33,8 @@ interface OperationsRailProps {
   cameras: Camera[];
   selectedCode: string | null;
   onPickCamera: (camera: Camera) => void;
+  /** "Replay the day" is running: the feed follows the replay clock. */
+  replaying?: boolean;
   className?: string;
 }
 
@@ -93,7 +95,7 @@ function AlertRow({ alert }: { alert: AlertRecord }) {
 }
 
 export function OperationsRail({
-  feed, alerts, alertCount, alertsLoading, alertsError, onRetryAlerts, cameras, selectedCode, onPickCamera, className,
+  feed, alerts, alertCount, alertsLoading, alertsError, onRetryAlerts, cameras, selectedCode, onPickCamera, replaying = false, className,
 }: OperationsRailProps) {
   const [tab, setTab] = useState<RailTab>('feed');
   const watchHits = feed.filter((f) => f.watchlist).length;
@@ -103,7 +105,7 @@ export function OperationsRail({
       className={className}
       title="Operations"
       icon={<RadioIcon />}
-      actions={tab === 'feed' ? <SimulationBadge compact /> : undefined}
+      actions={tab === 'feed' ? (replaying ? <Badge tone="danger" size="sm">Replay · live</Badge> : <SimulationBadge compact />) : undefined}
       flush
       bodyClassName="flex min-h-0 flex-col"
     >

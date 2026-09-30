@@ -2,21 +2,20 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { createFakeSupabase } from '@/test/supabaseMock';
+import { allMigrationsSql, migrationFiles } from '@/test/migrations';
 
 const h = vi.hoisted(() => ({ configured: false, fake: null as unknown as ReturnType<typeof createFakeSupabase> }));
 
 vi.mock('@/lib/supabase/client', async () => {
   const { createFakeSupabase } = await import('@/test/supabaseMock');
   h.fake = createFakeSupabase();
-  return { supabase: h.fake.client, isSupabaseConfigured: () => h.configured };
+  return { getSupabase: async () => h.fake.client, isSupabaseConfigured: () => h.configured };
 });
 
 import { searchVehicles, fetchTrajectoryByPlate } from './api';
 import { resetSimCache } from './sim';
 
-const SQL = ['20260925_init_schema.sql', '20260927_add_detection_pipeline_columns.sql', '20260927_add_detection_tracking.sql']
-  .map((f) => readFileSync(resolve(process.cwd(), `supabase/migrations/${f}`), 'utf8'))
-  .join('\n');
+const SQL = allMigrationsSql();
 
 const SUMMARY = JSON.parse(readFileSync(resolve(process.cwd(), 'public/sim/summary.json'), 'utf8'));
 const WATCH = SUMMARY.demo.watchlist[0].plate_text as string; // e.g. "MH 01 CS 0126"
@@ -100,11 +99,14 @@ describe('searchVehicles — Supabase configured', () => {
     expect(h.fake.opsFor(c, 'limit')[0]).toEqual([100]);
   });
 
-  it('falls back to the simulated network on error, throw or empty result', async () => {
+  it('surfaces database errors (ErrorState) instead of silently switching to the simulation', async () => {
     h.fake.enqueue('vehicles', { error: { message: 'x' } });
-    expect((await searchVehicles(WATCH)).map((v) => v.plate_text)).toContain(WATCH);
+    await expect(searchVehicles(WATCH)).rejects.toThrow('Failed to search vehicles: x');
     h.fake.enqueue('vehicles', new Error('net'));
-    expect((await searchVehicles(WATCH)).map((v) => v.plate_text)).toContain(WATCH);
+    await expect(searchVehicles(WATCH)).rejects.toThrow('net');
+  });
+
+  it('uses the (labelled) simulated network when the database has no match', async () => {
     h.fake.enqueue('vehicles', { data: [] });
     expect((await searchVehicles(WATCH)).map((v) => v.plate_text)).toContain(WATCH);
   });
@@ -217,23 +219,30 @@ describe('fetchTrajectoryByPlate — Supabase configured', () => {
     expect(t.camera_count).toBeGreaterThanOrEqual(4);
   });
 
-  it('falls back to the simulated network when nothing matches or the client throws', async () => {
+  it('uses the simulated network when the database has no journey, but surfaces errors', async () => {
     h.fake.enqueue('trajectories', { error: { message: 'relation does not exist' } });
     h.fake.enqueue('detections', { data: [] });
     expect((await fetchTrajectoryByPlate(WATCH))!.source).toBe('simulation');
     h.fake.enqueue('trajectories', new Error('net'));
-    expect((await fetchTrajectoryByPlate(WATCH))!.source).toBe('simulation');
-    h.fake.enqueue('trajectories', new Error('net'));
+    await expect(fetchTrajectoryByPlate(WATCH)).rejects.toThrow('net');
+    h.fake.enqueue('trajectories', { data: null });
+    h.fake.enqueue('detections', { error: { message: 'boom' } });
+    await expect(fetchTrajectoryByPlate(WATCH)).rejects.toThrow('Failed to load trajectory: boom');
+    h.fake.enqueue('trajectories', { data: null });
+    h.fake.enqueue('detections', { data: [] });
     expect(await fetchTrajectoryByPlate('x')).toBeNull();
   });
 
-  // BUG (schema drift): features/vehicles/api.ts queries a `trajectories` relation, orders
-  // detections by `detected_at`, and embeds cameras(latitude, longitude). None of
-  // these exist in supabase/migrations (detections has `timestamp`; cameras has
-  // lat/lng; there is no trajectories table/view). Against a migration-built DB the
-  // reconstruction path errors and the UI falls back to the simulated network.
-  it.fails('BUG: migrations define a trajectories relation and detections.detected_at', () => {
+  // Formerly schema drift (read only the first three migrations): the reconcile
+  // migration now defines the trajectories view and detections.detected_at.
+  it('migrations define a trajectories relation and detections.detected_at', () => {
     expect(SQL).toMatch(/(TABLE|VIEW)[^;]*public\.trajectories/i);
     expect(SQL).toMatch(/\bdetected_at\b/);
+  });
+
+  it('migration versions are unique 14-digit timestamps (supabase db push needs unique versions)', () => {
+    const versions = migrationFiles().map((f) => f.split('_')[0]);
+    for (const v of versions) expect(v).toMatch(/^\d{14}$/);
+    expect(new Set(versions).size).toBe(versions.length);
   });
 });

@@ -1,12 +1,17 @@
 // ═══════════════════════════════════════════════════
-// SystemStatus — camera network health pill + details popover (topbar).
+// SystemStatus — camera network health + the single data-source indicator
+// (Live Supabase / Simulated network / Demo fixtures) in the top bar.
 // Loaded lazily by TopBar so the cameras data layer stays out of the entry chunk.
 // ═══════════════════════════════════════════════════
 
+import { useSyncExternalStore } from 'react';
 import { Link } from 'react-router-dom';
 import { cn } from '@/shared/lib/cn';
-import { env } from '@/config/env';
+import { useDataSource, type DataSource } from '@/lib/dataSource';
 import { useCameras } from '@/features/cameras/hooks/useCameras';
+import { getLiveChannelStatus, subscribeLiveChannelStatus, type LiveChannelStatus } from '@/features/alerts/live';
+import { useAuth, ROLE_LABEL } from '@/features/auth/session';
+import { Badge, type Tone } from '@/shared/ui/Badge';
 import { Popover } from '@/shared/ui/Popover';
 import { StatusPill } from '@/shared/ui/StatusPill';
 
@@ -19,10 +24,25 @@ const HEALTH: Record<Health, { word: string; dot: string; text: string }> = {
   loading: { word: 'Checking', dot: 'bg-fg-subtle', text: 'text-fg-muted' },
 };
 
-const liveBackend = Boolean(env.supabaseUrl?.startsWith('http') && env.supabaseAnonKey);
+const SOURCE_TAG: Record<DataSource, { short: string; tone: Tone }> = {
+  live: { short: 'Live', tone: 'success' },
+  simulated: { short: 'Simulated', tone: 'warning' },
+  demo: { short: 'Demo data', tone: 'neutral' },
+};
+
+const CHANNEL_LABEL: Record<LiveChannelStatus, string> = {
+  off: 'Off (30 s polling)',
+  connecting: 'Connecting…',
+  subscribed: 'Realtime (alerts)',
+  error: 'Unavailable — 30 s polling',
+};
 
 export function SystemStatus({ className }: { className?: string }) {
   const { cameras, loading, error } = useCameras();
+  const ds = useDataSource();
+  const tag = SOURCE_TAG[ds.source];
+  const channel = useSyncExternalStore(subscribeLiveChannelStatus, getLiveChannelStatus, getLiveChannelStatus);
+  const { user } = useAuth();
   const total = cameras.length;
   const online = cameras.filter((c) => c.status === 'online').length;
   const offlineCams = cameras.filter((c) => c.status !== 'online');
@@ -32,7 +52,7 @@ export function SystemStatus({ className }: { className?: string }) {
   return (
     <Popover
       className={className}
-      triggerLabel={`System status: ${online} of ${total} cameras online, ${h.word}`}
+      triggerLabel={`System status: ${online} of ${total} cameras online, ${h.word}. Data source: ${ds.label}`}
       triggerClassName="inline-flex h-8 items-center gap-2 rounded-full border border-line px-3 text-xs font-medium text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
       trigger={
         <>
@@ -42,6 +62,8 @@ export function SystemStatus({ className }: { className?: string }) {
           </span>
           <span className="hidden xl:inline">cameras</span>
           <span className={cn('hidden font-semibold lg:inline', h.text)}>{h.word}</span>
+          <span aria-hidden className="h-3.5 w-px bg-line" />
+          <Badge tone={ds.liveError ? 'danger' : tag.tone} size="sm">{ds.liveError ? 'Live · degraded' : tag.short}</Badge>
         </>
       }
       panelClassName="w-72"
@@ -56,10 +78,24 @@ export function SystemStatus({ className }: { className?: string }) {
           {online} / {total}
         </dd>
         <dt className="text-fg-muted">Data source</dt>
-        <dd className="text-right text-fg">{liveBackend ? 'Live Supabase' : 'Simulated city network'}</dd>
+        <dd className="text-right font-medium text-fg">{ds.label}</dd>
+        {ds.source === 'live' && (
+          <>
+            <dt className="text-fg-muted">Alert updates</dt>
+            <dd className="text-right text-fg">{CHANNEL_LABEL[channel]}</dd>
+          </>
+        )}
+        <dt className="text-fg-muted">Session</dt>
+        <dd className="text-right text-fg">{user ? `${ROLE_LABEL[user.role]}${user.demo ? ' (demo)' : ''}` : 'Read-only guest'}</dd>
         <dt className="text-fg-muted">ANPR model</dt>
         <dd className="text-right text-fg">YOLOv7-tiny ANPR</dd>
       </dl>
+      <p className="border-t border-line px-3 py-2.5 text-xs text-fg-muted">{ds.description}</p>
+      {ds.liveError && (
+        <p role="alert" className="border-t border-line px-3 py-2.5 text-xs text-danger">
+          Last database error: {ds.liveError.message}
+        </p>
+      )}
       <div className="border-t border-line px-3 py-2.5">
         <div className="mb-1.5 text-2xs font-semibold uppercase tracking-[0.06em] text-fg-subtle">Offline cameras</div>
         {error ? (

@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   CctvIcon,
   CpuIcon,
+  PencilIcon,
   HistoryIcon,
   MapPinIcon,
   PlusIcon,
@@ -19,13 +20,16 @@ import {
 import type { AlertPriority, AuditLogEntry, BlacklistEntry, WatchlistCategory } from '@/types';
 import type { Camera } from '@/types/camera';
 import { DEFAULT_MAP_CENTER } from '@/config/constants';
-import { isSupabaseConfigured } from '@/lib/supabase/client';
-import { fetchCameras } from '@/features/cameras/api';
-import { fetchBlacklistEntries } from '@/features/alerts/api';
+import { useDataSource } from '@/lib/dataSource';
+import { createCamera, fetchCameras, updateCamera } from '@/features/cameras/api';
+import { clearCamerasCache } from '@/features/cameras/hooks/useCameras';
+import { createWatchlistEntry, fetchBlacklistEntries, updateWatchlistEntry } from '@/features/alerts/api';
+import { fetchAuditLog } from '@/features/admin/api';
+import { ROLE_LABEL, useAuth } from '@/features/auth/session';
+import { useOperatorAction } from '@/features/auth/guard';
 import { DETECT_ENDPOINT } from '@/features/detections/remote/detectFrame';
 import { formatIstDate, formatIstTime } from '@/features/vehicles/lib/geo';
-import { SHOW_SIMULATION_BADGE } from '@/features/vehicles/config';
-import { mockUsers, mockAuditLogs, type UserAccount } from '@/mocks/fixtures/mockAdmin';
+import { mockUsers, type UserAccount } from '@/mocks/fixtures/mockAdmin';
 import { Page, PageHeader } from '@/shared/layout/Page';
 import { ThemeToggle } from '@/shared/layout/ThemeToggle';
 import { Panel } from '@/shared/ui/Card';
@@ -81,7 +85,13 @@ function Switch({ checked, onChange, label }: { checked: boolean; onChange: (v: 
   );
 }
 
-interface CameraForm { name: string; code: string; zone: string; direction: string; road: string }
+interface CameraForm { name: string; code: string; zone: string; direction: string; road: string; lat: string; lng: string; status: Camera['status'] }
+const EMPTY_CAMERA: CameraForm = {
+  name: '', code: '', zone: ZONES[0], direction: DIRECTIONS[0], road: '',
+  lat: DEFAULT_MAP_CENTER[0].toFixed(5), lng: DEFAULT_MAP_CENTER[1].toFixed(5), status: 'offline',
+};
+// Greater Mumbai bounding box (camera coordinates are validated against it).
+const MUMBAI = { latMin: 18.85, latMax: 19.35, lngMin: 72.75, lngMax: 73.1 };
 interface WatchForm { plate: string; category: WatchlistCategory; priority: AlertPriority; reason: string; validTo: string }
 type Errors<T> = Partial<Record<keyof T, string>>;
 
@@ -92,7 +102,11 @@ export function AdminPage() {
   const [tab, setTab] = useState<AdminTab>('cameras');
   const [cameras, setCameras] = useState<Camera[]>([]);
   const [watchlist, setWatchlist] = useState<BlacklistEntry[]>([]);
-  const [audit, setAudit] = useState<AuditLogEntry[]>(mockAuditLogs);
+  const [audit, setAudit] = useState<AuditLogEntry[]>([]);
+  const [auditNote, setAuditNote] = useState<string | null>(null);
+  const { user } = useAuth();
+  const guard = useOperatorAction();
+  const ds = useDataSource();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -103,7 +117,9 @@ export function AdminPage() {
   const [auditDay, setAuditDay] = useState('all');
 
   const [camOpen, setCamOpen] = useState(false);
-  const [camForm, setCamForm] = useState<CameraForm>({ name: '', code: '', zone: ZONES[0], direction: DIRECTIONS[0], road: '' });
+  const [camForm, setCamForm] = useState<CameraForm>(EMPTY_CAMERA);
+  const [editingCam, setEditingCam] = useState<Camera | null>(null);
+  const [saving, setSaving] = useState(false);
   const [camErrors, setCamErrors] = useState<Errors<CameraForm>>({});
   const [wlOpen, setWlOpen] = useState(false);
   const [wlForm, setWlForm] = useState<WatchForm>({ plate: '', category: 'stolen', priority: 'high', reason: '', validTo: '' });
@@ -116,6 +132,15 @@ export function AdminPage() {
       const [c, w] = await Promise.all([fetchCameras(), fetchBlacklistEntries()]);
       setCameras(c);
       setWatchlist(w);
+      fetchAuditLog()
+        .then((a) => {
+          setAudit(a);
+          setAuditNote(null);
+        })
+        .catch((err: unknown) => {
+          setAudit([]);
+          setAuditNote(err instanceof Error ? err.message : 'Audit trail unavailable');
+        });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load admin data');
     } finally {
@@ -128,44 +153,82 @@ export function AdminPage() {
     load();
   }, [load]);
 
-  const logAction = (action: string, entity_type: string, entity_id: string, details: string) =>
+  // Live mode: the database audit trigger records writes (reloaded below);
+  // simulated/demo mode keeps a session-local trail.
+  const logAction = (action: string, entity_type: string, entity_id: string, details: string) => {
+    if (ds.source === 'live') {
+      fetchAuditLog().then(setAudit).catch(() => {});
+      return;
+    }
     setAudit((prev) => [
-      { id: `aud-${Date.now()}`, action, entity_type, entity_id, user_id: mockUsers[0].id, user_email: mockUsers[0].email, details, timestamp: nowIso() },
+      { id: `aud-${Date.now()}`, action, entity_type, entity_id, user_id: user?.id ?? 'guest', user_email: user?.email ?? 'guest', details, timestamp: nowIso() },
       ...prev,
     ]);
+  };
+
+  const openRegister = () => guard('register cameras', () => {
+    setEditingCam(null);
+    setCamForm(EMPTY_CAMERA);
+    setCamErrors({});
+    setCamOpen(true);
+  });
+
+  const openEdit = (c: Camera) => guard('edit cameras', () => {
+    setEditingCam(c);
+    setCamForm({
+      name: c.name, code: c.code, zone: c.zone, direction: c.direction, road: c.road ?? '',
+      lat: c.latitude.toFixed(5), lng: c.longitude.toFixed(5), status: c.status,
+    });
+    setCamErrors({});
+    setCamOpen(true);
+  });
 
   // ── cameras ──
-  const submitCamera = (e: FormEvent) => {
+  const submitCamera = async (e: FormEvent) => {
     e.preventDefault();
     const code = camForm.code.trim().toUpperCase();
+    const lat = Number(camForm.lat);
+    const lng = Number(camForm.lng);
     const errs: Errors<CameraForm> = {};
     if (!camForm.name.trim()) errs.name = 'Enter a camera name.';
-    if (!CAMERA_CODE.test(code)) errs.code = 'Use the format AB-01.';
-    else if (cameras.some((c) => c.code === code)) errs.code = `${code} is already registered.`;
+    if (!editingCam) {
+      if (!CAMERA_CODE.test(code)) errs.code = 'Use the format AB-01.';
+      else if (cameras.some((c) => c.code === code)) errs.code = `${code} is already registered.`;
+    }
+    if (!Number.isFinite(lat) || lat < MUMBAI.latMin || lat > MUMBAI.latMax) errs.lat = 'Latitude must be inside Greater Mumbai (18.85–19.35).';
+    if (!Number.isFinite(lng) || lng < MUMBAI.lngMin || lng > MUMBAI.lngMax) errs.lng = 'Longitude must be inside Greater Mumbai (72.75–73.10).';
     setCamErrors(errs);
     if (Object.keys(errs).length) return;
-    const cam: Camera = {
-      id: `cam-${Date.now()}`,
-      name: camForm.name.trim(),
-      code,
-      latitude: DEFAULT_MAP_CENTER[0],
-      longitude: DEFAULT_MAP_CENTER[1],
-      zone: camForm.zone,
-      direction: camForm.direction,
-      road: camForm.road.trim() || undefined,
-      status: 'offline',
-      video_url: '',
-      created_at: nowIso(),
+    const fields = {
+      name: camForm.name.trim(), zone: camForm.zone, direction: camForm.direction,
+      road: camForm.road.trim() || undefined, latitude: lat, longitude: lng, status: camForm.status,
     };
-    setCameras((prev) => [cam, ...prev]);
-    logAction('CAMERA_REGISTER', 'camera', code, `Registered ${cam.name} (${code}) in ${cam.zone}`);
-    toast({ tone: 'success', title: 'Camera registered', description: `${code} · ${cam.name} — offline until its stream is connected` });
-    setCamOpen(false);
-    setCamForm({ name: '', code: '', zone: ZONES[0], direction: DIRECTIONS[0], road: '' });
+    setSaving(true);
+    try {
+      if (editingCam) {
+        await updateCamera(editingCam.id, fields);
+        setCameras((prev) => prev.map((c) => (c.id === editingCam.id ? { ...c, ...fields } : c)));
+        logAction('CAMERA_UPDATE', 'camera', editingCam.code, `Updated ${fields.name} (${editingCam.code})`);
+        toast({ tone: 'success', title: 'Camera updated', description: `${editingCam.code} · ${fields.name}` });
+      } else {
+        const cam = await createCamera({ ...fields, code });
+        setCameras((prev) => [cam, ...prev]);
+        logAction('CAMERA_REGISTER', 'camera', code, `Registered ${cam.name} (${code}) in ${cam.zone}`);
+        toast({ tone: 'success', title: 'Camera registered', description: `${code} · ${cam.name} — ${cam.status === 'online' ? 'online' : 'offline until its stream is connected'}` });
+      }
+      clearCamerasCache();
+      setCamOpen(false);
+      setCamForm(EMPTY_CAMERA);
+      setEditingCam(null);
+    } catch (err) {
+      toast({ tone: 'danger', title: editingCam ? 'Could not update camera' : 'Could not register camera', description: err instanceof Error ? err.message : 'Please try again.' });
+    } finally {
+      setSaving(false);
+    }
   };
 
   // ── watchlist ──
-  const submitWatch = (e: FormEvent) => {
+  const submitWatch = async (e: FormEvent) => {
     e.preventDefault();
     const n = normalizePlate(wlForm.plate);
     const errs: Errors<WatchForm> = {};
@@ -174,31 +237,40 @@ export function AdminPage() {
     if (wlForm.reason.trim().length < 5) errs.reason = 'Give a short reason (at least 5 characters).';
     setWlErrors(errs);
     if (Object.keys(errs).length) return;
-    const ts = nowIso();
-    const entry: BlacklistEntry = {
-      id: `bl-${Date.now()}`,
-      plate_text: formatPlate(n),
-      category: wlForm.category,
-      priority: wlForm.priority,
-      reason: wlForm.reason.trim(),
-      valid_from: ts,
-      valid_to: wlForm.validTo ? new Date(`${wlForm.validTo}T23:59:59+05:30`).toISOString() : null,
-      is_active: true,
-      created_at: ts,
-      updated_at: ts,
-    };
-    setWatchlist((prev) => [entry, ...prev]);
-    logAction('WATCHLIST_ADD', 'blacklist_entry', entry.id, `Added ${entry.priority} priority watchlist entry for ${entry.plate_text} (${entry.category})`);
-    toast({ tone: 'success', title: 'Plate added to watchlist', description: `${entry.plate_text} · alerts will fire on the next camera read` });
-    setWlOpen(false);
-    setWlForm({ plate: '', category: 'stolen', priority: 'high', reason: '', validTo: '' });
+    setSaving(true);
+    try {
+      const entry = await createWatchlistEntry({
+        plate_text: formatPlate(n),
+        category: wlForm.category,
+        priority: wlForm.priority,
+        reason: wlForm.reason.trim(),
+        valid_to: wlForm.validTo ? new Date(`${wlForm.validTo}T23:59:59+05:30`).toISOString() : null,
+      });
+      setWatchlist((prev) => [entry, ...prev.filter((w) => w.id !== entry.id)]);
+      logAction('WATCHLIST_ADD', 'blacklist_entry', entry.id, `Added ${entry.priority} priority watchlist entry for ${entry.plate_text} (${entry.category})`);
+      toast({ tone: 'success', title: 'Plate added to watchlist', description: `${entry.plate_text} · alerts will fire on the next camera read` });
+      setWlOpen(false);
+      setWlForm({ plate: '', category: 'stolen', priority: 'high', reason: '', validTo: '' });
+    } catch (err) {
+      toast({ tone: 'danger', title: 'Could not add plate', description: err instanceof Error ? err.message : 'Please try again.' });
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const toggleActive = (entry: BlacklistEntry, active: boolean) => {
-    setWatchlist((prev) => prev.map((w) => (w.id === entry.id ? { ...w, is_active: active, updated_at: nowIso() } : w)));
-    logAction(active ? 'WATCHLIST_ENABLE' : 'WATCHLIST_DISABLE', 'blacklist_entry', entry.id, `${active ? 'Re-activated' : 'Deactivated'} watchlist entry for ${formatPlate(entry.plate_text)}`);
-    toast({ tone: 'info', title: active ? 'Watchlist entry activated' : 'Watchlist entry paused', description: formatPlate(entry.plate_text) });
-  };
+  const toggleActive = (entry: BlacklistEntry, active: boolean) =>
+    guard('edit the watchlist', async () => {
+      const before = watchlist;
+      setWatchlist((prev) => prev.map((w) => (w.id === entry.id ? { ...w, is_active: active, updated_at: nowIso() } : w)));
+      try {
+        await updateWatchlistEntry(entry.id, { is_active: active });
+        logAction(active ? 'WATCHLIST_ENABLE' : 'WATCHLIST_DISABLE', 'blacklist_entry', entry.id, `${active ? 'Re-activated' : 'Deactivated'} watchlist entry for ${formatPlate(entry.plate_text)}`);
+        toast({ tone: 'info', title: active ? 'Watchlist entry activated' : 'Watchlist entry paused', description: formatPlate(entry.plate_text) });
+      } catch (err) {
+        setWatchlist(before);
+        toast({ tone: 'danger', title: 'Could not update watchlist entry', description: err instanceof Error ? err.message : 'Please try again.' });
+      }
+    });
 
   // ── derived rows ──
   const camRows = useMemo(() => {
@@ -230,8 +302,13 @@ export function AdminPage() {
     { key: 'road', header: 'Road', cell: (c) => <span className="text-fg-muted">{c.road ?? '—'}</span>, hideBelow: 'lg' },
     { key: 'status', header: 'Status', sortValue: (c) => c.status, cell: (c) => <StatusPill status={c.status} size="sm" /> },
     {
-      key: 'act', header: <span className="sr-only">Actions</span>, align: 'right', width: '48px',
-      cell: (c) => <IconButton size="sm" label={`Locate ${c.code} on map`} icon={<MapPinIcon size={14} />} onClick={() => navigate(`/?cam=${encodeURIComponent(c.code)}`)} />,
+      key: 'act', header: <span className="sr-only">Actions</span>, align: 'right', width: '80px',
+      cell: (c) => (
+        <span className="inline-flex gap-0.5">
+          <IconButton size="sm" label={`Edit ${c.code}`} icon={<PencilIcon size={14} />} onClick={() => openEdit(c)} />
+          <IconButton size="sm" label={`Locate ${c.code} on map`} icon={<MapPinIcon size={14} />} onClick={() => navigate(`/?cam=${encodeURIComponent(c.code)}`)} />
+        </span>
+      ),
     },
   ];
 
@@ -276,7 +353,8 @@ export function AdminPage() {
   const system: [string, React.ReactNode][] = [
     ['ANPR model', 'YOLOv7-tiny ANPR (plate detection + OCR)'],
     ['Detection endpoint', <span key="e" className="font-mono">{DETECT_ENDPOINT}</span>],
-    ['Data source', isSupabaseConfigured() ? 'Live Supabase' : SHOW_SIMULATION_BADGE ? 'Simulated city network (seeded journeys on real Mumbai roads)' : 'Sample data'],
+    ['Data source', `${ds.label} — ${ds.description}`],
+    ['Signed in as', user ? `${user.name} (${user.email}) · ${ROLE_LABEL[user.role]}${user.demo ? ' · demo identity' : ''}` : 'Not signed in (read-only)'],
     ['Cameras registered', `${cameras.length} (${cameras.filter((c) => c.status === 'online').length} online)`],
     ['Road routing', 'OSRM road geometry between camera pairs'],
     ['Map tiles', 'Esri Canvas (light / dark) with reference labels'],
@@ -290,7 +368,13 @@ export function AdminPage() {
         title="Administration"
         icon={SettingsIcon}
         description="Camera registry, watchlist, access roles and audit trail"
-        meta={<Badge tone="info" size="md">Admin role</Badge>}
+        meta={
+          user ? (
+            <Badge tone={user.role === 'admin' ? 'primary' : 'info'} size="md">{`${ROLE_LABEL[user.role]}${user.demo ? ' · demo' : ''}`}</Badge>
+          ) : (
+            <Badge tone="neutral" size="md">Read-only · sign in to edit</Badge>
+          )
+        }
       />
 
       <div>
@@ -305,7 +389,7 @@ export function AdminPage() {
             title="Camera registry"
             subtitle="ANPR camera nodes on the city network"
             flush
-            actions={<Button size="sm" variant="primary" icon={<PlusIcon size={14} />} onClick={() => { setCamErrors({}); setCamOpen(true); }}>Register camera</Button>}
+            actions={<Button size="sm" variant="primary" icon={<PlusIcon size={14} />} onClick={openRegister}>Register camera</Button>}
           >
             <Toolbar className="border-b border-line px-4 py-2.5">
               <Input uiSize="sm" icon={<SearchIcon size={14} />} placeholder="Search name, code, zone, road" aria-label="Search cameras" value={camQuery} onChange={(e) => setCamQuery(e.target.value)} className="w-full max-w-xs" />
@@ -327,7 +411,7 @@ export function AdminPage() {
             title="Watchlist"
             subtitle="A camera read of an active plate raises an alert"
             flush
-            actions={<Button size="sm" variant="primary" icon={<PlusIcon size={14} />} onClick={() => { setWlErrors({}); setWlOpen(true); }}>Add plate</Button>}
+            actions={<Button size="sm" variant="primary" icon={<PlusIcon size={14} />} onClick={() => guard('edit the watchlist', () => { setWlErrors({}); setWlOpen(true); })}>Add plate</Button>}
           >
             <Toolbar className="border-b border-line px-4 py-2.5">
               <Input uiSize="sm" icon={<SearchIcon size={14} />} placeholder="Search plate or reason" aria-label="Search watchlist" value={wlQuery} onChange={(e) => setWlQuery(e.target.value)} className="w-full max-w-xs" />
@@ -349,7 +433,13 @@ export function AdminPage() {
         </TabPanel>
 
         <TabPanel id="users" active={tab === 'users'} className="mt-4">
-          <Panel title="Users & roles" subtitle="Admins manage configuration · operators triage alerts · analysts read analytics" flush>
+          <Panel
+            title="Users & roles"
+            subtitle={ds.source === 'live'
+              ? 'Sample directory — live roles are set in Supabase Auth (app_metadata.role), see docs/DATABASE.md'
+              : 'Admins manage configuration · operators triage alerts · analysts read analytics'}
+            flush
+          >
             <DataTable caption="User accounts" columns={userCols} rows={mockUsers} rowKey={(u) => u.id} empty={<EmptyState compact title="No users" />} />
           </Panel>
         </TabPanel>
@@ -373,7 +463,7 @@ export function AdminPage() {
               rowKey={(a) => a.id}
               pageSize={20}
               initialSort={{ key: 'ts', dir: 'desc' }}
-              empty={<EmptyState compact icon={<HistoryIcon size={20} />} title="No audit entries" description="Nothing recorded for these filters." />}
+              empty={<EmptyState compact icon={<HistoryIcon size={20} />} title="No audit entries" description={auditNote ?? (ds.source === 'live' && !user ? 'The audit trail is visible to signed-in operators and admins.' : 'Nothing recorded for these filters.')} />}
             />
           </Panel>
         </TabPanel>
@@ -395,21 +485,21 @@ export function AdminPage() {
       <Modal
         open={camOpen}
         onClose={() => setCamOpen(false)}
-        title="Register camera"
-        description="The camera appears offline until its video stream is connected."
+        title={editingCam ? `Edit camera ${editingCam.code}` : 'Register camera'}
+        description={editingCam ? 'Changes apply to the live map and trajectory reconstruction.' : 'The camera appears offline until its video stream is connected.'}
         footer={
           <>
             <Button variant="ghost" onClick={() => setCamOpen(false)}>Cancel</Button>
-            <Button variant="primary" type="submit" form="register-camera">Register camera</Button>
+            <Button variant="primary" type="submit" form="register-camera" loading={saving}>{editingCam ? 'Save changes' : 'Register camera'}</Button>
           </>
         }
       >
         <form id="register-camera" onSubmit={submitCamera} noValidate className="grid gap-3 sm:grid-cols-2">
           <Field label="Camera name" htmlFor="cam-name" required error={camErrors.name} className="sm:col-span-2">
-            <Input id="cam-name" value={camForm.name} invalid={!!camErrors.name} onChange={(e) => setCamForm({ ...camForm, name: e.target.value })} placeholder="e.g. ITO Crossing" />
+            <Input id="cam-name" value={camForm.name} invalid={!!camErrors.name} onChange={(e) => setCamForm({ ...camForm, name: e.target.value })} placeholder="e.g. Andheri Flyover (WEH)" />
           </Field>
           <Field label="Code" htmlFor="cam-code" required error={camErrors.code} hint="Two letters, dash, two digits">
-            <Input id="cam-code" mono value={camForm.code} invalid={!!camErrors.code} onChange={(e) => setCamForm({ ...camForm, code: e.target.value.toUpperCase() })} placeholder="IT-01" />
+            <Input id="cam-code" mono value={camForm.code} invalid={!!camErrors.code} disabled={!!editingCam} onChange={(e) => setCamForm({ ...camForm, code: e.target.value.toUpperCase() })} placeholder="GK-01" />
           </Field>
           <Field label="Zone" htmlFor="cam-zone">
             <Select id="cam-zone" value={camForm.zone} onChange={(e) => setCamForm({ ...camForm, zone: e.target.value })} className="w-full">
@@ -422,7 +512,19 @@ export function AdminPage() {
             </Select>
           </Field>
           <Field label="Road / junction" htmlFor="cam-road">
-            <Input id="cam-road" value={camForm.road} onChange={(e) => setCamForm({ ...camForm, road: e.target.value })} placeholder="e.g. Vikas Marg at ITO" />
+            <Input id="cam-road" value={camForm.road} onChange={(e) => setCamForm({ ...camForm, road: e.target.value })} placeholder="e.g. LBS Marg at Ghatkopar" />
+          </Field>
+          <Field label="Status" htmlFor="cam-status">
+            <Select id="cam-status" value={camForm.status} onChange={(e) => setCamForm({ ...camForm, status: e.target.value as Camera['status'] })} className="w-full">
+              <option value="offline">Offline</option>
+              <option value="online">Online</option>
+            </Select>
+          </Field>
+          <Field label="Latitude" htmlFor="cam-lat" required error={camErrors.lat}>
+            <Input id="cam-lat" mono inputMode="decimal" value={camForm.lat} invalid={!!camErrors.lat} onChange={(e) => setCamForm({ ...camForm, lat: e.target.value })} />
+          </Field>
+          <Field label="Longitude" htmlFor="cam-lng" required error={camErrors.lng}>
+            <Input id="cam-lng" mono inputMode="decimal" value={camForm.lng} invalid={!!camErrors.lng} onChange={(e) => setCamForm({ ...camForm, lng: e.target.value })} />
           </Field>
         </form>
       </Modal>
@@ -435,7 +537,7 @@ export function AdminPage() {
         footer={
           <>
             <Button variant="ghost" onClick={() => setWlOpen(false)}>Cancel</Button>
-            <Button variant="primary" type="submit" form="add-watchlist">Add to watchlist</Button>
+            <Button variant="primary" type="submit" form="add-watchlist" loading={saving}>Add to watchlist</Button>
           </>
         }
       >

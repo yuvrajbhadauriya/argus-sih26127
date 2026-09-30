@@ -5,21 +5,37 @@ The schema, row level security (RLS), audit trail and retention policy live in
 
 ## Migrations
 
-The Supabase CLI applies migrations in **byte order of the filename**.
+The Supabase CLI applies migrations in **byte order of the filename**. Every
+file has a unique 14-digit version (`YYYYMMDDHHMMSS`); the schema-contract tests
+(`src/test/migrations.ts`) read *all* files in that order and fail if a version
+is duplicated or not 14 digits.
 
 | File | What it does |
 | --- | --- |
-| `20260925_init_schema.sql` | Original tables and the old `vehicles` view (legacy). |
-| `20260927_add_detection_pipeline_columns.sql` | `tracked_vehicle_id`, `frame_timestamp_sec` (legacy). |
-| `20260927_add_detection_tracking.sql` | Same columns again. **Its version duplicates the file above** (see Known issues). |
-| `20260930_delhi_camera_network.sql` | Old Delhi camera registry (kept for history). |
+| `20260925000000_init_schema.sql` | Original tables and the old `vehicles` view (legacy). |
+| `20260927000000_add_detection_pipeline_columns.sql` | `tracked_vehicle_id`, `frame_timestamp_sec` (legacy). |
+| `20260927000100_add_detection_tracking.sql` | Same columns again (`IF NOT EXISTS`, so a no-op after the file above; kept for history). |
+| `20260930000000_delhi_camera_network.sql` | Old Delhi camera registry (kept for history). |
 | `20261001000000_reconcile_schema.sql` | **Makes the schema match the code** (details below). |
 | `20261001000100_rls.sql` | **RLS, grants, audit triggers, `purge_old_detections()`.** |
 | `20261001000200_mumbai_camera_network.sql` | Mumbai camera registry (cam-001..cam-008, new clips); retires cam-009. Sorts after the Delhi seed, so it wins on a fresh reset. |
+| `20261001000300_alerts_realtime.sql` | Adds **`alerts` (only)** to the `supabase_realtime` publication, so the dashboard gets new alerts instantly. `detections` is deliberately not published (high volume). No-op on plain Postgres. |
 
-The two `20261001*` files are idempotent and don't depend on the camera-network
+The `20261001*` files are idempotent and don't depend on the camera-network
 files, so you can apply them to any project built from the older migrations.
 They also work on an empty database.
+
+> **Renamed versions (Sept 2026).** The first four files used to be
+> `20260925_…`, `20260927_…` (twice — a duplicate version that made
+> `supabase db push` fail) and `20260930_…`. If your hosted project's migration
+> history still records the old 8-digit versions, re-map it once:
+>
+> ```bash
+> supabase migration repair --status reverted 20260925 20260927 20260930
+> supabase migration repair --status applied 20260925000000 20260927000000 20260927000100 20260930000000
+> ```
+>
+> The SQL itself did not change (only comments), so nothing is re-run.
 
 ### What the reconcile migration fixes
 
@@ -95,8 +111,12 @@ later without a policy is reachable only by `service_role`.
 
 > **Prototype vs production.** The dashboard currently uses the **anon key for
 > read-only access**, so the SIH demo works without a login. Every write from
-> the Admin or Alerts pages (acknowledge, watchlist edits) now **requires a
-> signed-in operator**. Without one, the write fails with a permission error.
+> the Admin or Alerts pages (acknowledge, register/edit camera, watchlist add /
+> pause) **requires a signed-in operator or admin**. The dashboard has an
+> operator sign-in page (`/login`, Supabase Auth email + password) and asks a
+> guest to sign in when they press a write button, instead of letting the
+> write fail. Create operator accounts in Dashboard → Authentication → Users,
+> then grant the role with the SQL above.
 > ANPR reads are personal data under the DPDP Act 2023. For production, drop
 > the `anon` read policies and require login. The statements are at the end of
 > `20261001000100_rls.sql`.
@@ -123,7 +143,7 @@ the rest:
 
 ```bash
 # example: init + pipeline columns were applied by hand
-supabase migration repair --status applied 20260925 20260927
+supabase migration repair --status applied 20260925000000 20260927000000 20260927000100
 supabase db push
 ```
 
@@ -135,11 +155,12 @@ Paste and run each file in this order:
 2. `20261001000100_rls.sql`
 3. `20261001000200_mumbai_camera_network.sql`, if the Mumbai cameras aren't
    loaded yet
+4. `20261001000300_alerts_realtime.sql` (live alert push)
 
 If you use the CLI later, record these files as applied:
 
 ```bash
-supabase migration repair --status applied 20261001000000 20261001000100 20261001000200
+supabase migration repair --status applied 20261001000000 20261001000100 20261001000200 20261001000300
 ```
 
 ### Retention (pg_cron)
@@ -225,10 +246,17 @@ Re-running is always safe:
 * Alerts are inserted with `ON CONFLICT (source_key) DO NOTHING`, so an
   acknowledgement is never reset.
 
+## Realtime
+
+`20261001000300_alerts_realtime.sql` publishes `alerts`. The dashboard
+(`src/features/alerts/realtime.ts`) subscribes to `postgres_changes`
+INSERT/UPDATE on `public.alerts`, re-reads each new row with its joins, and
+shows a toast + updates the sidebar badge. Realtime applies the same RLS as
+REST, so every role that can read alerts receives them. The 30 s poll remains
+as a fallback (the top-bar status popover shows whether the channel is
+subscribed).
+
 ## Known issues
 
-* **Duplicate version `20260927`.** Two files share the version, so
-  `supabase db push` fails when it records the second one. Rename
-  `20260927_add_detection_tracking.sql` to `20260927000001_add_detection_tracking.sql`,
-  or delete it: the reconcile migration covers it. If you rename it, also
-  update `src/features/vehicles/api.test.ts`, which reads it by name.
+* None open for the migration set. (The duplicate `20260927` version was fixed
+  by renaming every early migration to a 14-digit version, see above.)

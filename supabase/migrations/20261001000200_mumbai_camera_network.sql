@@ -13,7 +13,7 @@
 --   * pipeline/camera_config.json
 --   * this file
 --
--- Supersedes 20260930_delhi_camera_network.sql (kept for history) and sorts
+-- Supersedes 20260930000000_delhi_camera_network.sql (kept for history) and sorts
 -- after it, so a fresh `supabase db reset` ends on the Mumbai registry. It
 -- does not depend on the 20261001 reconcile/RLS migrations. Safe to re-run:
 -- upserts cam-001..cam-008 with the new code, location and video, and retires

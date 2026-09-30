@@ -3,12 +3,16 @@
 // Pages render inside <main> and bring their own <Page> padding.
 // ═══════════════════════════════════════════════════
 
-import { Suspense } from 'react';
+import { lazy, Suspense } from 'react';
 import { Outlet } from 'react-router-dom';
 import { LoadingState } from '@/shared/ui/LoadingState';
 import { Toaster } from '@/shared/ui/Toaster';
+import { SignInPrompt } from '@/features/auth/SignInPrompt';
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
+
+// Lazy: realtime / replay alert wiring pulls in the alerts data layer.
+const LiveAlertBridge = lazy(() => import('@/features/alerts/LiveAlertBridge'));
 
 export function DashboardLayout() {
   return (
@@ -30,6 +34,10 @@ export function DashboardLayout() {
         </main>
       </div>
       <Toaster />
+      <SignInPrompt />
+      <Suspense fallback={null}>
+        <LiveAlertBridge />
+      </Suspense>
     </div>
   );
 }

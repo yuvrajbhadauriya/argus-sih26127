@@ -1,13 +1,17 @@
 // ═══════════════════════════════════════════════════
 // Supabase Data Access Layer — Vehicles & Trajectories
 //
-// Supabase is used whenever it is configured and actually holds a multi-camera
-// trajectory for the plate. Otherwise the simulated city network
-// (/sim/journeys.json + /sim/road_routes.json, loaded lazily) is used.
+// Live (Supabase configured): the `vehicles` / `trajectories` views. A query
+// ERROR is thrown (the page shows ErrorState). When the database simply has no
+// multi-camera journey for a plate (e.g. only the 8 demo clips were processed),
+// the simulated city network is used instead and the result is tagged
+// `source: 'simulation'`, which the page labels with the SimulationBadge.
+// Not configured: the simulated city network (/sim/*.json, loaded lazily).
 // ═══════════════════════════════════════════════════
 
 import type { Vehicle, Trajectory } from '@/types';
-import { supabase, isSupabaseConfigured } from '@/lib/supabase/client';
+import { getSupabase, isSupabaseConfigured } from '@/lib/supabase/client';
+import { reportLiveError, reportLiveOk } from '@/lib/dataSource';
 import { DEFAULT_LOCATION } from '@/config/constants';
 import { normalizePlate } from './lib/geo';
 import { enrichWithRoads } from './lib/trajectory';
@@ -41,53 +45,51 @@ export async function searchVehicles(query: string = ''): Promise<Vehicle[]> {
     return simVehiclesOrEmpty(normalized);
   }
 
-  try {
-    let dbQuery = supabase.from('vehicles').select('*');
-    if (normalized) {
-      dbQuery = dbQuery.ilike('plate_text', `%${normalized}%`);
-    } else {
-      dbQuery = dbQuery.order('last_seen', { ascending: false }).limit(100);
-    }
-
-    const { data, error } = await dbQuery;
-
-    if (error || !data) {
-      console.warn('DB vehicles query error, falling back to simulated network:', error);
-      return simVehiclesOrEmpty(normalized);
-    }
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const rows = data.map((row: any) => ({
-      plate_text: row.plate_text || row.plate || 'UNKNOWN',
-      vehicle_type: row.vehicle_type || 'car',
-      first_seen: row.first_seen || new Date().toISOString(),
-      last_seen: row.last_seen || new Date().toISOString(),
-      detection_count: row.detection_count ?? 1,
-      camera_count: row.camera_count ?? 1,
-    })) as Vehicle[];
-    return rows.length > 0 ? rows : simVehiclesOrEmpty(normalized);
-  } catch (err) {
-    console.warn('Failed to query vehicles view:', err);
-    return simVehiclesOrEmpty(normalized);
+  const supabase = await getSupabase();
+  let dbQuery = supabase.from('vehicles').select('*');
+  if (normalized) {
+    dbQuery = dbQuery.ilike('plate_text', `%${normalized}%`);
+  } else {
+    dbQuery = dbQuery.order('last_seen', { ascending: false }).limit(100);
   }
+
+  const { data, error } = await dbQuery;
+  if (error) {
+    reportLiveError(error.message);
+    throw new Error(`Failed to search vehicles: ${error.message}`);
+  }
+  reportLiveOk();
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rows = (data ?? []).map((row: any) => ({
+    plate_text: row.plate_text || row.plate || 'UNKNOWN',
+    vehicle_type: row.vehicle_type || 'car',
+    first_seen: row.first_seen || new Date().toISOString(),
+    last_seen: row.last_seen || new Date().toISOString(),
+    detection_count: row.detection_count ?? 1,
+    camera_count: row.camera_count ?? 1,
+  })) as Vehicle[];
+  return rows.length > 0 ? rows : simVehiclesOrEmpty(normalized);
 }
 
 /** Trajectory from Supabase (trajectories relation, else reconstructed from detections). */
 async function fetchDbTrajectory(normalized: string): Promise<Trajectory | null> {
+  const supabase = await getSupabase();
   const { data, error } = await supabase
     .from('trajectories')
     .select('*')
     .eq('plate_text', normalized)
     .maybeSingle();
 
-  if (!error && data) return data as Trajectory;
+  if (!error && data) return { ...(data as Trajectory), source: 'supabase' };
 
-  const { data: dets } = await supabase
+  const { data: dets, error: detErr } = await supabase
     .from('detections')
     .select('*, cameras(name, code, latitude, longitude)')
     .eq('plate_text_normalized', normalizePlate(normalized))
     .order('detected_at', { ascending: true });
 
+  if (detErr) throw new Error(`Failed to load trajectory: ${detErr.message}`);
   if (!dets || dets.length === 0) return null;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -146,11 +148,13 @@ export async function fetchTrajectoryByPlate(plate: string): Promise<Trajectory 
     return simTrajectoryOrNull(normalized);
   }
 
-  let db: Trajectory | null = null;
+  let db: Trajectory | null;
   try {
     db = await fetchDbTrajectory(normalized);
+    reportLiveOk();
   } catch (err) {
-    console.warn('Error fetching trajectory from Supabase:', err);
+    reportLiveError(err);
+    throw err instanceof Error ? err : new Error(String(err));
   }
 
   // Prefer real data when it shows an actual cross-camera journey.

@@ -2,6 +2,9 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig, type Plugin, type Rolldown } from 'vite'
 import { fileURLToPath, URL } from 'node:url'
+import fs from 'node:fs'
+import path from 'node:path'
+import type { IncomingMessage, ServerResponse } from 'node:http'
 
 /**
  * Pages are lazy chunks, so without help the browser only discovers the
@@ -19,6 +22,7 @@ const ROUTE_PAGES: Record<string, string> = {
   '/analytics': 'src/features/analytics/pages/AnalyticsPage.tsx',
   '/detections': 'src/features/detections/pages/DetectionsPage.tsx',
   '/admin': 'src/features/admin/pages/AdminPage.tsx',
+  '/login': 'src/features/auth/LoginPage.tsx',
 }
 
 function routePreloadPlugin(): Plugin {
@@ -70,9 +74,83 @@ function routePreloadPlugin(): Plugin {
   }
 }
 
+
+/**
+ * public/videos-local/ holds ~100 MB of symlinked dev clips
+ * (pipeline/tools/link_local_videos.py, gitignored). Vite would copy it into
+ * dist/ on every build, so this plugin:
+ *   - build:   disables Vite's public-dir copy and copies public/ itself,
+ *              skipping videos-local/ (production streams from Supabase Storage);
+ *   - preview: serves /videos-local/* straight from public/ (with HTTP Range
+ *              support so <video> can seek), so `vite preview` still plays
+ *              local clips. `vite dev` serves public/ as usual.
+ */
+const LOCAL_VIDEOS_DIR = 'videos-local'
+const VIDEO_TYPES: Record<string, string> = { '.mp4': 'video/mp4', '.jpg': 'image/jpeg', '.json': 'application/json', '.webm': 'video/webm' }
+
+function serveLocalVideos(root: string) {
+  const base = path.resolve(root, 'public', LOCAL_VIDEOS_DIR)
+  return (req: IncomingMessage, res: ServerResponse, next: () => void) => {
+    const url = decodeURIComponent((req.url ?? '').split('?')[0])
+    if (!url.startsWith(`/${LOCAL_VIDEOS_DIR}/`)) return next()
+    const file = path.resolve(base, url.slice(LOCAL_VIDEOS_DIR.length + 2))
+    if (!file.startsWith(base + path.sep) || !fs.existsSync(file)) return next()
+    const { size } = fs.statSync(file)
+    const type = VIDEO_TYPES[path.extname(file).toLowerCase()] ?? 'application/octet-stream'
+    const range = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range ?? '')
+    res.setHeader('Accept-Ranges', 'bytes')
+    res.setHeader('Content-Type', type)
+    if (range) {
+      const start = range[1] ? Number(range[1]) : Math.max(0, size - Number(range[2]))
+      const end = range[1] && range[2] ? Math.min(Number(range[2]), size - 1) : size - 1
+      if (start >= size || start > end) {
+        res.statusCode = 416
+        res.setHeader('Content-Range', `bytes */${size}`)
+        return res.end()
+      }
+      res.statusCode = 206
+      res.setHeader('Content-Range', `bytes ${start}-${end}/${size}`)
+      res.setHeader('Content-Length', String(end - start + 1))
+      fs.createReadStream(file, { start, end }).pipe(res)
+      return
+    }
+    res.setHeader('Content-Length', String(size))
+    fs.createReadStream(file).pipe(res)
+  }
+}
+
+function localVideosPlugin(): Plugin {
+  let root = process.cwd()
+  let outDir = 'dist'
+  let publicDir = ''
+  return {
+    name: 'nero-local-videos',
+    config(_cfg, { command }) {
+      if (command === 'build') return { build: { copyPublicDir: false } }
+    },
+    configResolved(cfg) {
+      root = cfg.root
+      outDir = path.resolve(cfg.root, cfg.build.outDir)
+      publicDir = cfg.publicDir
+    },
+    writeBundle() {
+      if (!publicDir || !fs.existsSync(publicDir)) return
+      const skip = path.join(publicDir, LOCAL_VIDEOS_DIR)
+      fs.cpSync(publicDir, outDir, {
+        recursive: true,
+        dereference: true,
+        filter: (src) => src !== skip && !src.startsWith(skip + path.sep),
+      })
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use(serveLocalVideos(root))
+    },
+  }
+}
+
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), tailwindcss(), routePreloadPlugin()],
+  plugins: [react(), tailwindcss(), routePreloadPlugin(), localVideosPlugin()],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),

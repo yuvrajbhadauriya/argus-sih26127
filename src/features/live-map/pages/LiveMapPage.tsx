@@ -12,6 +12,9 @@ import { mockDetections } from '@/mocks/fixtures/mockDetections';
 import { mockLiveFeed } from '@/mocks/fixtures/mockLiveFeed';
 import { DEFAULT_MAP_CENTER, SECTOR_LABEL } from '@/config/constants';
 import { SimulationBadge } from '@/features/vehicles/components/SimulationBadge';
+import { ReplayControls } from '@/features/replay/ReplayControls';
+import { useReplayView } from '@/features/replay/engine';
+import { formatReplayClock } from '@/features/replay/clock';
 import { Page } from '@/shared/layout/Page';
 import { Panel } from '@/shared/ui/Card';
 import { KpiStrip, KpiTile } from '@/shared/ui/KpiTile';
@@ -84,7 +87,20 @@ export function LiveMapPage() {
   const openAlerts = useMemo(() => topOpenAlerts(alerts.data ?? [], Number.POSITIVE_INFINITY), [alerts.data]);
   const critical = openAlerts.filter((a) => a.priority === 'critical').length;
   const hotspots = useMemo(() => (showHotspots ? alertHotspots(alerts.data ?? []) : []), [alerts.data, showHotspots]);
-  const plates = useMemo(() => lastPlates(), []);
+  const replay = useReplayView(12);
+  const staticPlates = useMemo(() => lastPlates(), []);
+  // During a replay the popups show each camera's latest read at the replay clock.
+  const plates = useMemo(() => {
+    if (!replay.feed) return staticPlates;
+    const byCode = new Map(cameras.map((c) => [c.code, c.id]));
+    const out: Record<string, string | undefined> = { ...staticPlates };
+    for (const f of [...replay.feed].reverse()) {
+      const id = byCode.get(f.cameraCode);
+      if (id) out[id] = f.plate;
+    }
+    return out;
+  }, [replay.feed, staticPlates, cameras]);
+  const feed = replay.feed ?? mockLiveFeed;
   const stats = summary.data?.stats;
   const simHint = summary.data?.simulated ? <SimulationBadge compact /> : undefined;
   const simValue = (v: number | undefined, fmt: (n: number) => string = (n) => nf.format(n)) =>
@@ -105,11 +121,11 @@ export function LiveMapPage() {
           />
           <KpiTile
             label="Detections · last hour"
-            value={simValue(stats?.sightings_per_hour[istHour()])}
+            value={replay.readsLastHour != null ? nf.format(replay.readsLastHour) : simValue(stats?.sightings_per_hour[istHour()])}
             icon={<ScanLineIcon size={16} />}
             tone="info"
-            hint={summary.error ? 'Summary unavailable' : simHint}
-            loading={summary.loading}
+            hint={replay.active ? `Replay · to ${formatReplayClock(replay.clock).slice(0, 5)} IST` : summary.error ? 'Summary unavailable' : simHint}
+            loading={summary.loading && !replay.active}
           />
           <KpiTile
             label="Open alerts"
@@ -175,6 +191,10 @@ export function LiveMapPage() {
                 <IconButton size="sm" label="Recenter" icon={<LocateFixedIcon size={16} strokeWidth={1.75} />} onClick={() => setRecenterNonce((n) => n + 1)} />
               </MapPanel>
 
+              <MapPanel position="bottom-center" className="w-max max-w-[calc(100%-24px)] border-0 bg-transparent shadow-none">
+                <ReplayControls className="shadow-pop" />
+              </MapPanel>
+
               <MapLegend
                 title="Legend"
                 position="bottom-left"
@@ -198,7 +218,8 @@ export function LiveMapPage() {
 
         <OperationsRail
           className="min-h-[420px] lg:min-h-0"
-          feed={mockLiveFeed}
+          feed={feed}
+          replaying={replay.active}
           alerts={openAlerts.slice(0, 8)}
           alertCount={openAlerts.length}
           alertsLoading={alerts.loading}

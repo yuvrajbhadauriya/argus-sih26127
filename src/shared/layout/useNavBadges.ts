@@ -1,13 +1,15 @@
 // ═══════════════════════════════════════════════════
 // useNavBadges — live counts for the shell (unacknowledged alerts).
 // The alerts API is imported dynamically so the Supabase client stays out of
-// the entry chunk; refreshes every 60 s. Shared module-level cache so the
+// the entry chunk. Refreshed on every live alert event (Supabase Realtime /
+// replay, see features/alerts/LiveAlertBridge) and polled every 30 s as the
+// fallback. Shared module-level cache so the
 // Sidebar and TopBar don't each fetch.
 // ═══════════════════════════════════════════════════
 
 import { useSyncExternalStore, useEffect } from 'react';
 
-export const NAV_BADGE_REFRESH_MS = 60_000;
+export const NAV_BADGE_REFRESH_MS = 30_000;
 
 interface NavBadges {
   alerts: number;

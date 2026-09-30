@@ -7,7 +7,7 @@
 import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { DashboardLayout } from '@/shared/layout/DashboardLayout';
-import { routes, prefetchRoutesWhenIdle } from './routes';
+import { routes, loginRoute, prefetchRoutesWhenIdle } from './routes';
 
 export default function App() {
   useEffect(() => prefetchRoutesWhenIdle(), []);
@@ -15,6 +15,8 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* Sign-in sits outside the dashboard shell. */}
+        <Route path={loginRoute.path} element={<loginRoute.page.Component />} />
         <Route element={<DashboardLayout />}>
           {routes.map(({ path, page: { Component } }) => (
             <Route key={path} path={path} element={<Component />} />

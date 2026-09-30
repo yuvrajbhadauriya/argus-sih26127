@@ -62,17 +62,15 @@ export function useCameras(): UseCamerasReturn {
   const [loading, setLoading] = useState(() => !cache);
   const [error, setError] = useState<string | null>(null);
 
-  const run = useCallback(async (force: boolean, isActive: () => boolean = () => true) => {
+  const run = useCallback(async (force: boolean) => {
     try {
       const data = await loadCameras(force);
-      if (isActive()) {
-        setCameras(data);
-        setError(null);
-      }
+      setCameras(data);
+      setError(null);
     } catch (err) {
-      if (isActive()) setError(err instanceof Error ? err.message : 'Failed to load cameras');
+      setError(err instanceof Error ? err.message : 'Failed to load cameras');
     } finally {
-      if (isActive()) setLoading(false);
+      setLoading(false);
     }
   }, []);
 
@@ -80,11 +78,25 @@ export function useCameras(): UseCamerasReturn {
     // Fresh cache → nothing to do. Stale cache → show it, refresh in background.
     if (cache && Date.now() - cache.at < CAMERAS_CACHE_TTL_MS) return;
     let active = true;
-    run(false, () => active);
+    // State is only set from the promise callbacks (never synchronously here).
+    loadCameras(false)
+      .then(
+        (data) => {
+          if (!active) return;
+          setCameras(data);
+          setError(null);
+        },
+        (err: unknown) => {
+          if (active) setError(err instanceof Error ? err.message : 'Failed to load cameras');
+        },
+      )
+      .finally(() => {
+        if (active) setLoading(false);
+      });
     return () => {
       active = false;
     };
-  }, [run]);
+  }, []);
 
   const refetch = useCallback(() => {
     setLoading(true);

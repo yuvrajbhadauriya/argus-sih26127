@@ -7,7 +7,7 @@ vi.mock('@/lib/supabase/client', async () => {
   const { createFakeSupabase } = await import('@/test/supabaseMock');
   h.fake = createFakeSupabase();
   return {
-    supabase: h.fake.client,
+    getSupabase: async () => h.fake.client,
     isSupabaseConfigured: () => h.configured,
   };
 });

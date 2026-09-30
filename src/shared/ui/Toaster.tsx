@@ -38,6 +38,18 @@ export function Toaster() {
             <div className="min-w-0 flex-1">
               <p className="text-[13px] font-semibold leading-[18px]">{t.title}</p>
               {t.description && <p className="mt-0.5 text-xs text-fg-muted">{t.description}</p>}
+              {t.action && (
+                <button
+                  type="button"
+                  className="mt-1.5 rounded-sm text-xs font-semibold text-primary hover:underline focus-visible:outline-2 focus-visible:outline-focus"
+                  onClick={() => {
+                    dismissToast(t.id);
+                    t.action!.onClick();
+                  }}
+                >
+                  {t.action.label}
+                </button>
+              )}
             </div>
             <IconButton size="sm" label="Dismiss notification" icon={<XIcon size={14} />} onClick={() => dismissToast(t.id)} className="-m-1" />
           </div>

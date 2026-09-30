@@ -7,11 +7,14 @@ import { mockBlacklistEntries } from '@/mocks/fixtures/mockAlerts';
 import type { Camera } from '@/types/camera';
 
 const api = vi.hoisted(() => ({ fetchCameras: vi.fn(), fetchBlacklistEntries: vi.fn() }));
-vi.mock('@/features/cameras/api', () => ({ fetchCameras: api.fetchCameras }));
-vi.mock('@/features/alerts/api', () => ({ fetchBlacklistEntries: api.fetchBlacklistEntries }));
+vi.mock('@/features/cameras/api', async (orig) => ({ ...(await orig<object>()), fetchCameras: api.fetchCameras }));
+vi.mock('@/features/alerts/api', async (orig) => ({ ...(await orig<object>()), fetchBlacklistEntries: api.fetchBlacklistEntries }));
 
 import { AdminPage } from './AdminPage';
 import { clearToasts, getToasts } from '@/shared/ui/toast';
+import { DEMO_USERS, resetAuth } from '@/features/auth/session';
+import { SignInPrompt } from '@/features/auth/SignInPrompt';
+import { closeSignInPrompt } from '@/features/auth/guard';
 
 const CAMS: Camera[] = mockCameras.slice(0, 3).map((c) => ({
   id: c.id, name: c.name, code: c.code, latitude: c.lat, longitude: c.lng, zone: c.zone, direction: c.direction, road: c.road,
@@ -20,11 +23,13 @@ const CAMS: Camera[] = mockCameras.slice(0, 3).map((c) => ({
 
 beforeEach(() => {
   clearToasts();
+  resetAuth(DEMO_USERS.admin);
+  closeSignInPrompt();
   api.fetchCameras.mockReset().mockResolvedValue(CAMS);
   api.fetchBlacklistEntries.mockReset().mockResolvedValue(mockBlacklistEntries.map((e) => ({ ...e })));
 });
 
-const renderPage = () => render(<MemoryRouter><AdminPage /></MemoryRouter>);
+const renderPage = () => render(<MemoryRouter><AdminPage /><SignInPrompt /></MemoryRouter>);
 
 describe('AdminPage', () => {
   it('lists cameras and validates the register-camera form', async () => {
@@ -68,6 +73,32 @@ describe('AdminPage', () => {
     expect(sw.getAttribute('aria-checked')).not.toBe(before);
   });
 
+  it('prompts to sign in (not an error) when a guest tries to write', async () => {
+    resetAuth(null);
+    renderPage();
+    await screen.findByText(CAMS[0].name);
+    expect(screen.getByText(/read-only · sign in to edit/i)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /register camera/i }));
+    const prompt = screen.getByRole('dialog', { name: /sign in required/i });
+    expect(within(prompt).getByText(/register cameras/i)).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: /register camera$/i })).toBeNull();
+    expect(getToasts().filter((t) => t.tone === 'danger')).toHaveLength(0);
+  });
+
+  it('edits a camera through the same form (code locked)', async () => {
+    renderPage();
+    await screen.findByText(CAMS[0].name);
+    await userEvent.click(screen.getByRole('button', { name: `Edit ${CAMS[0].code}` }));
+    const dialog = screen.getByRole('dialog', { name: new RegExp(`edit camera ${CAMS[0].code}`, 'i') });
+    expect(within(dialog).getByLabelText(/code/i)).toBeDisabled();
+    const name = within(dialog).getByLabelText(/camera name/i);
+    await userEvent.clear(name);
+    await userEvent.type(name, 'Renamed Junction');
+    await userEvent.click(within(dialog).getByRole('button', { name: /save changes/i }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(screen.getByText('Renamed Junction')).toBeInTheDocument();
+  });
+
   it('shows the error state with retry', async () => {
     api.fetchCameras.mockRejectedValueOnce(new Error('registry offline'));
     renderPage();
@@ -81,7 +112,8 @@ describe('AdminPage', () => {
     await screen.findByText(CAMS[0].name);
     await userEvent.click(screen.getByRole('tab', { name: /system/i }));
     expect(screen.getByText(/YOLOv7-tiny ANPR/)).toBeInTheDocument();
-    expect(screen.getByText(/Simulated city network/)).toBeInTheDocument();
+    expect(screen.getByText(/Simulated network/)).toBeInTheDocument();
+    expect(screen.getByText(/Demo Admin/)).toBeInTheDocument();
     expect(screen.getByRole('radiogroup')).toBeInTheDocument();
   });
 });

@@ -19,36 +19,31 @@ export function useCameraDetections(
   cameraId?: string,
   { enabled = true }: UseCameraDetectionsOptions = {},
 ) {
-  const [detections, setDetections] = useState<Detection[]>([]);
-  const [loading, setLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
+  // Results are stored with the request they answer; loading / "no camera"
+  // are derived during render, so the effect never sets state synchronously.
+  const key = cameraCode || cameraId ? `${cameraCode ?? ''}|${cameraId ?? ''}` : null;
+  const [result, setResult] = useState<{ key: string; detections: Detection[]; error: string | null } | null>(null);
 
   useEffect(() => {
-    if (!cameraCode && !cameraId) {
-      setDetections([]);
-      return;
-    }
-    if (!enabled) return;
-
+    if (!key || !enabled) return;
     const controller = new AbortController();
-    setLoading(true);
-    setError(null);
-
     fetchCameraDetections(cameraCode, cameraId, { signal: controller.signal })
       .then((rows) => {
-        if (!controller.signal.aborted) setDetections(rows);
+        if (!controller.signal.aborted) setResult({ key, detections: rows, error: null });
       })
       .catch((err) => {
         if (controller.signal.aborted) return;
-        setError(err instanceof Error ? err.message : String(err));
-        setDetections([]);
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
+        setResult({ key, detections: [], error: err instanceof Error ? err.message : String(err) });
       });
-
     return () => controller.abort();
-  }, [cameraCode, cameraId, enabled]);
+  }, [key, cameraCode, cameraId, enabled]);
 
-  return { detections, loading, error };
+  const current = key && result?.key === key ? result : null;
+  return {
+    detections: current?.detections ?? EMPTY,
+    loading: key != null && enabled && current == null,
+    error: current?.error ?? null,
+  };
 }
+
+const EMPTY: Detection[] = [];

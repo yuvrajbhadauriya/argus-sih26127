@@ -5,10 +5,9 @@ Symlinks (or with ``--copy``, copies) ``pipeline/data/videos_720p/*.mp4``,
 ``*.jpg`` and ``manifest.json`` into ``public/videos-local/``. Vite then
 serves them at ``/videos-local/<slug>.mp4`` during ``npm run dev``.
 
-``public/videos-local/`` is gitignored. Note that ``npm run build`` copies
-``public/`` into ``dist/``; with symlinks Vite follows them, so remove the
-folder (``--clean``) before a production build if you do not want the clips
-bundled.
+``public/videos-local/`` is gitignored and is never copied into ``dist/``:
+``npm run build`` skips it (``localVideosPlugin`` in ``vite.config.ts``), and
+``vite preview`` serves it straight from ``public/``.
 
 Usage::
 

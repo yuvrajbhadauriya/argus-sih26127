@@ -33,7 +33,7 @@ CREATE SCHEMA IF NOT EXISTS extensions;
 CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA extensions;
 
 -- ── 1. Base tables (no-ops on an existing project; lets a fresh DB start
---       from this file alone). Column lists match 20260925_init_schema.sql. ──
+--       from this file alone). Column lists match 20260925000000_init_schema.sql. ──
 CREATE TABLE IF NOT EXISTS public.cameras (
   id VARCHAR(64) PRIMARY KEY,
   name VARCHAR(255) NOT NULL,

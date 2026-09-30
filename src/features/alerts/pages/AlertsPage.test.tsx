@@ -27,6 +27,11 @@ vi.mock('react-leaflet', () => {
 
 import { AlertsPage } from './AlertsPage';
 import { clearToasts, getToasts } from '@/shared/ui/toast';
+import { act } from '@testing-library/react';
+import { DEMO_USERS, resetAuth } from '@/features/auth/session';
+import { SignInPrompt } from '@/features/auth/SignInPrompt';
+import { closeSignInPrompt } from '@/features/auth/guard';
+import { emitAlertEvent } from '../live';
 
 const alert = (over: Partial<AlertRecord>): AlertRecord => ({
   id: 'a',
@@ -51,11 +56,13 @@ beforeEach(() => {
   api.fetchBlacklistEntries.mockReset().mockResolvedValue([]);
   api.fetchTrajectoryByPlate.mockReset().mockResolvedValue(null);
   clearToasts();
+  resetAuth(DEMO_USERS.operator);
+  closeSignInPrompt();
   vi.spyOn(console, 'error').mockImplementation(() => {});
 });
 
 describe('AlertsPage', () => {
-  const renderPage = () => render(<MemoryRouter><AlertsPage /></MemoryRouter>);
+  const renderPage = () => render(<MemoryRouter><AlertsPage /><SignInPrompt /></MemoryRouter>);
 
   it('shows pending alerts and hides acknowledged ones by default', async () => {
     api.fetchAlerts.mockResolvedValue([
@@ -104,7 +111,7 @@ describe('AlertsPage', () => {
     expect(btn).toBeDefined();
     await userEvent.click(btn!);
     await waitFor(() => expect(screen.queryByText('ACK-ME')).toBeNull());
-    expect(api.acknowledgeAlert).toHaveBeenCalledWith('1', 'Admin Operator');
+    expect(api.acknowledgeAlert).toHaveBeenCalledWith('1', 'Demo Operator');
     expect(getToasts().at(-1)).toMatchObject({ tone: 'success', title: 'Alert acknowledged' });
   });
 
@@ -118,6 +125,36 @@ describe('AlertsPage', () => {
     await waitFor(() => expect(getToasts().at(-1)).toMatchObject({ tone: 'danger', description: 'network down' }));
     expect(screen.getAllByText('FAIL-ME').length).toBeGreaterThan(0);
     expect(screen.getByText(/1 Pending Action/)).toBeInTheDocument();
+  });
+
+  it('asks a guest to sign in instead of acknowledging (no error)', async () => {
+    resetAuth(null);
+    api.fetchAlerts.mockResolvedValue([alert({ id: '1', plate_text: 'GUEST-1' })]);
+    renderPage();
+    await screen.findAllByText('GUEST-1');
+    const btn = screen.getAllByRole('button').find((b) => /^acknowledge$/i.test(b.textContent ?? ''))!;
+    await userEvent.click(btn);
+    expect(screen.getByRole('dialog', { name: /sign in required/i })).toBeInTheDocument();
+    expect(api.acknowledgeAlert).not.toHaveBeenCalled();
+    expect(screen.getByText(/1 Pending Action/)).toBeInTheDocument();
+  });
+
+  it('merges a live alert event (Realtime / replay) into the queue without polling', async () => {
+    api.fetchAlerts.mockResolvedValue([alert({ id: '1', plate_text: 'OLD-1' })]);
+    renderPage();
+    await screen.findAllByText('OLD-1');
+    act(() => emitAlertEvent({ type: 'insert', source: 'realtime', alert: alert({ id: '2', plate_text: 'NEW-2', priority: 'critical' }) }));
+    expect((await screen.findAllByText('NEW-2')).length).toBeGreaterThan(0);
+    expect(screen.getByText(/2 Pending Action/)).toBeInTheDocument();
+    act(() => emitAlertEvent({ type: 'update', source: 'realtime', alert: alert({ id: '2', plate_text: 'NEW-2', acknowledged: true, acknowledged_by: 'Op' }) }));
+    await waitFor(() => expect(screen.getByText(/1 Pending Action/)).toBeInTheDocument());
+    expect(api.fetchAlerts).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers "Replay the day" in simulated mode', async () => {
+    api.fetchAlerts.mockResolvedValue([]);
+    renderPage();
+    expect(await screen.findByRole('button', { name: /replay the day/i })).toBeInTheDocument();
   });
 
   it('lists route anomalies with evidence and filters them by type', async () => {

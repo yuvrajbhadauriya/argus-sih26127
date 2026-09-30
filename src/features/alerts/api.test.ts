@@ -1,28 +1,18 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createFakeSupabase } from '@/test/supabaseMock';
+import { tableColumns } from '@/test/migrations';
 
 const h = vi.hoisted(() => ({ configured: false, fake: null as unknown as ReturnType<typeof createFakeSupabase> }));
 
 vi.mock('@/lib/supabase/client', async () => {
   const { createFakeSupabase } = await import('@/test/supabaseMock');
   h.fake = createFakeSupabase();
-  return { supabase: h.fake.client, isSupabaseConfigured: () => h.configured };
+  return { getSupabase: async () => h.fake.client, isSupabaseConfigured: () => h.configured };
 });
 
-import { fetchAlerts, acknowledgeAlert, fetchBlacklistEntries } from './api';
+import { fetchAlerts, acknowledgeAlert, fetchBlacklistEntries, simAlertsAt, createWatchlistEntry, updateWatchlistEntry, rowToAlert } from './api';
+import { resetReplay, startReplay, stopReplay, istOnDay } from '@/features/replay/clock';
 import { mockAlertFeed as mockAlerts, mockBlacklistEntries } from '@/mocks/fixtures/mockAlerts';
-
-const INIT_SQL = readFileSync(resolve(process.cwd(), 'supabase/migrations/20260925_init_schema.sql'), 'utf8');
-function tableColumns(table: string): string[] {
-  const m = INIT_SQL.match(new RegExp(`CREATE TABLE IF NOT EXISTS public\\.${table} \\(([\\s\\S]*?)\\n\\);`));
-  if (!m) throw new Error(`table ${table} not found`);
-  return m[1]
-    .split('\n')
-    .map((l) => l.trim().split(/\s+/)[0])
-    .filter((c) => c && /^[a-z_]+$/.test(c));
-}
 
 beforeEach(() => {
   h.configured = false;
@@ -90,10 +80,15 @@ describe('alerts — Supabase configured (mocked client)', () => {
     expect(h.fake.opsFor(call, 'order')[0]).toEqual(['created_at', { ascending: false }]);
   });
 
-  it('falls back to a plain select when the join returns empty, then to mocks on error', async () => {
+  it('falls back to a plain select when the join returns empty, and surfaces an error (never mocks)', async () => {
     h.fake.enqueue('alerts', { data: [] }, { error: { message: 'x' } });
-    expect(await fetchAlerts()).toBe(mockAlerts);
+    await expect(fetchAlerts()).rejects.toThrow('Failed to load alerts: x');
     expect(h.fake.calls).toHaveLength(2);
+  });
+
+  it('returns an empty list (not the fixtures) when the database has no alerts', async () => {
+    h.fake.enqueue('alerts', { data: [] }, { data: [] });
+    expect(await fetchAlerts()).toEqual([]);
   });
 
   it('maps rows from the plain-select fallback', async () => {
@@ -102,14 +97,13 @@ describe('alerts — Supabase configured (mocked client)', () => {
     expect(a).toMatchObject({ id: 'z', priority: 'low', acknowledged: false });
   });
 
-  it('returns mock alerts when the client throws', async () => {
+  it('rejects (for ErrorState) when the client throws', async () => {
     h.fake.enqueue('alerts', new Error('network down'));
-    expect(await fetchAlerts()).toBe(mockAlerts);
+    await expect(fetchAlerts()).rejects.toThrow('network down');
   });
 
-  // BUG: a genuine coordinate of 0 is replaced with default-location because of `||`.
-  // (src/features/alerts/api.ts:62-63). Low impact in Mumbai, but it's a silent data rewrite.
-  it.fails('BUG: preserves lat/lng of 0 instead of substituting defaults', async () => {
+  // Regression: a genuine coordinate of 0 used to be replaced by the default location (`||`).
+  it('preserves lat/lng of 0 instead of substituting defaults', async () => {
     h.fake.enqueue('alerts', { data: [{ id: 'a', detections: { lat: 0, lng: 0 } }] });
     const [a] = await fetchAlerts();
     expect(a.lat).toBe(0);
@@ -120,13 +114,32 @@ describe('alerts — Supabase configured (mocked client)', () => {
     await expect(acknowledgeAlert('a1')).rejects.toThrow('Failed to acknowledge alert: denied');
   });
 
-  // BUG: operatorName is accepted but never persisted in DB mode (features/alerts/api.ts:87-93);
-  // the audit trail of *who* acknowledged is lost.
-  it.fails('BUG: acknowledgeAlert persists acknowledged_by in DB mode', async () => {
+  // Regression: operatorName used to be dropped in DB mode. (The RLS trigger
+  // re-stamps acknowledged_by from the JWT server-side; sending it keeps
+  // non-RLS/older databases correct.)
+  it('acknowledgeAlert persists status + acknowledged_by in DB mode', async () => {
     h.fake.enqueue('alerts', { data: null });
     await acknowledgeAlert('a1', 'Officer X');
     const payload = h.fake.opsFor(h.fake.calls[0], 'update')[0][0] as Record<string, unknown>;
-    expect(payload.acknowledged_by).toBe('Officer X');
+    expect(payload).toMatchObject({ status: 'acknowledged', acknowledged: true, acknowledged_by: 'Officer X' });
+  });
+
+  it('maps anomaly alert_type and camera code from joined rows', () => {
+    const a = rowToAlert({ id: 'x', alert_type: 'cloned_plate', status: 'open', detections: { cameras: { code: 'DD-01', name: 'Dadar' } } });
+    expect(a).toMatchObject({ kind: 'cloned_plate', camera_code: 'DD-01', camera_name: 'Dadar', acknowledged: false });
+  });
+
+  it('createWatchlistEntry inserts plate/notes and maps the stored row', async () => {
+    h.fake.enqueue('blacklist_entries', { data: { id: 'bl-1', plate_text: 'MH 01 AB 1234', notes: 'why', category: 'wanted', priority: 'high', created_at: 'c' } });
+    const e = await createWatchlistEntry({ plate_text: 'MH 01 AB 1234', category: 'wanted', priority: 'high', reason: 'why', valid_to: null });
+    expect(e).toMatchObject({ id: 'bl-1', plate_text: 'MH 01 AB 1234', reason: 'why' });
+    const payload = h.fake.opsFor(h.fake.calls[0], 'insert')[0][0] as Record<string, unknown>;
+    expect(payload).toMatchObject({ plate_text: 'MH 01 AB 1234', reason: 'why', notes: 'why', is_active: true });
+  });
+
+  it('updateWatchlistEntry throws the RLS error for anonymous writes', async () => {
+    h.fake.enqueue('blacklist_entries', { error: { message: 'permission denied for table blacklist_entries' } });
+    await expect(updateWatchlistEntry('bl-1', { is_active: false })).rejects.toThrow('permission denied');
   });
 
   it('fetchBlacklistEntries maps rows and throws on error', async () => {
@@ -141,18 +154,41 @@ describe('alerts — Supabase configured (mocked client)', () => {
   });
 });
 
-describe('alerts — schema contract against supabase/migrations', () => {
-  // BUG (schema drift): the frontend orders `alerts` by `created_at` and writes a
-  // `status` column, but the init migration defines neither (it has `timestamp`
-  // and `acknowledged BOOLEAN`). Against a DB built from the migrations, both
-  // fetch queries error → UI silently shows mockAlerts, and acknowledge always throws.
-  it.fails('BUG: alerts table has the columns alerts api.ts reads/writes (created_at, status, detection_id)', () => {
+describe('alerts — schema contract against ALL supabase/migrations (in apply order)', () => {
+  // Formerly schema drift (init migration only): fixed by 20261001000000_reconcile_schema.sql.
+  it('alerts table has the columns alerts api.ts reads/writes', () => {
     const cols = tableColumns('alerts');
-    expect(cols).toEqual(expect.arrayContaining(['created_at', 'status', 'detection_id']));
+    expect(cols).toEqual(expect.arrayContaining(['created_at', 'status', 'detection_id', 'acknowledged', 'acknowledged_by', 'acknowledged_at', 'alert_type']));
   });
 
-  it.fails('BUG: blacklist_entries has plate_text_normalized/notes as written by seed_alerts_and_watchlist.py', () => {
+  it('blacklist_entries has the columns written by the dashboard and seed_alerts_and_watchlist.py', () => {
     const cols = tableColumns('blacklist_entries');
-    expect(cols).toEqual(expect.arrayContaining(['plate_text_normalized', 'notes']));
+    expect(cols).toEqual(expect.arrayContaining(['plate_text', 'plate_text_normalized', 'notes', 'reason', 'is_active', 'valid_to', 'source']));
+  });
+});
+
+describe('alerts — replay the day (simulated mode)', () => {
+  afterEach(() => resetReplay());
+
+  it('only returns alerts that have fired by the replay clock, un-acknowledging later acks', async () => {
+    startReplay('08:06:00');
+    stopReplay();
+    const at = istOnDay('08:06:00');
+    const visible = simAlertsAt(at);
+    expect(visible.length).toBeGreaterThan(0);
+    expect(visible.length).toBeLessThan(mockAlerts.length);
+    for (const a of visible) {
+      expect(Date.parse(a.timestamp)).toBeLessThanOrEqual(at);
+      if (a.acknowledged && a.acknowledged_at && !a.acknowledged_by?.startsWith('Tester')) expect(Date.parse(a.acknowledged_at)).toBeLessThanOrEqual(at);
+    }
+  });
+
+  it('fetchAlerts follows the replay clock while replay is active', async () => {
+    startReplay('08:06:00');
+    const during = await fetchAlerts();
+    stopReplay();
+    const after = await fetchAlerts();
+    expect(during.length).toBeLessThan(after.length);
+    expect(after).toBe(mockAlerts);
   });
 });

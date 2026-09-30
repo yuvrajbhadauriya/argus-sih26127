@@ -9,11 +9,14 @@ export interface ToastInput {
   description?: string;
   tone?: ToastTone;
   durationMs?: number;
+  /** Optional inline action (e.g. "Open" on a new-alert toast). */
+  action?: { label: string; onClick: () => void };
 }
 
 export interface ToastItem extends Required<Pick<ToastInput, 'title' | 'tone' | 'durationMs'>> {
   id: number;
   description?: string;
+  action?: ToastInput['action'];
 }
 
 const MAX_VISIBLE = 3;
@@ -44,6 +47,7 @@ export function toast(t: ToastInput): void {
     description: t.description,
     tone: t.tone ?? 'info',
     durationMs: t.durationMs ?? 4000,
+    action: t.action,
   };
   items = [...items, item].slice(-MAX_VISIBLE);
   if (item.durationMs > 0) timers.set(item.id, setTimeout(() => dismissToast(item.id), item.durationMs));
