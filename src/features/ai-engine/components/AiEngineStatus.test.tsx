@@ -4,37 +4,25 @@ import { act, render, screen, cleanup } from '@testing-library/react';
 const h = vi.hoisted(() => ({
   configured: true,
   row: null as Record<string, unknown> | null,
-  error: null as { message: string } | null,
+  error: null as string | null,
   fetches: 0,
-  handlers: [] as ((p: { new: unknown }) => void)[],
-  removed: 0,
 }));
 
-vi.mock('@/lib/supabase/client', () => {
-  const channel = {
-    on: (_k: string, _f: unknown, cb: (p: { new: unknown }) => void) => {
-      h.handlers.push(cb);
-      return channel;
-    },
-    subscribe: () => channel,
-  };
-  const builder = {
-    select: () => builder,
-    eq: () => builder,
-    maybeSingle: () => {
-      h.fetches++;
-      return Promise.resolve({ data: h.row, error: h.error });
-    },
-  };
-  const client = {
-    from: () => builder,
-    channel: () => channel,
-    removeChannel: () => {
-      h.removed++;
-      return Promise.resolve('ok');
-    },
-  };
-  return { getSupabase: async () => client, isSupabaseConfigured: () => h.configured };
+vi.mock('@/lib/supabase/client', () => ({
+  getSupabase: async () => {
+    throw new Error('the browser must not query tables directly');
+  },
+  isSupabaseConfigured: () => h.configured,
+  getAccessToken: async () => null,
+}));
+
+/** GET /api/data/model-status → { row } (or a 502 { error }). */
+const fetchStub = vi.fn(async (url: RequestInfo | URL) => {
+  if (!String(url).startsWith('/api/data/model-status')) return new Response('not found', { status: 404 });
+  h.fetches++;
+  return h.error
+    ? new Response(JSON.stringify({ error: h.error }), { status: 502 })
+    : new Response(JSON.stringify({ row: h.row }), { status: 200 });
 });
 
 import { AiEngineStatusPill } from './AiEngineStatus';
@@ -53,14 +41,14 @@ beforeEach(() => {
   h.row = null;
   h.error = null;
   h.fetches = 0;
-  h.handlers = [];
-  h.removed = 0;
+  vi.stubGlobal('fetch', fetchStub);
   resetAiEngineStore();
 });
 
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
+  vi.unstubAllGlobals();
 });
 
 const at = (msAgo: number) => new Date(Date.now() - msAgo).toISOString();
@@ -85,35 +73,41 @@ describe('AiEngineStatusPill', () => {
     expect(screen.getByText('Model starting…')).toBeInTheDocument();
   });
 
-  it('applies Realtime updates immediately', async () => {
+  it('picks up a state change on the next 5 s poll', async () => {
     h.row = { id: 'gpu-primary', state: 'starting', eta_seconds: 30, last_heartbeat: at(0) };
     render(<AiEngineStatusPill variant="panel" />);
     await flush();
-    expect(h.handlers.length).toBeGreaterThan(0);
-    act(() => h.handlers[0]({ new: { id: 'gpu-primary', state: 'running', last_heartbeat: new Date().toISOString(), uptime_seconds: 5 } }));
+    expect(screen.getByText(/Model starting/)).toBeInTheDocument();
+    h.row = { id: 'gpu-primary', state: 'running', last_heartbeat: new Date(Date.now() + 5000).toISOString(), uptime_seconds: 5 };
+    await act(async () => {
+      vi.advanceTimersByTime(5_000);
+    });
+    await flush();
     expect(screen.getByText('AI engine online')).toBeInTheDocument();
   });
 
-  it('goes to "reconnecting" when the heartbeat stops, and polls every 10 s', async () => {
+  it('goes to "reconnecting" when the heartbeat stops, and polls every 5 s', async () => {
     h.row = { id: 'gpu-primary', state: 'running', last_heartbeat: at(0), uptime_seconds: 5 };
     render(<AiEngineStatusPill variant="panel" />);
     await flush();
     expect(screen.getByText('AI engine online')).toBeInTheDocument();
     const before = h.fetches;
     // Watchdog dies: the row stops changing.
-    await act(async () => {
-      vi.advanceTimersByTime(31_000);
-    });
-    await flush();
+    for (let i = 0; i < 7; i++) {
+      await act(async () => {
+        vi.advanceTimersByTime(5_000);
+      });
+      await flush();
+    }
     expect(screen.getByText('AI engine reconnecting…')).toBeInTheDocument();
     expect(screen.getByText(/Last seen/)).toBeInTheDocument();
-    expect(h.fetches - before).toBeGreaterThanOrEqual(3);
+    expect(h.fetches - before).toBeGreaterThanOrEqual(6);
   });
 
-  it('an empty table or a query error shows reconnecting without logging', async () => {
+  it('an empty table or an API error shows reconnecting without logging', async () => {
     const err = vi.spyOn(console, 'error');
     const warn = vi.spyOn(console, 'warn');
-    h.error = { message: 'permission denied' };
+    h.error = 'Database request failed (HTTP 500)';
     render(<AiEngineStatusPill variant="panel" />);
     await flush();
     expect(screen.getByText('AI engine reconnecting…')).toBeInTheDocument();
@@ -150,7 +144,6 @@ describe('AiEngineStatusPill', () => {
     a.unmount();
     b.unmount();
     await flush();
-    expect(h.removed).toBe(1);
     await act(async () => {
       vi.advanceTimersByTime(30_000);
     });

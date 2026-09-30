@@ -38,7 +38,7 @@ export function useLiveMapData() {
   const summary = useSource<SimSummary>(fetchSimSummary);
   const alerts = useSource<AlertRecord[]>(fetchAlerts);
   const { refresh } = alerts;
-  // Live alert events (Realtime / replay) and replay scrubbing change the set.
+  // Live alert events (live poll / replay) and replay scrubbing change the set.
   useEffect(() => {
     const offEvents = subscribeAlertEvents(refresh);
     const offReplay = subscribeReplay((prev, next, change) => {

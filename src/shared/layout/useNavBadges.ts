@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════
 // useNavBadges — live counts for the shell (unacknowledged alerts).
 // The alerts API is imported dynamically so the Supabase client stays out of
-// the entry chunk. Refreshed on every live alert event (Supabase Realtime /
+// the entry chunk. Refreshed on every live alert event (live poll /
 // replay, see features/alerts/LiveAlertBridge) and polled every 30 s as the
 // fallback. Shared module-level cache so the
 // Sidebar and TopBar don't each fetch.

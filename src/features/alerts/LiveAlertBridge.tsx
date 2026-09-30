@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════
 // LiveAlertBridge — mounted once in the dashboard shell (lazily).
 //
-//  * Live mode: opens the Supabase Realtime subscription on `alerts`.
+//  * Live mode: polls /api/data/alerts every 10 s (./livePoll.ts).
 //  * Simulated mode: starts the replay engine (alerts fire as the replay
 //    clock passes them).
 //  * Either way: every new alert becomes a toast and refreshes the sidebar /
@@ -17,7 +17,7 @@ import { refreshNavBadges } from '@/shared/layout/useNavBadges';
 import { startReplayEngine } from '@/features/replay/engine';
 import { subscribeReplay } from '@/features/replay/clock';
 import { subscribeAlertEvents, setLiveChannelStatus } from './live';
-import { subscribeAlertsRealtime } from './realtime';
+import { subscribeAlertsLive } from './livePoll';
 import { alertToastContent } from './lib/toastContent';
 
 export function LiveAlertBridge() {
@@ -26,7 +26,7 @@ export function LiveAlertBridge() {
   useEffect(() => {
     const stops: (() => void)[] = [];
     if (isSupabaseConfigured()) {
-      stops.push(subscribeAlertsRealtime(setLiveChannelStatus));
+      stops.push(subscribeAlertsLive(setLiveChannelStatus));
     } else {
       stops.push(startReplayEngine());
       // Starting / stopping / seeking the replay changes which alerts exist.

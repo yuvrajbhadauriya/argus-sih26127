@@ -50,7 +50,7 @@ import { ALERT_KIND_LABEL, alertKind, type TriageAlert } from '../types';
 import { medianAckSeconds, newAlertIds, relativeTime, sortForTriage } from '../lib/triage';
 import { AlertMiniMap, type MiniMapPoint } from '../components/AlertMiniMap';
 
-/** Fallback poll; new alerts normally arrive instantly via Realtime / replay events. */
+/** Fallback poll; new alerts normally arrive via the 10 s live poll / replay events. */
 const POLL_MS = 30_000;
 
 const SEV_BAR: Record<AlertRecord['priority'], string> = {
@@ -275,7 +275,7 @@ export function AlertsPage() {
     return () => clearInterval(id);
   }, [apply]);
 
-  // Live events (Supabase Realtime / replay): merge immediately.
+  // Live events (live poll / replay): merge immediately.
   useEffect(
     () =>
       subscribeAlertEvents((e) => {

@@ -62,7 +62,7 @@ const KNOWN_STATES = new Set<EngineState>(['running', 'starting', 'restarting', 
 /** Architecture / checkpoint names that must never reach the UI. */
 const ARCH_NAME = /deim|parseq|yolo|raw35|deim50k|lpu_on_gpu/i;
 
-/** Normalise a raw row (Realtime payloads are untyped). Returns null when unusable. */
+/** Normalise a raw row (API answers are untyped). Returns null when unusable. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function parseModelStatusRow(raw: any): ModelStatusRow | null {
   if (!raw || typeof raw !== 'object' || typeof raw.last_heartbeat !== 'string') return null;

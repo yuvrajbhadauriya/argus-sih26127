@@ -1,13 +1,13 @@
 // ═══════════════════════════════════════════════════
 // useAiEngineStatus — one shared model_status feed for every consumer
-// (top bar + Cameras page). The first subscriber starts the fetch, the 10 s
-// poll and the Realtime channel; the last one to leave stops them.
+// (top bar + Cameras page). The first subscriber starts the fetch and the 5 s
+// poll of /api/data/model-status; the last one to leave stops them.
 // Components re-render once a second (countdown / uptime / staleness).
 // ═══════════════════════════════════════════════════
 
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { isSupabaseConfigured } from '@/lib/supabase/client';
-import { fetchModelStatus, subscribeModelStatus, MODEL_STATUS_POLL_MS } from '../api';
+import { fetchModelStatus, MODEL_STATUS_POLL_MS } from '../api';
 import { engineView, type EngineView, type ModelStatusRow } from '../lib/status';
 
 interface Store {
@@ -36,7 +36,7 @@ function accept(row: ModelStatusRow | null) {
     set({ row: null, loaded: true });
     return;
   }
-  // A slow poll must not overwrite a fresher Realtime update.
+  // A slow (out-of-order) poll must not overwrite a fresher answer.
   if (newer(store.row, row)) set({ row, loaded: true });
   else if (!store.loaded) set({ loaded: true });
 }
@@ -56,12 +56,10 @@ function startFeed(): () => void {
     if (document.visibilityState === 'visible') poll();
   };
   document.addEventListener('visibilitychange', onVisible);
-  const unsubscribe = subscribeModelStatus((row) => active && accept(row));
   return () => {
     active = false;
     clearInterval(timer);
     document.removeEventListener('visibilitychange', onVisible);
-    unsubscribe();
   };
 }
 

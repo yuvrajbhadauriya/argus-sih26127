@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════
 // Live alert events — one tiny in-memory bus for "an alert just happened".
 //
-// Producers: Supabase Realtime (./realtime.ts, live mode) and the replay
+// Producers: the live alerts poll (./livePoll.ts, live mode) and the replay
 // engine (src/features/replay/engine.ts, simulated mode).
 // Consumers: LiveAlertBridge (toast + sidebar badge) and the Alerts page
 // (merges the row into the queue without waiting for the 30 s poll).
@@ -10,7 +10,7 @@
 import type { TriageAlert } from './types';
 
 export type AlertEventType = 'insert' | 'update';
-export type AlertEventSource = 'realtime' | 'replay';
+export type AlertEventSource = 'live' | 'replay';
 
 export interface AlertEvent {
   type: AlertEventType;
@@ -39,7 +39,7 @@ export function applyAlertEvent<T extends TriageAlert>(list: T[], e: AlertEvent)
   return next;
 }
 
-// ── realtime connection status (for the top-bar status popover) ──
+// ── live feed status (for the top-bar status popover) ──
 
 export type LiveChannelStatus = 'off' | 'connecting' | 'subscribed' | 'error';
 let channelStatus: LiveChannelStatus = 'off';

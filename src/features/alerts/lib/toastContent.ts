@@ -1,4 +1,4 @@
-// Toast text for a new live alert (Realtime or replay).
+// Toast text for a new live alert (live poll or replay).
 import { formatIstTime } from '@/features/live-map/lib/time';
 import type { AlertEvent } from '../live';
 import { ALERT_KIND_LABEL, alertKind } from '../types';

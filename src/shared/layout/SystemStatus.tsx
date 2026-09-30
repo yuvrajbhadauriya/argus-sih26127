@@ -34,8 +34,8 @@ const SOURCE_TAG: Record<DataSource, { short: string; tone: Tone }> = {
 const CHANNEL_LABEL: Record<LiveChannelStatus, string> = {
   off: 'Off (30 s polling)',
   connecting: 'Connecting…',
-  subscribed: 'Realtime (alerts)',
-  error: 'Unavailable — 30 s polling',
+  subscribed: 'Live (alerts, 10 s poll)',
+  error: 'Unavailable — retrying',
 };
 
 export function SystemStatus({ className }: { className?: string }) {

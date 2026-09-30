@@ -3,7 +3,7 @@
 //
 //  * Alerts: every simulated alert (watchlist hit / route anomaly) whose
 //    timestamp the clock passes during a tick is emitted on the live-alert bus
-//    (toast + sidebar badge + Alerts queue), exactly as a Supabase Realtime
+//    (toast + sidebar badge + Alerts queue), exactly as a live-poll
 //    INSERT would be in live mode.
 //  * Sightings: every plate read of the simulated day, indexed by time, so the
 //    Live Map feed / KPIs show what the network "sees" at the replay clock.

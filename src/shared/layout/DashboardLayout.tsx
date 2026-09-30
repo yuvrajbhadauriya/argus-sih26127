@@ -11,7 +11,7 @@ import { SignInPrompt } from '@/features/auth/SignInPrompt';
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
 
-// Lazy: realtime / replay alert wiring pulls in the alerts data layer.
+// Lazy: live-poll / replay alert wiring pulls in the alerts data layer.
 const LiveAlertBridge = lazy(() => import('@/features/alerts/LiveAlertBridge'));
 
 export function DashboardLayout() {

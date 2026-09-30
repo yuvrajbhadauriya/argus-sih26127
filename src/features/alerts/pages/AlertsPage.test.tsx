@@ -139,14 +139,14 @@ describe('AlertsPage', () => {
     expect(screen.getByText(/1 Pending Action/)).toBeInTheDocument();
   });
 
-  it('merges a live alert event (Realtime / replay) into the queue without polling', async () => {
+  it('merges a live alert event (live poll / replay) into the queue without polling', async () => {
     api.fetchAlerts.mockResolvedValue([alert({ id: '1', plate_text: 'OLD-1' })]);
     renderPage();
     await screen.findAllByText('OLD-1');
-    act(() => emitAlertEvent({ type: 'insert', source: 'realtime', alert: alert({ id: '2', plate_text: 'NEW-2', priority: 'critical' }) }));
+    act(() => emitAlertEvent({ type: 'insert', source: 'live', alert: alert({ id: '2', plate_text: 'NEW-2', priority: 'critical' }) }));
     expect((await screen.findAllByText('NEW-2')).length).toBeGreaterThan(0);
     expect(screen.getByText(/2 Pending Action/)).toBeInTheDocument();
-    act(() => emitAlertEvent({ type: 'update', source: 'realtime', alert: alert({ id: '2', plate_text: 'NEW-2', acknowledged: true, acknowledged_by: 'Op' }) }));
+    act(() => emitAlertEvent({ type: 'update', source: 'live', alert: alert({ id: '2', plate_text: 'NEW-2', acknowledged: true, acknowledged_by: 'Op' }) }));
     await waitFor(() => expect(screen.getByText(/1 Pending Action/)).toBeInTheDocument());
     expect(api.fetchAlerts).toHaveBeenCalledTimes(1);
   });
