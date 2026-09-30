@@ -61,3 +61,16 @@ describe('detections log helpers', () => {
     expect(formatFrameTime(65.5)).toBe('01:05.500');
   });
 });
+
+describe('recentPlateReads', () => {
+  it('keeps the most confident read per tracked vehicle, newest first, skipping unreadable plates', async () => {
+    const { recentPlateReads } = await import('./log');
+    const out = recentPlateReads([
+      det({ event_id: 'a', tracked_vehicle_id: 1, confidence_score: 0.8, frame_timestamp_sec: 1 }),
+      det({ event_id: 'b', tracked_vehicle_id: 1, confidence_score: 0.9, frame_timestamp_sec: 2 }),
+      det({ event_id: 'c', tracked_vehicle_id: 2, plate_text_raw: 'UNKNOWN', frame_timestamp_sec: 5 }),
+      det({ event_id: 'd', tracked_vehicle_id: 3, plate_text_raw: 'HR26CD5678', frame_timestamp_sec: 9 }),
+    ]);
+    expect(out.map((d) => d.event_id)).toEqual(['d', 'b']);
+  });
+});

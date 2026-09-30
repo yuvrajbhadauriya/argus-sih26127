@@ -89,4 +89,20 @@ describe('CameraVideoPlayer', () => {
     expect(screen.queryByText('Feed offline')).toBeNull();
     expect(document.querySelector('video')).not.toBeNull();
   });
+
+  it('reports its <video> element and feed status to the caller', () => {
+    const onVideoElement = vi.fn();
+    const onStatusChange = vi.fn();
+    render(<CameraVideoPlayer camera={camera} onVideoElement={onVideoElement} onStatusChange={onStatusChange} />);
+    expect(onVideoElement).toHaveBeenLastCalledWith(video());
+    expect(onStatusChange).toHaveBeenLastCalledWith('connecting');
+    setVisible(true);
+    fireEvent.playing(video());
+    expect(onStatusChange).toHaveBeenLastCalledWith('playing');
+    expect(screen.getByText('LIVE')).toBeInTheDocument();
+    fireEvent.error(video());
+    fireEvent.error(video());
+    expect(onStatusChange).toHaveBeenLastCalledWith('offline');
+    expect(onVideoElement).toHaveBeenLastCalledWith(null);
+  });
 });

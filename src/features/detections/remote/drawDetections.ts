@@ -3,9 +3,11 @@
 // ═══════════════════════════════════════════════════
 
 import type { RemoteDetection } from './detectFrame';
+import { VIDEO_OVERLAY } from '@/shared/theme/tokens';
 
-const BOX_COLOR = '#22d3ee'; // nero-cyan
-const PLATE_BG = 'rgba(0, 0, 0, 0.75)';
+const BOX_COLOR = VIDEO_OVERLAY.box;
+const PLATE_BG = VIDEO_OVERLAY.labelBg;
+const LABEL_FG = VIDEO_OVERLAY.labelFg;
 
 export function formatPct(v: number | null | undefined): string {
   return v == null ? '—' : `${(v * 100).toFixed(1)}%`;
@@ -35,7 +37,7 @@ export function drawDetections(canvas: HTMLCanvasElement, frame: { width: number
     const ly = y - th >= 0 ? y - th : y + height;
     ctx.fillStyle = PLATE_BG;
     ctx.fillRect(x, ly, tw, th);
-    ctx.fillStyle = BOX_COLOR;
+    ctx.fillStyle = LABEL_FG;
     ctx.fillText(label, x + 4, ly + 3);
   }
 }

@@ -100,3 +100,16 @@ export function formatFrameTime(ts: string | number): string {
   const s = n - m * 60;
   return `${String(m).padStart(2, '0')}:${s.toFixed(3).padStart(6, '0')}`;
 }
+
+/** One row per tracked vehicle (its most confident read that has plate text), newest frame first. */
+export function recentPlateReads(detections: Detection[], limit = 50): Detection[] {
+  const best = new Map<string, Detection>();
+  for (const d of detections) {
+    if (!d.plate_text_raw || d.plate_text_raw === 'UNKNOWN') continue;
+    const key = d.tracked_vehicle_id != null ? `t${d.tracked_vehicle_id}` : `p${plateKey(d.plate_text_raw)}`;
+    const cur = best.get(key);
+    if (!cur || d.confidence_score > cur.confidence_score) best.set(key, d);
+  }
+  const t = (d: Detection) => d.frame_timestamp_sec ?? (typeof d.timestamp === 'number' ? d.timestamp : 0);
+  return [...best.values()].sort((a, b) => t(b) - t(a)).slice(0, limit);
+}

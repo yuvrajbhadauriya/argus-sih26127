@@ -18,6 +18,7 @@
 
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import type { Detection } from '@/types';
+import { VIDEO_OVERLAY } from '@/shared/theme/tokens';
 
 /** Detections within ±this many seconds of the playhead are drawn. */
 export const OVERLAY_WINDOW_SEC = 0.2;
@@ -145,18 +146,17 @@ function drawDetections(ctx: CanvasRenderingContext2D, dets: Detection[], cssW: 
     const scaledW = width * scaleX;
     const scaledH = height * scaleY;
 
-    // Bounding box styling - Electric Emerald Green
-    ctx.strokeStyle = '#22c55e';
-    ctx.lineWidth = 2.5;
-    ctx.shadowColor = 'rgba(34, 197, 94, 0.7)';
-    ctx.shadowBlur = 10;
+    // Bounding box (fixed video-overlay palette: video is always dark)
+    ctx.strokeStyle = VIDEO_OVERLAY.box;
+    ctx.lineWidth = 2;
+    ctx.shadowColor = VIDEO_OVERLAY.boxGlow;
+    ctx.shadowBlur = 6;
     ctx.strokeRect(scaledX, scaledY, scaledW, scaledH);
     ctx.shadowBlur = 0;
 
-    // Bounding box corner ticks for high-tech AI tracking aesthetic
-    const cornerLen = 10;
-    ctx.strokeStyle = '#4ade80';
-    ctx.lineWidth = 3.5;
+    // Corner ticks make small boxes easier to pick out on busy footage
+    const cornerLen = Math.min(10, scaledW / 3, scaledH / 3);
+    ctx.lineWidth = 3;
     ctx.beginPath();
     ctx.moveTo(scaledX, scaledY + cornerLen);
     ctx.lineTo(scaledX, scaledY);
@@ -172,21 +172,20 @@ function drawDetections(ctx: CanvasRenderingContext2D, dets: Detection[], cssW: 
     ctx.lineTo(scaledX + scaledW, scaledY + scaledH - cornerLen);
     ctx.stroke();
 
-    // Label header tag
-    const trackedIdStr = det.tracked_vehicle_id ? `[#${det.tracked_vehicle_id}] ` : '';
-    const labelText = `${trackedIdStr}${det.plate_text_raw} (${String(det.vehicle_type).toUpperCase()}) ${Math.round(det.confidence_score * 100)}%`;
-    ctx.font = '600 11px Inter, sans-serif';
-    const tagHeight = 20;
-    const tagWidth = ctx.measureText(labelText).width + 12;
+    // Label: plate · class · confidence on a dark chip above the box
+    const trackedIdStr = det.tracked_vehicle_id ? `#${det.tracked_vehicle_id} ` : '';
+    const labelText = `${trackedIdStr}${det.plate_text_raw} · ${String(det.vehicle_type).toUpperCase()} · ${Math.round(det.confidence_score * 100)}%`;
+    ctx.font = '600 11px "Inter Variable", Inter, sans-serif';
+    const tagHeight = 18;
+    const tagWidth = ctx.measureText(labelText).width + 10;
     const tagY = Math.max(0, scaledY - tagHeight - 2);
 
-    ctx.fillStyle = '#064e3b';
+    ctx.fillStyle = VIDEO_OVERLAY.labelBg;
     ctx.fillRect(scaledX, tagY, tagWidth, tagHeight);
-    ctx.strokeStyle = '#22c55e';
-    ctx.lineWidth = 1.5;
-    ctx.strokeRect(scaledX, tagY, tagWidth, tagHeight);
-    ctx.fillStyle = '#4ade80';
-    ctx.fillText(labelText, scaledX + 6, Math.max(14, scaledY - 7));
+    ctx.fillStyle = VIDEO_OVERLAY.box;
+    ctx.fillRect(scaledX, tagY, 2, tagHeight);
+    ctx.fillStyle = VIDEO_OVERLAY.labelFg;
+    ctx.fillText(labelText, scaledX + 6, tagY + 13);
   }
 }
 

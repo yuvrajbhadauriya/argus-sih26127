@@ -12,22 +12,34 @@
 // and for canvas frame capture — keep them.
 // ═══════════════════════════════════════════════════
 
-import { useRef, useEffect, useState } from 'react';
-import { VideoOffIcon, RotateCcwIcon } from 'lucide-react';
+import { useRef, useEffect, useState, type ReactNode, type RefObject } from 'react';
+import { ScanLineIcon } from 'lucide-react';
 import type { Camera } from '@/types/camera';
 import type { Detection } from '@/types';
 import { useDetectionOverlay } from '@/features/detections/hooks/useDetectionOverlay';
 import { useCameraDetections } from '@/features/detections/hooks/useCameraDetections';
 import { resolveSupabaseVideoUrl } from '@/features/cameras/api';
 import { useInViewport } from '@/features/cameras/hooks/useInViewport';
-import { LiveDetectPanel } from '@/features/detections/components/LiveDetectPanel';
+import { VIDEO_OVERLAY } from '@/shared/theme/tokens';
+import { VideoTile } from '@/shared/ui/VideoTile';
+
+export type FeedStatus = 'connecting' | 'playing' | 'offline';
 
 interface CameraVideoPlayerProps {
   camera: Camera;
   detections?: Detection[];
+  /** Receives the current <video> element (null when torn down / offline). Used by LiveDetectPanel + snapshot. */
+  onVideoElement?: (el: HTMLVideoElement | null) => void;
+  /** The pipeline detections loaded for this clip (shared so callers need not refetch). */
+  onDetections?: (detections: Detection[]) => void;
+  /** Feed state changes (connecting → playing → offline). */
+  onStatusChange?: (status: FeedStatus) => void;
+  /** Attached to the media layer (video + overlay canvas) — for fullscreen / snapshot. */
+  mediaRef?: RefObject<HTMLDivElement | null>;
+  /** Extra chips in the frame's top-right corner. */
+  topRight?: ReactNode;
+  className?: string;
 }
-
-type FeedStatus = 'connecting' | 'playing' | 'offline';
 
 export function CameraVideoPlayer(props: CameraVideoPlayerProps) {
   // "Retry" remounts the whole player so video element, overlay and state start fresh.
@@ -39,6 +51,12 @@ function PlayerInner({
   camera,
   detections: propDetections,
   onRetry,
+  onVideoElement,
+  onStatusChange,
+  onDetections,
+  mediaRef,
+  topRight,
+  className,
 }: CameraVideoPlayerProps & { onRetry: () => void }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -61,8 +79,29 @@ function PlayerInner({
   });
   const activeDetections = hasPropDetections ? propDetections! : realDetections;
 
-  // Sync green bounding box canvas overlay with video timeline
-  useDetectionOverlay(videoRef, canvasRef, activeDetections);
+  // Sync bounding box canvas overlay with video timeline
+  const { activeDetections: inFrame } = useDetectionOverlay(videoRef, canvasRef, activeDetections);
+
+  // Report status / element to the caller (AI detection panel, snapshot).
+  const statusCb = useRef(onStatusChange);
+  const elementCb = useRef(onVideoElement);
+  const detectionsCb = useRef(onDetections);
+  useEffect(() => {
+    statusCb.current = onStatusChange;
+    elementCb.current = onVideoElement;
+    detectionsCb.current = onDetections;
+  });
+  useEffect(() => {
+    detectionsCb.current?.(activeDetections);
+  }, [activeDetections]);
+  useEffect(() => {
+    statusCb.current?.(status);
+  }, [status]);
+  useEffect(() => {
+    const cb = elementCb.current;
+    cb?.(status === 'offline' ? null : videoRef.current);
+    return () => cb?.(null);
+  }, [status]);
 
   // Play while visible and the tab is foregrounded; pause otherwise.
   useEffect(() => {
@@ -103,10 +142,39 @@ function PlayerInner({
     setStatus('offline');
   };
 
+  const tileStatus = status === 'offline' ? 'offline' : status === 'playing' ? 'live' : inView ? 'connecting' : 'paused';
+  const setMediaEl = (el: HTMLDivElement | null) => {
+    containerRef.current = el;
+    if (mediaRef) mediaRef.current = el;
+  };
+
   return (
-    <div ref={containerRef} className="w-full h-full flex flex-col items-center justify-center">
-      {/* Video Container — Fullscreen video without controls, looping */}
-      <div className="relative w-full aspect-video overflow-hidden rounded-xl bg-black flex items-center justify-center shadow-2xl">
+    <VideoTile
+      size="lg"
+      code={camera.code}
+      name={camera.name}
+      zone={camera.zone}
+      status={tileStatus}
+      onRetry={onRetry}
+      clock={status === 'playing'}
+      topRight={
+        <>
+          {status === 'playing' && inFrame.length > 0 && (
+            <span
+              className="inline-flex h-5 items-center gap-1 rounded-sm px-1.5 text-2xs font-semibold tabular-nums"
+              style={{ background: 'var(--overlay-bg)', color: 'var(--overlay-fg)' }}
+              title="Vehicles detected in the current frame"
+            >
+              <ScanLineIcon size={12} strokeWidth={1.75} aria-hidden="true" />
+              {inFrame.length} in frame
+            </span>
+          )}
+          {topRight}
+        </>
+      }
+      className={className}
+    >
+      <div ref={setMediaEl} className="absolute inset-0" style={{ background: VIDEO_OVERLAY.frameBg }}>
         {status !== 'offline' && (
           <video
             ref={videoRef}
@@ -120,49 +188,13 @@ function PlayerInner({
             crossOrigin="anonymous"
             onPlaying={() => setStatus('playing')}
             onError={handleError}
-            className="w-full h-full object-contain pointer-events-none select-none"
+            className="pointer-events-none h-full w-full select-none object-contain"
           />
         )}
 
-        {status === 'connecting' && (
-          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 text-nero-text-muted pointer-events-none">
-            <div className="relative h-8 w-8">
-              <div className="absolute inset-0 rounded-full border-2 border-nero-border" />
-              <div className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-nero-accent" />
-            </div>
-            <p className="text-xs">{inView ? 'Connecting to feed…' : 'Feed paused (off screen)'}</p>
-          </div>
-        )}
-
-        {status === 'offline' && (
-          <div role="status" className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 bg-nero-surface text-nero-text-muted">
-            <VideoOffIcon size={28} className="text-rose-400" />
-            <p className="text-sm font-semibold text-nero-text-primary">Feed offline</p>
-            <p className="text-[11px]">{camera.code} video stream could not be loaded</p>
-            <button
-              type="button"
-              onClick={onRetry}
-              className="mt-1 inline-flex items-center gap-1.5 rounded-lg border border-nero-border px-3 py-1 text-xs font-medium text-nero-accent hover:bg-nero-surface-hover"
-            >
-              <RotateCcwIcon size={12} /> Retry
-            </button>
-          </div>
-        )}
-
         {/* Detection overlay canvas */}
-        <canvas
-          ref={canvasRef}
-          className="absolute inset-0 pointer-events-none w-full h-full z-10"
-        />
+        <canvas ref={canvasRef} className="pointer-events-none absolute inset-0 z-10 h-full w-full" />
       </div>
-
-      {/* Camera Footer */}
-      <div className="w-full flex items-center justify-between mt-3 text-xs text-nero-text-muted">
-        <span className="font-semibold text-nero-text-primary">{camera.name} ({camera.code})</span>
-        <span>Zone: {camera.zone} • Direction: {camera.direction}</span>
-      </div>
-
-      {status === 'playing' && <LiveDetectPanel videoRef={videoRef} cameraCode={camera.code} />}
-    </div>
+    </VideoTile>
   );
 }

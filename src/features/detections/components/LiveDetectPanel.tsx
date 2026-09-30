@@ -4,11 +4,16 @@
 // <video>, sends it to /api/detect (trained YOLOv7-tiny ANPR model on the GPU
 // server, key kept server-side), and shows the analysed still with boxes +
 // plate text, plus a list of plates with confidence and latency.
-// Self-contained — drop it next to any <video> ref.
+// Panel-body content: the caller supplies the surrounding Panel/title.
 // ═══════════════════════════════════════════════════
 
 import { useEffect, useRef, useState, type RefObject } from 'react';
-import { ScanLineIcon, LoaderCircleIcon, AlertTriangleIcon } from 'lucide-react';
+import { ScanLineIcon, TriangleAlertIcon } from 'lucide-react';
+import { Button } from '@/shared/ui/Button';
+import { PlateChip } from '@/shared/ui/PlateChip';
+import { vehicleClassToPlateVariant } from '@/shared/lib/plate';
+import { VIDEO_OVERLAY } from '@/shared/theme/tokens';
+import { VehicleClass } from './VehicleClass';
 import {
   detectVideoFrame,
   DetectFrameError,
@@ -20,11 +25,14 @@ import { drawDetections, formatPct as pct } from '../remote/drawDetections';
 interface LiveDetectPanelProps {
   videoRef: RefObject<HTMLVideoElement | null>;
   cameraCode: string;
+  /** False while the feed is not playing yet (button disabled). Default true. */
+  ready?: boolean;
+  className?: string;
 }
 
 type Status = 'idle' | 'running' | 'done' | 'error';
 
-export function LiveDetectPanel({ videoRef, cameraCode }: LiveDetectPanelProps) {
+export function LiveDetectPanel({ videoRef, cameraCode, ready = true, className = '' }: LiveDetectPanelProps) {
   const [status, setStatus] = useState<Status>('idle');
   const [error, setError] = useState<string | null>(null);
   const [frame, setFrame] = useState<CapturedFrame | null>(null);
@@ -72,57 +80,72 @@ export function LiveDetectPanel({ videoRef, cameraCode }: LiveDetectPanelProps) 
   const plates = result?.detections ?? [];
 
   return (
-    <div className="rounded-xl border border-nero-border bg-nero-surface p-4 space-y-3">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h3 className="text-sm font-bold text-nero-text-primary">AI Plate Detection</h3>
-          <p className="text-[11px] text-nero-text-muted">YOLOv7-tiny ANPR model · camera {cameraCode}</p>
-        </div>
-        <button
-          type="button"
-          onClick={run}
-          disabled={running}
-          className="flex items-center gap-2 rounded-xl border border-nero-accent/40 bg-nero-accent/10 px-3 py-1.5 text-xs font-semibold text-nero-accent hover:bg-nero-accent/20 disabled:opacity-50 disabled:cursor-wait cursor-pointer transition-colors"
-        >
-          {running ? <LoaderCircleIcon size={14} className="animate-spin" /> : <ScanLineIcon size={14} />}
-          {running ? 'Detecting…' : 'Run AI detection on this frame'}
-        </button>
-      </div>
+    <div className={`space-y-3 ${className}`}>
+      <Button
+        variant="primary"
+        fullWidth
+        onClick={run}
+        loading={running}
+        disabled={!ready}
+        title={ready ? undefined : 'Waiting for the live feed'}
+        icon={<ScanLineIcon size={14} strokeWidth={1.75} />}
+      >
+        {running ? 'Detecting…' : 'Run AI detection on this frame'}
+      </Button>
 
       {status === 'error' && error && (
-        <div role="alert" className="flex items-start gap-2 rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-xs text-rose-300">
-          <AlertTriangleIcon size={14} className="mt-0.5 shrink-0" />
+        <div role="alert" className="flex items-start gap-2 rounded-sm border border-danger/35 bg-danger/12 px-3 py-2 text-xs text-danger">
+          <TriangleAlertIcon size={14} strokeWidth={1.75} className="mt-0.5 shrink-0" aria-hidden="true" />
           <span>{error}</span>
         </div>
       )}
 
+      {status === 'idle' && (
+        <p className="text-xs text-fg-muted">
+          Captures the current frame of camera <span className="font-mono">{cameraCode}</span> and runs plate detection + OCR on the GPU server.
+        </p>
+      )}
+
       {frame && result && (
         <>
-          <div className="relative w-full overflow-hidden rounded-lg bg-black">
-            <img src={frame.dataUrl} alt={`Analysed frame from ${cameraCode}`} className="block w-full h-auto" />
-            <canvas ref={overlayRef} data-testid="detect-overlay" className="absolute inset-0 w-full h-full pointer-events-none" />
+          <div className="relative w-full overflow-hidden rounded-md border border-line" style={{ background: VIDEO_OVERLAY.frameBg }}>
+            <img src={frame.dataUrl} alt={`Analysed frame from ${cameraCode}`} className="block h-auto w-full" />
+            <canvas ref={overlayRef} data-testid="detect-overlay" className="pointer-events-none absolute inset-0 h-full w-full" />
           </div>
 
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-nero-text-muted">
-            <span>Latency: <span className="font-semibold text-nero-text-secondary">{result.latency_ms} ms</span></span>
-            {result.inference_ms != null && (
-              <span>Inference: <span className="font-semibold text-nero-text-secondary">{result.inference_ms} ms</span></span>
-            )}
-            <span>Model: <span className="font-semibold text-nero-text-secondary">{result.engine} {result.model_version}</span></span>
-            <span>Frame t={frame.timestampSec.toFixed(2)}s</span>
-          </div>
+          <dl className="grid grid-cols-3 gap-2 text-xs">
+            <div className="rounded-sm bg-surface-2 px-2 py-1.5">
+              <dt className="text-2xs font-semibold uppercase tracking-[0.06em] text-fg-subtle">Latency</dt>
+              <dd className="font-mono tabular-nums text-fg">{result.latency_ms} ms</dd>
+            </div>
+            <div className="rounded-sm bg-surface-2 px-2 py-1.5">
+              <dt className="text-2xs font-semibold uppercase tracking-[0.06em] text-fg-subtle">Inference</dt>
+              <dd className="font-mono tabular-nums text-fg">{result.inference_ms != null ? `${result.inference_ms} ms` : '—'}</dd>
+            </div>
+            <div className="rounded-sm bg-surface-2 px-2 py-1.5">
+              <dt className="text-2xs font-semibold uppercase tracking-[0.06em] text-fg-subtle">Frame</dt>
+              <dd className="font-mono tabular-nums text-fg">t={frame.timestampSec.toFixed(2)}s</dd>
+            </div>
+          </dl>
+          <p className="text-2xs text-fg-subtle">
+            Model <span className="font-mono">{result.engine} {result.model_version}</span>
+          </p>
 
           {plates.length === 0 ? (
-            <p className="text-xs text-nero-text-muted">No vehicles or plates detected in this frame.</p>
+            <p className="text-xs text-fg-muted">No vehicles or plates detected in this frame.</p>
           ) : (
-            <ul className="divide-y divide-nero-border rounded-lg border border-nero-border">
+            <ul className="divide-y divide-line rounded-md border border-line">
               {plates.map((d, i) => (
                 <li key={i} className="flex items-center justify-between gap-3 px-3 py-2 text-xs">
-                  <span className="font-mono text-sm font-black text-nero-accent">{d.plate_text ?? 'Plate unreadable'}</span>
-                  <span className="flex items-center gap-3 text-nero-text-muted">
-                    <span className="capitalize">{d.vehicle_type}</span>
-                    <span>OCR {pct(d.plate_confidence)}</span>
-                    <span>Det {pct(d.confidence)}</span>
+                  {d.plate_text ? (
+                    <PlateChip plate={d.plate_text} size="sm" variant={vehicleClassToPlateVariant(d.vehicle_type)} />
+                  ) : (
+                    <span className="text-fg-muted">Plate unreadable</span>
+                  )}
+                  <span className="flex items-center gap-3 text-fg-muted">
+                    <VehicleClass type={d.vehicle_type} iconOnly />
+                    <span className="font-mono tabular-nums">OCR {pct(d.plate_confidence)}</span>
+                    <span className="font-mono tabular-nums">Det {pct(d.confidence)}</span>
                   </span>
                 </li>
               ))}

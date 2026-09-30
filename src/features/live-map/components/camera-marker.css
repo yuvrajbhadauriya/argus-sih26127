@@ -1,0 +1,55 @@
+/* Camera markers on the Live Map. Colours come from theme variables, so the
+   (cached) divIcons follow the theme without being rebuilt. */
+.nero-cam-icon {
+  background: none;
+  border: 0;
+}
+.nero-cam {
+  position: relative;
+  width: 20px;
+  height: 20px;
+}
+.nero-cam__dot {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 12px;
+  height: 12px;
+  border-radius: 9999px;
+  background: var(--map-cam-online);
+  box-shadow: 0 0 0 2px var(--map-marker-halo);
+}
+.nero-cam[data-status='offline'] .nero-cam__dot { background: var(--map-cam-offline); }
+.nero-cam[data-status='maintenance'] .nero-cam__dot { background: var(--map-cam-maint); }
+.nero-cam[data-selected='true'] .nero-cam__dot {
+  box-shadow: 0 0 0 2px var(--map-marker-halo), 0 0 0 5px var(--map-selected);
+}
+.nero-cam__label {
+  position: absolute;
+  top: 1px;
+  left: 20px;
+  display: none;
+  height: 18px;
+  padding: 0 5px;
+  align-items: center;
+  border-radius: 3px;
+  border: 1px solid var(--map-label-border);
+  background: var(--map-label-bg);
+  color: var(--map-label-fg);
+  font: 600 11px/1 var(--font-mono);
+  white-space: nowrap;
+  pointer-events: none;
+}
+/* Code labels from zoom 13 up (class toggled by MapView), always for the selection. */
+.nero-cam-labels .nero-cam__label,
+.nero-cam[data-selected='true'] .nero-cam__label {
+  display: inline-flex;
+}
+.nero-cam[data-selected='true'] .nero-cam__label {
+  border-color: var(--map-selected);
+}
+.nero-cam-icon:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 9999px;
+}

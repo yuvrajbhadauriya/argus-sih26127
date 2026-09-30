@@ -14,6 +14,7 @@ vi.mock('@/features/cameras/api', () => ({ getCameras: api.getCameras }));
 vi.mock('@/features/cameras/components/CameraVideoPlayer', () => ({ CameraVideoPlayer: () => <div data-testid="player" /> }));
 
 import { CamerasPage } from './CamerasPage';
+import { pickCamera } from '../lib/pickCamera';
 import { useCameras, clearCamerasCache, prefetchCameras } from '@/features/cameras/hooks/useCameras';
 
 const cam = (over: Partial<Camera>): Camera => ({
@@ -78,29 +79,68 @@ describe('useCameras', () => {
 });
 
 describe('CamerasPage', () => {
-  it('renders camera cards and filters by zone', async () => {
+  it('renders the wall + selected feed and filters by zone (the zone Select is the only combobox)', async () => {
     api.getCameras.mockResolvedValue([
       cam({ id: 'c1', name: 'Alpha Cam', zone: 'Z1' }),
       cam({ id: 'c2', name: 'Beta Cam', code: 'CP-01', zone: 'Z2', status: 'offline' }),
     ]);
     render(<MemoryRouter><CamerasPage /></MemoryRouter>);
-    expect(await screen.findByText('Alpha Cam')).toBeInTheDocument();
-    expect(screen.getByText('Beta Cam')).toBeInTheDocument();
+    expect((await screen.findAllByText('Alpha Cam')).length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Beta Cam').length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('combobox')).toHaveLength(1);
     await userEvent.selectOptions(screen.getByRole('combobox'), 'Z2');
     expect(screen.queryByText('Alpha Cam')).toBeNull();
   });
 
-  // BUG (UI): the header badge reads "{cameras.length} Active Feeds" and counts
-  // offline cameras as active (CamerasPage.tsx:48).
-  it.fails('BUG: "Active Feeds" count excludes offline cameras', async () => {
+  // Was a BUG: the header read "{cameras.length} Active Feeds", counting offline cameras.
+  it('header counts online and offline cameras separately', async () => {
     api.getCameras.mockResolvedValue([cam({ id: 'c1' }), cam({ id: 'c2', code: 'X', status: 'offline' })]);
     render(<MemoryRouter><CamerasPage /></MemoryRouter>);
-    expect(await screen.findByText('1 Active Feeds')).toBeInTheDocument();
+    expect(await screen.findByText('Camera Network')).toBeInTheDocument();
+    expect(screen.getByText('1 online')).toBeInTheDocument();
+    expect(screen.getByText('1 offline')).toBeInTheDocument();
+    expect(screen.queryByText(/Active Feeds/)).toBeNull();
+  });
+
+  it('selects the camera from ?cam= and defaults to the first online camera', async () => {
+    const cams = [
+      cam({ id: 'c1', name: 'Offline First', code: 'OF-01', status: 'offline' }),
+      cam({ id: 'c2', name: 'Online Second', code: 'ON-02' }),
+      cam({ id: 'c3', name: 'Third', code: 'TH-03' }),
+    ];
+    api.getCameras.mockResolvedValue(cams);
+    const { unmount } = render(<MemoryRouter><CamerasPage /></MemoryRouter>);
+    await screen.findByRole('heading', { name: /Online Second/ });
+    expect(screen.getByRole('button', { name: 'Open feed ON-02 Online Second' })).toHaveAttribute('aria-pressed', 'true');
+    unmount();
+
+    render(<MemoryRouter initialEntries={['/cameras?cam=TH-03']}><CamerasPage /></MemoryRouter>);
+    await screen.findByRole('heading', { name: /Third/ });
+    await userEvent.click(screen.getByRole('button', { name: 'Open feed OF-01 Offline First' }));
+    expect(screen.getByRole('heading', { name: /Offline First/ })).toBeInTheDocument();
+  });
+
+  it('pickCamera falls back sensibly', () => {
+    expect(pickCamera([], 'X')).toBeNull();
+    const a = cam({ id: 'a', code: 'A', status: 'offline' });
+    const b = cam({ id: 'b', code: 'B' });
+    expect(pickCamera([a, b], null)).toBe(b);
+    expect(pickCamera([a, b], 'A')).toBe(a);
+    expect(pickCamera([a], 'missing')).toBe(a);
   });
 
   it('shows the empty message when there are no cameras', async () => {
     api.getCameras.mockResolvedValue([]);
     render(<MemoryRouter><CamerasPage /></MemoryRouter>);
     expect(await screen.findByText('No cameras found')).toBeInTheDocument();
+  });
+
+  it('shows an error with retry', async () => {
+    api.getCameras.mockRejectedValue(new Error('boom'));
+    render(<MemoryRouter><CamerasPage /></MemoryRouter>);
+    expect(await screen.findByText('boom')).toBeInTheDocument();
+    api.getCameras.mockResolvedValue([cam({})]);
+    await userEvent.click(screen.getByRole('button', { name: /try again/i }));
+    expect((await screen.findAllByText('India Gate Junction')).length).toBeGreaterThan(0);
   });
 });

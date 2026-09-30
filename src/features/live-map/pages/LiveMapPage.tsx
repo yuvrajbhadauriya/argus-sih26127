@@ -1,172 +1,209 @@
 // ═══════════════════════════════════════════════════
-// LiveMapPage — Home page / Main Command Center View
-// Ultra-Premium UI with Glassmorphic Panels & Neon Glows
+// LiveMapPage — command view: network KPIs, camera map, operations rail.
+// ?cam=CODE selects (and flies to) a camera, e.g. from Cameras "Open on map".
 // ═══════════════════════════════════════════════════
 
+import { useMemo, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { CarIcon, CctvIcon, GaugeIcon, LocateFixedIcon, ScanLineIcon, SirenIcon, TagIcon, TargetIcon } from 'lucide-react';
 import type { Camera } from '@/types/camera';
 import { useCameras } from '@/features/cameras/hooks/useCameras';
-import { MapView } from '@/features/live-map/components/MapView';
-import { Card, CardHeader } from '@/shared/ui/Card';
-import { StatusBadge } from '@/shared/ui/StatusBadge';
-import { LoadingState } from '@/shared/ui/LoadingState';
+import { mockDetections } from '@/mocks/fixtures/mockDetections';
+import { mockLiveFeed } from '@/mocks/fixtures/mockLiveFeed';
+import { SimulationBadge } from '@/features/vehicles/components/SimulationBadge';
+import { Page } from '@/shared/layout/Page';
+import { Panel } from '@/shared/ui/Card';
+import { KpiStrip, KpiTile } from '@/shared/ui/KpiTile';
+import { Button, IconButton } from '@/shared/ui/Button';
+import { MapLegend, MapPanel } from '@/shared/ui/MapLegend';
+import { EmptyState } from '@/shared/ui/EmptyState';
 import { ErrorState } from '@/shared/ui/ErrorState';
-import {
-  CameraIcon,
-  RadioIcon,
-  ArrowUpRightIcon,
-} from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { SkeletonPanel } from '@/shared/ui/Skeleton';
+import { MapView } from '../components/MapView';
+import { OperationsRail } from '../components/OperationsRail';
+import { useLiveMapData } from '../hooks/useLiveMapData';
+import { alertHotspots, topOpenAlerts } from '../lib/alerts';
+import { istHour } from '../lib/time';
 
-/** Derive status counts from the live camera array */
-function getCameraStatusCounts(cameras: Camera[]) {
-  return {
-    online: cameras.filter((c) => c.status === 'online').length,
-    offline: cameras.filter((c) => c.status === 'offline').length,
-    total: cameras.length,
-  };
+const nf = new Intl.NumberFormat('en-IN');
+
+function LayerToggle({ label, pressed, onToggle, icon }: { label: string; pressed: boolean; onToggle: () => void; icon: React.ReactNode }) {
+  return (
+    <Button
+      size="sm"
+      variant={pressed ? 'secondary' : 'ghost'}
+      aria-pressed={pressed}
+      icon={icon}
+      onClick={onToggle}
+      className={pressed ? 'text-fg' : 'text-fg-subtle'}
+    >
+      {label}
+    </Button>
+  );
 }
 
-// Simulated live detection feed entries
-const mockLiveDetections = [
-  { id: '1', plate: 'DL-01-AB-1234', camera: 'India Gate Junction', type: 'Car', time: '2s ago', confidence: 96, priority: 'normal' },
-  { id: '2', plate: 'HR-26-CD-5678', camera: 'Connaught Place Circle', type: 'Truck', time: '5s ago', confidence: 94, priority: 'alert' },
-  { id: '3', plate: 'DL-02-EF-9012', camera: 'AIIMS T-Junction', type: 'Bus', time: '12s ago', confidence: 91, priority: 'normal' },
-  { id: '4', plate: 'UP-16-GH-3456', camera: 'Nehru Place Underpass', type: 'Car', time: '18s ago', confidence: 89, priority: 'normal' },
-  { id: '5', plate: 'DL-03-IJ-7890', camera: 'Karol Bagh Crossing', type: 'Motorcycle', time: '25s ago', confidence: 88, priority: 'alert' },
-  { id: '6', plate: 'RJ-14-KL-2345', camera: 'India Gate Junction', type: 'Car', time: '31s ago', confidence: 97, priority: 'normal' },
-  { id: '7', plate: 'DL-04-MN-6789', camera: 'Dwarka Expressway Entry', type: 'Truck', time: '40s ago', confidence: 85, priority: 'normal' },
-];
+/** Last plate read per camera id (for marker popups). */
+function lastPlates(): Record<string, string | undefined> {
+  const out: Record<string, string | undefined> = {};
+  for (const [camId, dets] of Object.entries(mockDetections)) out[camId] = dets[dets.length - 1]?.plate_text_raw;
+  return out;
+}
 
 export function LiveMapPage() {
   const navigate = useNavigate();
+  const [params, setParams] = useSearchParams();
   const { cameras, loading, error, refetch } = useCameras();
+  const { summary, alerts } = useLiveMapData();
 
-  if (loading) return <LoadingState message="Initializing city-wide intelligence map..." />;
-  if (error) return <ErrorState message={error} onRetry={refetch} />;
+  const [showCameras, setShowCameras] = useState(true);
+  const [showLabels, setShowLabels] = useState(true);
+  const [showHotspots, setShowHotspots] = useState(true);
+  const [recenterNonce, setRecenterNonce] = useState(0);
+  // Deep link (?cam=) flies to the camera on first render.
+  const [focusNonce, setFocusNonce] = useState(() => (params.get('cam') ? 1 : 0));
 
-  const statusCounts = getCameraStatusCounts(cameras);
+  const selectedCode = params.get('cam');
+  const selectCamera = (cam: Camera, fly = false) => {
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.set('cam', cam.code);
+        return next;
+      },
+      { replace: true },
+    );
+    if (fly) setFocusNonce((n) => n + 1);
+  };
+
+  const online = cameras.filter((c) => c.status === 'online').length;
+  const total = cameras.length;
+  const ratio = total ? online / total : 0;
+  const openAlerts = useMemo(() => topOpenAlerts(alerts.data ?? [], Number.POSITIVE_INFINITY), [alerts.data]);
+  const critical = openAlerts.filter((a) => a.priority === 'critical').length;
+  const hotspots = useMemo(() => (showHotspots ? alertHotspots(alerts.data ?? []) : []), [alerts.data, showHotspots]);
+  const plates = useMemo(() => lastPlates(), []);
+  const stats = summary.data?.stats;
+  const simHint = summary.data?.simulated ? <SimulationBadge compact /> : undefined;
+  const simValue = (v: number | undefined, fmt: (n: number) => string = (n) => nf.format(n)) =>
+    summary.error ? '—' : v == null ? '—' : fmt(v);
 
   return (
-    <div className="flex flex-col lg:flex-row h-[calc(100vh-7rem)] gap-5 animate-fade-in">
-      {/* Main Map Canvas Area */}
-      <div className="flex-1 relative overflow-hidden rounded-2xl border border-nero-border/80 shadow-2xl bg-nero-surface/40 backdrop-blur-md">
-        {/* Map Header Floating Overlay Pill */}
-        <div className="absolute top-4 left-4 z-10 flex items-center gap-3 rounded-xl bg-nero-surface/90 backdrop-blur-md border border-nero-border px-4 py-2 shadow-xl">
-          <div className="flex h-3 w-3 items-center justify-center">
-            <span className="absolute inline-flex h-3 w-3 animate-ping rounded-full bg-emerald-400 opacity-75" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-          </div>
-          <div>
-            <h3 className="text-xs font-bold text-nero-text-primary uppercase tracking-wider">New Delhi Command Sector</h3>
-            <p className="text-[10px] font-mono text-nero-text-muted">GPS: 28.6129° N, 77.2295° E • Live Grid</p>
-          </div>
-        </div>
-
-        {/* Leaflet Map Component */}
-        <MapView cameras={cameras} />
-      </div>
-
-      {/* Right Command Panels */}
-      <div className="flex w-full lg:w-[360px] flex-shrink-0 flex-col gap-5 h-full overflow-y-auto pr-1">
-        {/* Camera Status Card */}
-        <Card className="nero-card border-nero-border/80">
-          <CardHeader
-            title="Camera Infrastructure"
-            subtitle={`${statusCounts.total} Virtual CCTV Feeds Placed`}
-            action={<CameraIcon size={18} className="text-nero-accent" />}
+    <Page fullBleed>
+      <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(420px,1fr)] gap-3 lg:grid-cols-[minmax(0,1fr)_360px] lg:grid-rows-[auto_minmax(0,1fr)]">
+        <KpiStrip className="lg:col-span-2">
+          <KpiTile
+            label="Cameras online"
+            value={`${online}/${total}`}
+            icon={<CctvIcon size={16} />}
+            tone={total === 0 ? 'default' : ratio === 1 ? 'success' : ratio >= 0.5 ? 'warning' : 'danger'}
+            hint={total > 0 && online < total ? `${total - online} offline` : 'All feeds nominal'}
+            loading={loading}
+            onClick={() => navigate('/cameras')}
           />
-
-          {/* Status Metrics Counters */}
-          <div className="grid grid-cols-2 gap-2.5 my-3">
-            <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-2.5 text-center">
-              <p className="text-xl font-black text-emerald-400">{statusCounts.online}</p>
-              <p className="mt-0.5 text-[9px] font-bold text-emerald-400/80 uppercase tracking-widest">Active</p>
-            </div>
-            <div className="rounded-xl bg-rose-500/10 border border-rose-500/20 p-2.5 text-center">
-              <p className="text-xl font-black text-rose-400">{statusCounts.offline}</p>
-              <p className="mt-0.5 text-[9px] font-bold text-rose-400/80 uppercase tracking-widest">Offline</p>
-            </div>
-          </div>
-
-          {/* Scrollable camera node list */}
-          <div className="space-y-1.5 max-h-[160px] overflow-y-auto pr-1">
-            {cameras.map((cam) => (
-              <div
-                key={cam.id}
-                onClick={() => navigate('/cameras')}
-                className="flex items-center justify-between rounded-xl bg-nero-bg/60 border border-nero-border/50 px-3 py-2 transition-all hover:bg-nero-surface-hover hover:border-nero-accent/40 cursor-pointer group"
-              >
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div
-                    className={`h-2 w-2 rounded-full shrink-0 ${
-                      cam.status === 'online'
-                        ? 'status-dot-online'
-                        : 'status-dot-offline'
-                    }`}
-                  />
-                  <span className="text-xs font-semibold text-nero-text-primary group-hover:text-nero-accent transition-colors truncate">
-                    {cam.name}
-                  </span>
-                </div>
-                <StatusBadge variant={cam.status} size="sm" />
-              </div>
-            ))}
-          </div>
-        </Card>
-
-        {/* Live Activity Ticker Card */}
-        <Card className="nero-card border-nero-border/80 flex-1 flex flex-col min-h-0">
-          <CardHeader
-            title="Real-Time Detections"
-            subtitle="ANPR Vehicle Event Stream"
-            action={
-              <div className="flex items-center gap-1.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-0.5">
-                <RadioIcon size={12} className="text-emerald-400 animate-pulse" />
-                <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Stream</span>
-              </div>
-            }
+          <KpiTile
+            label="Detections · last hour"
+            value={simValue(stats?.sightings_per_hour[istHour()])}
+            icon={<ScanLineIcon size={16} />}
+            tone="info"
+            hint={summary.error ? 'Summary unavailable' : simHint}
+            loading={summary.loading}
           />
+          <KpiTile
+            label="Open alerts"
+            value={alerts.error ? '—' : openAlerts.length}
+            icon={<SirenIcon size={16} />}
+            tone={critical > 0 ? 'danger' : openAlerts.length > 0 ? 'warning' : 'success'}
+            hint={alerts.error ? 'Alerts unavailable' : `${critical} critical`}
+            loading={alerts.loading}
+            onClick={() => navigate('/alerts')}
+          />
+          <KpiTile
+            label="Network avg speed"
+            value={simValue(stats?.hop_speed_kmph.mean, (n) => n.toFixed(1))}
+            unit={stats ? 'km/h' : undefined}
+            icon={<GaugeIcon size={16} />}
+            hint={summary.error ? 'Summary unavailable' : simHint}
+            loading={summary.loading}
+          />
+          <KpiTile
+            label="Vehicles tracked today"
+            value={simValue(stats?.vehicles)}
+            icon={<CarIcon size={16} />}
+            hint={summary.error ? 'Summary unavailable' : simHint}
+            loading={summary.loading}
+          />
+        </KpiStrip>
 
-          <div className="flex-1 space-y-2 overflow-y-auto min-h-0 pr-1 mt-1">
-            {mockLiveDetections.map((det) => (
-              <div
-                key={det.id}
-                onClick={() => navigate(`/vehicles?plate=${encodeURIComponent(det.plate)}`)}
-                className={`group rounded-xl p-3 border transition-all cursor-pointer ${
-                  det.priority === 'alert'
-                    ? 'bg-rose-500/10 border-rose-500/40 hover:border-rose-500'
-                    : 'bg-nero-bg/70 border-nero-border/70 hover:border-nero-accent/50 hover:bg-nero-surface-hover'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-xs font-bold text-nero-accent group-hover:text-white transition-colors">
-                      {det.plate}
-                    </span>
-                    {det.priority === 'alert' && (
-                      <span className="rounded bg-rose-500/20 px-1.5 py-0.2 text-[9px] font-bold uppercase text-rose-400">
-                        Watchlist
-                      </span>
-                    )}
-                  </div>
-                  <span className="text-[10px] font-mono text-nero-text-muted">{det.time}</span>
-                </div>
+        <Panel flush className="min-h-[420px]" bodyClassName="relative">
+          {loading ? (
+            <SkeletonPanel height="100%" className="absolute inset-0 rounded-none border-0" />
+          ) : error ? (
+            <div className="flex h-full items-center justify-center">
+              <ErrorState title="Camera network unavailable" message={error} onRetry={refetch} />
+            </div>
+          ) : (
+            <div className="absolute inset-0">
+              <MapView
+                cameras={cameras}
+                selectedCode={selectedCode}
+                onSelect={(c) => selectCamera(c)}
+                lastPlateByCamera={plates}
+                showCameras={showCameras}
+                showLabels={showLabels}
+                hotspots={hotspots}
+                recenterNonce={recenterNonce}
+                focusNonce={focusNonce}
+              />
 
-                <div className="flex items-center justify-between text-[11px] text-nero-text-secondary">
-                  <span className="truncate max-w-[170px]">{det.camera}</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-medium uppercase text-nero-text-muted">{det.type}</span>
-                    <span className="rounded bg-nero-surface-elevated px-1.5 py-0.5 font-mono text-[10px] font-semibold text-emerald-400 border border-emerald-500/20">
-                      {det.confidence}%
-                    </span>
-                    <ArrowUpRightIcon size={12} className="text-nero-text-muted group-hover:text-nero-accent transition-colors" />
-                  </div>
+              <MapPanel position="top-left" className="px-3 py-2">
+                <p className="text-[13px] font-semibold text-fg">New Delhi · Central Command Sector</p>
+                <p className="font-mono text-2xs tabular-nums text-fg-muted">28.6129° N, 77.2295° E</p>
+              </MapPanel>
+
+              <MapPanel position="top-right" className="flex items-center gap-1 p-1">
+                <div role="group" aria-label="Map layers" className="flex items-center gap-0.5">
+                  <LayerToggle label="Cameras" pressed={showCameras} onToggle={() => setShowCameras((v) => !v)} icon={<CctvIcon size={14} strokeWidth={1.75} />} />
+                  <LayerToggle label="Labels" pressed={showLabels} onToggle={() => setShowLabels((v) => !v)} icon={<TagIcon size={14} strokeWidth={1.75} />} />
+                  <LayerToggle label="Alert hotspots" pressed={showHotspots} onToggle={() => setShowHotspots((v) => !v)} icon={<TargetIcon size={14} strokeWidth={1.75} />} />
                 </div>
-              </div>
-            ))}
-          </div>
-        </Card>
+                <span className="mx-0.5 h-5 w-px bg-line" aria-hidden="true" />
+                <IconButton size="sm" label="Recenter" icon={<LocateFixedIcon size={16} strokeWidth={1.75} />} onClick={() => setRecenterNonce((n) => n + 1)} />
+              </MapPanel>
+
+              <MapLegend
+                title="Legend"
+                position="bottom-left"
+                items={[
+                  { label: 'Online', color: 'var(--map-cam-online)', shape: 'dot' },
+                  { label: 'Offline', color: 'var(--map-cam-offline)', shape: 'dot' },
+                  { label: 'Maintenance', color: 'var(--map-cam-maint)', shape: 'dot' },
+                  { label: 'Selected', color: 'var(--map-selected)', shape: 'ring' },
+                  { label: 'Alert hotspot', color: 'var(--sev-critical)', shape: 'ring' },
+                ]}
+              />
+
+              {cameras.length === 0 && (
+                <MapPanel position="bottom-center" className="w-[320px] max-w-[calc(100%-24px)]">
+                  <EmptyState compact icon={<CctvIcon size={20} />} title="No cameras registered — add one in Admin" />
+                </MapPanel>
+              )}
+            </div>
+          )}
+        </Panel>
+
+        <OperationsRail
+          className="min-h-[420px] lg:min-h-0"
+          feed={mockLiveFeed}
+          alerts={openAlerts.slice(0, 8)}
+          alertCount={openAlerts.length}
+          alertsLoading={alerts.loading}
+          alertsError={alerts.error}
+          onRetryAlerts={alerts.retry}
+          cameras={cameras}
+          selectedCode={selectedCode}
+          onPickCamera={(c) => selectCamera(c, true)}
+        />
       </div>
-    </div>
+    </Page>
   );
 }
