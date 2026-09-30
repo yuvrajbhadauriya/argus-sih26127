@@ -174,10 +174,7 @@ def test_offline_inference_writes_consistent_records(tmp_path):
         assert r["plate_text_normalized"] == r["plate_text_raw"].replace("-", "")
 
 
-@pytest.mark.xfail(strict=True, raises=FileNotFoundError, reason=(
-    "BUG legacy_local_model/yolov7_offline_inference.py:59 and legacy_local_model/run_yolov7_on_videos.py:147 — "
-    "os.makedirs(os.path.dirname(output_path)) raises FileNotFoundError when --output is a "
-    "bare filename (dirname == '')."))
+# Regression (was a strict xfail): a bare --output filename (dirname == "") used to raise FileNotFoundError.
 def test_offline_inference_accepts_bare_output_filename(chdir_tmp):
     mod = importlib.import_module("yolov7_offline_inference")
     mod.run_offline_inference("v.mp4", "cam-001", "out.json")
@@ -225,10 +222,7 @@ def test_run_yolov7_simulation_mode(tmp_path, fake_capture):
     assert [r["timestamp"] for r in recs] == ["00:00.500", "00:01.000", "00:01.500", "00:02.000"]
 
 
-@pytest.mark.xfail(strict=True, raises=AttributeError, reason=(
-    "BUG legacy_local_model/run_yolov7_on_videos.py:92 — `class_names.get(cls_id, 'car')` assumes a dict, "
-    "but YOLOv7 torch.hub models expose model.names as a list → AttributeError on the first "
-    "detection with real weights."))
+# Regression (was a strict xfail): YOLOv7 hub models expose model.names as a list.
 def test_run_yolov7_with_real_style_model_names(tmp_path, fake_capture, fake_torch):
     mod = importlib.import_module("run_yolov7_on_videos")
     v = tmp_path / "v.mp4"

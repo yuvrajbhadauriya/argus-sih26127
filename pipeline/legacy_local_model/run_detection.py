@@ -352,7 +352,9 @@ def process_single_video(
 
     Returns (detections_list, summary_dict) or (None, None) on failure.
     """
-    if not os.path.exists(video_path):
+    # http(s) URLs are streamed by OpenCV/FFmpeg directly (Supabase Storage).
+    is_url = video_path.startswith(("http://", "https://"))
+    if not is_url and not os.path.exists(video_path):
         print(f"[!] Video not found: {video_path}")
         return None, None
 
@@ -447,6 +449,10 @@ def process_single_video(
                     print(f"\n[!] Inference error on frame {frame_idx}: {e}")
                     print("    Switching to heuristic fallback for this video.")
                     model = None
+                else:
+                    # Later failures (e.g. CUDA OOM mid-video) must not be
+                    # silent: the frame yields no detections, say so.
+                    print(f"\n[!] Inference error on frame {frame_idx}: {e} (frame skipped)")
 
         # ── Heuristic fallback (background subtraction + contour analysis) ──
         if model is None:

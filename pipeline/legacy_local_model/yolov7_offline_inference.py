@@ -56,7 +56,8 @@ def run_offline_inference(video_path: str, camera_id: str, output_path: str):
         det["plate_text_normalized"] = det["plate_text_raw"].replace("-", "")
         detections.append(det)
 
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    if os.path.dirname(output_path):
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
     with open(output_path, "w") as f:
         json.dump(detections, f, indent=2)
 

@@ -201,10 +201,7 @@ class TestProcessSingleVideo:
         assert "Switching to heuristic fallback" in capsys.readouterr().out
         assert summary["total_detections"] == 0
 
-    @pytest.mark.xfail(strict=True, reason=(
-        "BUG legacy_local_model/run_detection.py:445-449 — inference exceptions after the 2nd sampled frame are "
-        "swallowed silently: no log, model kept, frame yields zero detections. A mid-video "
-        "CUDA/OOM failure produces a silently truncated dataset."))
+    # Regression (was a strict xfail): mid-video inference errors used to be swallowed silently.
     def test_late_inference_error_is_reported(self, run_detection, fake_capture, tmp_path, capsys):
         p = tmp_path / "v.mp4"
         p.write_bytes(b"x")
@@ -213,10 +210,7 @@ class TestProcessSingleVideo:
         run_detection.process_single_video(str(p), "X", model)
         assert "error" in capsys.readouterr().out.lower()
 
-    @pytest.mark.xfail(strict=True, reason=(
-        "BUG legacy_local_model/run_detection.py:355 + main():663-672 — main() sets video_path to an http URL "
-        "for 'streaming', but process_single_video() rejects anything that is not a local "
-        "file via os.path.exists(), so the URL-streaming fallback is dead code."))
+    # Regression (was a strict xfail): http(s) video URLs were rejected by os.path.exists().
     def test_url_video_paths_are_opened(self, run_detection, fake_capture):
         url = "https://example.supabase.co/storage/v1/object/public/videos/a.mp4"
         run_detection.process_single_video(url, "IG-01", FakeModel([]))

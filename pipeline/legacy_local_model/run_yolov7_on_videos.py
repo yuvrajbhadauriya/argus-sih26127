@@ -89,7 +89,11 @@ def process_video_with_custom_yolov7(weights_path: str, video_path: str, camera_
             pred = results.pred[0]
             for *xyxy, conf, cls in pred:
                 cls_id = int(cls)
-                v_type = class_names.get(cls_id, 'car').lower()
+                # YOLOv7 hub models expose `names` as a list, older exports as a dict.
+                if isinstance(class_names, dict):
+                    v_type = str(class_names.get(cls_id, 'car')).lower()
+                else:
+                    v_type = str(class_names[cls_id]).lower() if 0 <= cls_id < len(class_names) else 'car'
                 x1, y1, x2, y2 = [float(x) for x in xyxy]
 
                 # Map coordinates to 640x360 reference canvas
@@ -144,7 +148,8 @@ def process_video_with_custom_yolov7(weights_path: str, video_path: str, camera_
 
     cap.release()
 
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    if os.path.dirname(output_path):
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
     with open(output_path, "w") as f:
         json.dump(detections, f, indent=2)
 
