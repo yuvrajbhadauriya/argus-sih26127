@@ -3,54 +3,108 @@
     "camera_code": "IG-01",
     "camera_name": "India Gate Junction",
     "video_filename": "13052823_3840_2160_30fps.mp4",
-    "video_url": "https://ngwrbxiaeressvmhfopb.supabase.co/storage/v1/object/public/videos/13052823_3840_2160_30fps.mp4"
+    "video_url": "https://ngwrbxiaeressvmhfopb.supabase.co/storage/v1/object/public/videos/13052823_3840_2160_30fps.mp4",
+    "lat": 28.6155,
+    "lng": 77.2297,
+    "zone": "Central Delhi",
+    "direction": "Southbound",
+    "road": "C-Hexagon at Kasturba Gandhi Marg",
+    "landmark": "India Gate"
   },
   {
     "camera_code": "CP-01",
     "camera_name": "Connaught Place Circle",
     "video_filename": "13067896_3840_2160_30fps.mp4",
-    "video_url": "https://ngwrbxiaeressvmhfopb.supabase.co/storage/v1/object/public/videos/13067896_3840_2160_30fps.mp4"
+    "video_url": "https://ngwrbxiaeressvmhfopb.supabase.co/storage/v1/object/public/videos/13067896_3840_2160_30fps.mp4",
+    "lat": 28.6315,
+    "lng": 77.2167,
+    "zone": "Central Delhi",
+    "direction": "Northbound",
+    "road": "Outer Circle at Baba Kharak Singh Marg",
+    "landmark": "Connaught Place"
   },
   {
     "camera_code": "KB-01",
     "camera_name": "Karol Bagh Crossing",
     "video_filename": "13105470_3840_2160_30fps.mp4",
-    "video_url": "https://ngwrbxiaeressvmhfopb.supabase.co/storage/v1/object/public/videos/13105470_3840_2160_30fps.mp4"
+    "video_url": "https://ngwrbxiaeressvmhfopb.supabase.co/storage/v1/object/public/videos/13105470_3840_2160_30fps.mp4",
+    "lat": 28.644,
+    "lng": 77.1883,
+    "zone": "West Delhi",
+    "direction": "Eastbound",
+    "road": "Pusa Road near Karol Bagh Metro",
+    "landmark": "Karol Bagh"
   },
   {
     "camera_code": "LN-01",
     "camera_name": "Lajpat Nagar Flyover",
     "video_filename": "13172888_3840_2160_30fps.mp4",
-    "video_url": "https://ngwrbxiaeressvmhfopb.supabase.co/storage/v1/object/public/videos/13172888_3840_2160_30fps.mp4"
+    "video_url": "https://ngwrbxiaeressvmhfopb.supabase.co/storage/v1/object/public/videos/13172888_3840_2160_30fps.mp4",
+    "lat": 28.565,
+    "lng": 77.2402,
+    "zone": "South Delhi",
+    "direction": "Westbound",
+    "road": "Ring Road (Mahatma Gandhi Marg), Lajpat Nagar Flyover",
+    "landmark": "Lajpat Nagar"
   },
   {
     "camera_code": "AI-01",
     "camera_name": "AIIMS T-Junction",
     "video_filename": "13269027_3840_2160_30fps.mp4",
-    "video_url": "https://ngwrbxiaeressvmhfopb.supabase.co/storage/v1/object/public/videos/13269027_3840_2160_30fps.mp4"
+    "video_url": "https://ngwrbxiaeressvmhfopb.supabase.co/storage/v1/object/public/videos/13269027_3840_2160_30fps.mp4",
+    "lat": 28.5706,
+    "lng": 77.208,
+    "zone": "South Delhi",
+    "direction": "Eastbound",
+    "road": "Ring Road (AIIMS Flyover) at Aurobindo Marg",
+    "landmark": "AIIMS"
   },
   {
     "camera_code": "NP-01",
     "camera_name": "Nehru Place Underpass",
     "video_filename": "13269676_3840_2160_30fps.mp4",
-    "video_url": "https://ngwrbxiaeressvmhfopb.supabase.co/storage/v1/object/public/videos/13269676_3840_2160_30fps.mp4"
+    "video_url": "https://ngwrbxiaeressvmhfopb.supabase.co/storage/v1/object/public/videos/13269676_3840_2160_30fps.mp4",
+    "lat": 28.5463,
+    "lng": 77.251,
+    "zone": "South Delhi",
+    "direction": "Eastbound",
+    "road": "Outer Ring Road at Nehru Place",
+    "landmark": "Nehru Place"
   },
   {
     "camera_code": "CC-01",
     "camera_name": "Chandni Chowk Gate",
     "video_filename": "13270133_3840_2160_30fps.mp4",
-    "video_url": "https://ngwrbxiaeressvmhfopb.supabase.co/storage/v1/object/public/videos/13270133_3840_2160_30fps.mp4"
+    "video_url": "https://ngwrbxiaeressvmhfopb.supabase.co/storage/v1/object/public/videos/13270133_3840_2160_30fps.mp4",
+    "lat": 28.6561,
+    "lng": 77.2367,
+    "zone": "Old Delhi",
+    "direction": "Northbound",
+    "road": "Netaji Subhash Marg at Chandni Chowk (Lal Qila crossing)",
+    "landmark": "Chandni Chowk"
   },
   {
     "camera_code": "DW-01",
     "camera_name": "Dwarka Expressway Entry",
     "video_filename": "13105476_3840_2160_30fps.mp4",
-    "video_url": "https://ngwrbxiaeressvmhfopb.supabase.co/storage/v1/object/public/videos/13105476_3840_2160_30fps.mp4"
+    "video_url": "https://ngwrbxiaeressvmhfopb.supabase.co/storage/v1/object/public/videos/13105476_3840_2160_30fps.mp4",
+    "lat": 28.5437,
+    "lng": 77.0676,
+    "zone": "West Delhi",
+    "direction": "Eastbound",
+    "road": "Dwarka Expressway (NH-248BB) near Sector 25",
+    "landmark": "Dwarka"
   },
   {
     "camera_code": "DK-01",
     "camera_name": "Dhaula Kuan Interchange",
     "video_filename": "13268898_3840_2160_30fps.mp4",
-    "video_url": "https://ngwrbxiaeressvmhfopb.supabase.co/storage/v1/object/public/videos/13268898_3840_2160_30fps.mp4"
+    "video_url": "https://ngwrbxiaeressvmhfopb.supabase.co/storage/v1/object/public/videos/13268898_3840_2160_30fps.mp4",
+    "lat": 28.5924,
+    "lng": 77.1611,
+    "zone": "South West Delhi",
+    "direction": "Westbound",
+    "road": "NH-48 at Dhaula Kuan Interchange",
+    "landmark": "Dhaula Kuan"
   }
 ]

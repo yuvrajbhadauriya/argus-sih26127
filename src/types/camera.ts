@@ -11,6 +11,8 @@ export interface Camera {
   longitude: number;
   zone: string;
   direction: string;
+  /** Road / junction the camera watches (optional, additive column) */
+  road?: string;
   status: 'online' | 'offline';
   video_url: string;
   created_at: string;

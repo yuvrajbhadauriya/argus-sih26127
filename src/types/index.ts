@@ -26,6 +26,8 @@ export interface CameraFeed {
   lng: number;
   zone: string;
   direction: string;
+  /** Road / junction the camera watches (e.g. "Ring Road (AIIMS Flyover)"). */
+  road?: string;
   status: CameraStatus;
   video_url: string;
   thumbnail_url?: string;
@@ -78,6 +80,30 @@ export interface Trajectory {
   camera_count: number;
   first_seen: string;
   last_seen: string;
+  /** Where the trajectory came from (absent on legacy rows). */
+  source?: TrajectorySource;
+  /** Road distance covered between observed stops, in metres. */
+  total_distance_m?: number;
+  /** Time spent moving between observed stops (excludes off-network gaps). */
+  moving_time_seconds?: number;
+  /** Free-form tags, e.g. "watchlist", "anomaly:cloned_plate". */
+  tags?: string[];
+  /** Detected anomalies worth surfacing to an operator. */
+  anomalies?: TrajectoryAnomaly[];
+}
+
+/** Origin of a reconstructed trajectory */
+export type TrajectorySource = 'supabase' | 'simulation' | 'mock';
+
+/** 8-point compass heading of travel */
+export type CompassHeading = 'N' | 'NE' | 'E' | 'SE' | 'S' | 'SW' | 'W' | 'NW';
+
+/** An anomaly flagged on a trajectory */
+export interface TrajectoryAnomaly {
+  kind: 'cloned_plate' | 'circling' | string;
+  message: string;
+  /** Waypoint indices (into `waypoints`) that evidence the anomaly */
+  waypoint_indices?: number[];
 }
 
 /** A single stop in a vehicle's trajectory */
@@ -88,6 +114,18 @@ export interface TrajectoryWaypoint {
   lng: number;
   timestamp: string;
   time_since_previous_seconds: number | null;
+  /** Camera code (e.g. "AI-01"), when known */
+  camera_code?: string;
+  /** Direction of travel when seen at this camera */
+  heading?: CompassHeading | string;
+  /** Average speed over the hop from the previous stop of the same trip */
+  speed_kmph_from_prev?: number | null;
+  /** Road distance of the hop from the previous stop of the same trip */
+  distance_m_from_prev?: number | null;
+  /** Index of the continuous trip this stop belongs to (0-based) */
+  trip_index?: number;
+  /** Road geometry [lat, lng][] from the previous stop of the same trip */
+  path_from_prev?: [number, number][] | null;
 }
 
 /** A watchlist/blacklist entry */
