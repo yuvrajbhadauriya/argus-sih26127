@@ -32,7 +32,7 @@ import { Panel } from '@/shared/ui/Card';
 import { Badge } from '@/shared/ui/Badge';
 import { Button, IconButton } from '@/shared/ui/Button';
 import { KpiStrip, KpiTile } from '@/shared/ui/KpiTile';
-import { Select } from '@/shared/ui/Input';
+import { Select, Toolbar } from '@/shared/ui/Input';
 import { PlateChip } from '@/shared/ui/PlateChip';
 import { SeverityChip } from '@/shared/ui/SeverityChip';
 import { Skeleton, SkeletonPanel } from '@/shared/ui/Skeleton';
@@ -356,8 +356,9 @@ export function AlertsPage() {
             {simulated && <SimulationBadge />}
           </>
         }
-        actions={filters}
       />
+
+      <Toolbar>{filters}</Toolbar>
 
       {error ? (
         <ErrorState message={error} onRetry={load} />

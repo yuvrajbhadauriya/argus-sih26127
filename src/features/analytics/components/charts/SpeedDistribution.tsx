@@ -73,7 +73,7 @@ export function SpeedDistribution({ stats, height = 220, ariaLabel = 'Distributi
           <TooltipRow label="Share" value={`${((bins[hover].count / stats.n) * 100).toFixed(1)}%`} />
         </ChartTooltip>
       )}
-      <dl className="mt-2 grid grid-cols-3 gap-x-4 gap-y-1 text-xs sm:grid-cols-6">
+      <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-3">
         {([
           ['P10', stats.p10], ['P25', stats.p25], ['Median', stats.p50], ['Mean', stats.mean], ['P75', stats.p75], ['P90', stats.p90],
         ] as const).map(([k, v]) => (

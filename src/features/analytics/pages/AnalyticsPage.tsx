@@ -230,7 +230,7 @@ export function AnalyticsPage() {
     />
   );
   const heatmap = () => (
-    <div className="h-[340px]">
+    <div className="h-[380px]">
       <CongestionMap cameras={data!.cameras} corridors={data!.corridors} routes={routes} />
     </div>
   );
@@ -251,7 +251,7 @@ export function AnalyticsPage() {
       ariaLabel="Hourly sightings per zone (IST)"
       valueLabel="Sightings"
       xLabels={HOURS}
-      band={[...windowHours]}
+      band={win.id === 'all' ? [] : [...windowHours]}
       series={data!.hourlyByZone.map((z, i) => ({ name: z.zone, values: z.values, color: SERIES[i % SERIES.length] }))}
     />
   );
@@ -295,7 +295,7 @@ export function AnalyticsPage() {
             <Panel title="Hourly volume" subtitle="Sightings per hour · IST" icon={<ChartColumnIcon />}>{body(hourlyChart, 220)}</Panel>
             <Panel title="Camera load" subtitle={win.label} icon={<LayersIcon />}>{body(cameraChart, 234)}</Panel>
             <Panel title="Congestion heatmap" subtitle="Camera load and route density" icon={<FlameIcon />} flush>
-              {body(heatmap, 340)}
+              {body(heatmap, 380)}
             </Panel>
             <Panel title="Speed distribution" subtitle="Hop speeds between cameras" icon={<GaugeIcon />}>{body(speedChart, 260)}</Panel>
           </div>

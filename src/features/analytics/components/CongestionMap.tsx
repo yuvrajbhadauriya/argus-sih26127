@@ -4,8 +4,8 @@
 //  • route density: road-snapped corridors weighted by trips in the window
 // ═══════════════════════════════════════════════════
 
-import { useMemo, useState } from 'react';
-import { MapContainer, CircleMarker, Circle, Polyline, Tooltip } from 'react-leaflet';
+import { useEffect, useMemo, useState } from 'react';
+import { MapContainer, CircleMarker, Circle, Polyline, Tooltip, useMap } from 'react-leaflet';
 import { BaseTileLayer } from '@/shared/map/BaseTileLayer';
 import { MapLegend, MapPanel } from '@/shared/ui/MapLegend';
 import { useThemeTokens } from '@/shared/theme/tokens';
@@ -20,6 +20,18 @@ interface CongestionMapProps {
   corridors: Corridor[];
   routes: RoadRoutesDoc | null;
   className?: string;
+}
+
+/** Frame all cameras once the map has a size. */
+function FitCameras({ cameras }: { cameras: CameraLoad[] }) {
+  const map = useMap();
+  const key = cameras.map((c) => c.code).join('|');
+  useEffect(() => {
+    if (!map?.fitBounds || cameras.length === 0) return;
+    map.fitBounds(cameras.map((c) => [c.lat, c.lng] as [number, number]), { paddingTopLeft: [40, 40], paddingBottomRight: [40, 40], animate: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, map]);
+  return null;
 }
 
 /** 0..1 → index into a 5-step ramp. */
@@ -57,6 +69,7 @@ export function CongestionMap({ cameras, corridors, routes, className }: Congest
         aria-label="Congestion and route density map"
       >
         <BaseTileLayer />
+        <FitCameras cameras={cameras} />
         {showRoutes &&
           lines.map(({ c, coords }) => {
             const t = c.trips / maxTrips;

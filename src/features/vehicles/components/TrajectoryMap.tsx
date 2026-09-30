@@ -160,6 +160,13 @@ function buildHops(waypoints: TrajectoryWaypoint[]): Hop[] {
   return hops;
 }
 
+/** Same pair of cameras, in either direction. */
+function samePair(a: Hop, b: Hop): boolean {
+  const x = [a.from?.camera_code, a.to.camera_code];
+  const y = [b.from?.camera_code, b.to.camera_code];
+  return (x[0] === y[0] && x[1] === y[1]) || (x[0] === y[1] && x[1] === y[0]);
+}
+
 // ── Map children ──
 
 function FitBounds({ points, id }: { points: LatLngTuple[]; id: string }) {
@@ -232,8 +239,8 @@ const HopLayer = memo(function HopLayer({ hops, colorFor, showLabels, casing }: 
         )),
       )}
       {showLabels &&
-        // Repeated hops (e.g. a vehicle circling) share one label: the first pass.
-        hops.filter((h, i) => hops.findIndex((o) => o.from?.camera_code === h.from?.camera_code && o.to.camera_code === h.to.camera_code) === i).map((h) => (
+        // Repeated hops on the same road (circling, return trips) share one label: the first pass.
+        hops.filter((h, i) => hops.findIndex((o) => samePair(o, h)) === i).map((h) => (
           <Marker
             key={`lbl-${h.key}`}
             position={h.mid}
