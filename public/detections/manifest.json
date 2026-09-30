@@ -2,7 +2,7 @@
   "note": "Camera codes whose current clip has ANPR output in detections_<code>.json (per-frame overlay boxes, 640x360 canvas) and events_<code>.json (one event per vehicle). Written by pipeline/detect/run_remote_detection.py from the team's LPU model API.",
   "engine": "lpu_on_gpu",
   "model_version": "deim50k+raw35",
-  "generated_at": "2026-09-30T16:36:43Z",
+  "generated_at": "2026-09-30T19:49:30Z",
   "cameras": [
     "AN-01",
     "BH-01",
@@ -25,12 +25,12 @@
     },
     {
       "camera_code": "BH-01",
-      "video_filename": "india_rain-overhead-wet-road_pexels33588922.mp4",
-      "vehicles": 28,
-      "good_reads": 0,
-      "plates": 0,
-      "overlay_tracks": 23,
-      "gpu_seconds": 82.0
+      "video_filename": "mumbai_roadside-best-bus-front_pexels30249348.mp4",
+      "vehicles": 56,
+      "good_reads": 12,
+      "plates": 13,
+      "overlay_tracks": 44,
+      "gpu_seconds": 173.4
     },
     {
       "camera_code": "DD-01",
@@ -52,21 +52,21 @@
     },
     {
       "camera_code": "KR-01",
-      "video_filename": "india_night-overhead-junction_pexels34766759.mp4",
-      "vehicles": 12,
-      "good_reads": 0,
-      "plates": 0,
-      "overlay_tracks": 1,
-      "gpu_seconds": 138.9
+      "video_filename": "mumbai_flyover-roadside-approach-taxis_pexels31048404.mp4",
+      "vehicles": 70,
+      "good_reads": 5,
+      "plates": 7,
+      "overlay_tracks": 42,
+      "gpu_seconds": 187.9
     },
     {
       "camera_code": "SC-01",
-      "video_filename": "mumbai_overhead-dense-bus-autos_pexels31046718.mp4",
-      "vehicles": 66,
-      "good_reads": 0,
-      "plates": 0,
-      "overlay_tracks": 56,
-      "gpu_seconds": 129.6
+      "video_filename": "mumbai_flyover-roadside-front-plates_pexels30381474.mp4",
+      "vehicles": 78,
+      "good_reads": 26,
+      "plates": 25,
+      "overlay_tracks": 61,
+      "gpu_seconds": 159.7
     },
     {
       "camera_code": "SN-01",

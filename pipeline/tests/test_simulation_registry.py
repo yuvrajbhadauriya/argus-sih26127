@@ -9,7 +9,12 @@ from conftest import PIPELINE_DIR, ROOT_DIR
 
 CONFIG = json.loads((PIPELINE_DIR / "camera_config.json").read_text())
 MOCK_TS = (ROOT_DIR / "src" / "mocks" / "fixtures" / "mockCameras.ts").read_text()
-SQL = (ROOT_DIR / "supabase" / "migrations" / "20261001000200_mumbai_camera_network.sql").read_text()
+MIGRATIONS = ROOT_DIR / "supabase" / "migrations"
+# The network seed plus the later clip swaps (video_url updates) that apply on top of it.
+SQL = "\n".join((MIGRATIONS / f).read_text() for f in (
+    "20261001000200_mumbai_camera_network.sql",
+    "20261001000800_camera_clip_upgrade.sql",
+))
 SLUG = re.compile(r"^[a-z0-9]+_[a-z0-9-]+_(pexels|pixabay)\d+$")
 ROUTES = ROOT_DIR / "public" / "sim" / "road_routes.json"
 
