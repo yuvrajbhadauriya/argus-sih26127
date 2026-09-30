@@ -106,9 +106,19 @@ export const VIDEO_OVERLAY = {
   frameBg: '#05070A',
   box: '#22D3EE',
   boxGlow: 'rgba(34,211,238,.6)',
+  /** Thin box of a tracked vehicle without a plate read. */
+  boxMuted: 'rgba(34,211,238,.55)',
+  /** Box of a vehicle whose plate was read (≥ 80 %). */
+  readBox: '#3FB950',
+  readGlow: 'rgba(63,185,80,.55)',
+  /** Plate label chip — HSRP white plate, black text. */
+  plateBg: '#FFFFFF',
+  plateFg: '#0B0F14',
   labelBg: 'rgba(11,15,20,.8)',
   labelFg: '#FFFFFF',
+  labelMuted: 'rgba(255,255,255,.72)',
   watchlistBox: '#F85149',
+  watchlistGlow: 'rgba(248,81,73,.6)',
   liveDot: '#F85149',
 } as const;
 

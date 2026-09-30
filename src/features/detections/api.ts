@@ -105,6 +105,7 @@ export async function fetchDetectionsFromSupabase(
     plate_text_raw: item.plate_text_raw || 'UNKNOWN',
     plate_text_normalized: item.plate_text_normalized || '',
     confidence_score: item.confidence_score ?? 0.85,
+    ...(typeof item.plate_confidence === 'number' ? { plate_confidence: item.plate_confidence } : {}),
     vehicle_type: item.vehicle_type || 'car',
     timestamp: item.frame_timestamp_sec ?? 0,
     frame_timestamp_sec: item.frame_timestamp_sec ?? 0,
@@ -134,8 +135,9 @@ export async function fetchDetectionsFromStaticJson(
       camera_id: cameraCode || effectiveCode,
       tracked_vehicle_id: item.tracked_vehicle_id,
       plate_text_raw: item.plate_text,
-      plate_text_normalized: item.plate_text ? item.plate_text.replace(/\s+/g, '') : '',
+      plate_text_normalized: item.plate_text && item.plate_text !== 'UNKNOWN' ? item.plate_text.replace(/\s+/g, '') : '',
       confidence_score: item.confidence ?? 0.85,
+      ...(typeof item.plate_confidence === 'number' || item.plate_confidence === null ? { plate_confidence: item.plate_confidence } : {}),
       vehicle_type: item.vehicle_type || 'car',
       timestamp: item.frame_timestamp_sec ?? 0,
       frame_timestamp_sec: item.frame_timestamp_sec ?? 0,
@@ -175,4 +177,102 @@ export async function fetchCameraDetections(
   }
   options?.signal?.throwIfAborted();
   return fetchDetectionsFromStaticJson(cameraCode, options);
+}
+
+// ── Per-vehicle ANPR events (events_<code>.json) ─────────────────────────
+
+/** One vehicle's final read on a clip, from /detections/events_<code>.json. */
+export interface PlateEvent {
+  camera_code: string;
+  tracked_vehicle_id: string;
+  /** Formatted plate ("MH 02 GB 4920") when the OCR read passed the grammar check, else null. */
+  plate_text: string | null;
+  /** Raw OCR string (may be garbage for unreadable plates). */
+  plate_read: string | null;
+  /** OCR confidence 0–1 (null when no plate crop was read). */
+  plate_confidence: number | null;
+  grammar_valid: boolean;
+  vehicle_type: Detection['vehicle_type'];
+  /** Human class label from the model (Car, LCV, Bus, …). */
+  vehicle_class: string;
+  /** Clip time (s) at which the read was made. */
+  time_sec: number;
+  bbox: Detection['bbox'];
+}
+
+export interface CameraEvents {
+  camera_code: string;
+  /** Clip length in seconds (frames / fps) when the file says so. */
+  duration_sec: number | null;
+  events: PlateEvent[];
+}
+
+/** A plate read shown to operators ("good read"): OCR ≥ 75 % and a valid Indian plate grammar (pipeline rule). */
+export const DISPLAY_READ_MIN_CONFIDENCE = 0.75;
+
+export function isDisplayableRead(e: Pick<PlateEvent, 'plate_text' | 'plate_confidence' | 'grammar_valid'>): boolean {
+  return !!e.plate_text && e.grammar_valid && (e.plate_confidence ?? 0) >= DISPLAY_READ_MIN_CONFIDENCE;
+}
+
+const VEHICLE_TYPES = new Set(['car', 'truck', 'bus', 'motorcycle', 'unknown']);
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function parseCameraEvents(code: string, doc: any): CameraEvents {
+  const clip = doc?.clip ?? {};
+  const duration = Number(clip.frames) > 0 && Number(clip.fps) > 0 ? Number(clip.frames) / Number(clip.fps) : null;
+  const raw = Array.isArray(doc?.events) ? doc.events : Array.isArray(doc) ? doc : [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const events: PlateEvent[] = raw.map((e: any, i: number) => ({
+    camera_code: code,
+    tracked_vehicle_id: String(e.tracked_vehicle_id ?? `ev-${i}`),
+    plate_text: typeof e.plate_text === 'string' && e.plate_text && e.plate_text !== 'UNKNOWN' ? e.plate_text : null,
+    plate_read: typeof e.plate_read === 'string' ? e.plate_read : null,
+    plate_confidence: typeof e.plate_confidence === 'number' ? e.plate_confidence : null,
+    grammar_valid: e.grammar_valid === true,
+    vehicle_type: VEHICLE_TYPES.has(e.vehicle_type) ? e.vehicle_type : 'unknown',
+    vehicle_class: typeof e.vehicle_class === 'string' ? e.vehicle_class : 'Vehicle',
+    time_sec: typeof e.time_sec === 'number' ? e.time_sec : 0,
+    bbox: { x: e.bbox?.x ?? 0, y: e.bbox?.y ?? 0, width: e.bbox?.width ?? 0, height: e.bbox?.height ?? 0 },
+  }));
+  events.sort((a, b) => a.time_sec - b.time_sec);
+  return { camera_code: code, duration_sec: duration, events };
+}
+
+const eventsCache = new Map<string, Promise<CameraEvents | null>>();
+
+/**
+ * Per-vehicle events for a camera's clip (memoised). Resolves null when the
+ * manifest does not list the camera or the file is missing.
+ */
+export function fetchCameraEvents(cameraCode: string): Promise<CameraEvents | null> {
+  const code = CODE_ALIAS_MAP[cameraCode] || cameraCode;
+  let p = eventsCache.get(code);
+  if (!p) {
+    p = loadDetectionsManifest()
+      .then(async (codes) => {
+        if (!codes.has(code)) return null;
+        const res = await fetch(`/detections/events_${code}.json`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return parseCameraEvents(code, await res.json());
+      })
+      .catch((err: unknown) => {
+        eventsCache.delete(code);
+        console.warn(`Could not load plate events for camera ${code}:`, err);
+        return null;
+      });
+    eventsCache.set(code, p);
+  }
+  return p;
+}
+
+/** Events for every camera in the manifest (cameras without a file are skipped). */
+export async function fetchAllCameraEvents(): Promise<CameraEvents[]> {
+  const codes = [...(await loadDetectionsManifest())];
+  const all = await Promise.all(codes.map((c) => fetchCameraEvents(c)));
+  return all.filter((x): x is CameraEvents => !!x);
+}
+
+/** Test hook. */
+export function resetCameraEventsCache() {
+  eventsCache.clear();
 }

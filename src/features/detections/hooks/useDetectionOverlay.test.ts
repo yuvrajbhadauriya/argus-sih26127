@@ -6,15 +6,16 @@ import {
   buildDetectionIndex,
   selectActiveDetections,
   isDrawableDetection,
+  plateReadState,
 } from './useDetectionOverlay';
 
 // ── Canvas / rAF harness ──────────────────────────────────────────
 function makeCtx() {
   return {
     clearRect: vi.fn(), strokeRect: vi.fn(), fillRect: vi.fn(), fillText: vi.fn(),
-    beginPath: vi.fn(), moveTo: vi.fn(), lineTo: vi.fn(), stroke: vi.fn(),
+    beginPath: vi.fn(), moveTo: vi.fn(), lineTo: vi.fn(), stroke: vi.fn(), fill: vi.fn(), rect: vi.fn(),
     measureText: vi.fn(() => ({ width: 50 })),
-    strokeStyle: '', fillStyle: '', lineWidth: 0, shadowColor: '', shadowBlur: 0, font: '',
+    strokeStyle: '', fillStyle: '', lineWidth: 0, shadowColor: '', shadowBlur: 0, font: '',  textBaseline: "",
   };
 }
 
@@ -79,18 +80,73 @@ describe('useDetectionOverlay', () => {
     expect(ctx.strokeRect).toHaveBeenCalledWith(100, 100, 80, 60);
   });
 
-  it('filters people/unknown, low confidence, full-frame and tiny boxes', () => {
+  it('filters people, unread unknown/low-confidence/tiny vehicles and full-frame boxes', () => {
     const keep = det();
+    const unread = { plate_text_raw: 'UNKNOWN', plate_text_normalized: '' };
+    const keepUnread = det({ ...unread, confidence_score: 0.6 });
     const dets = [
       keep,
-      det({ vehicle_type: 'unknown' }),
-      det({ confidence_score: 0.79 }),
+      keepUnread,
+      det({ vehicle_type: 'person' as Detection['vehicle_type'] }),
+      det({ ...unread, vehicle_type: 'unknown' }),
+      det({ ...unread, confidence_score: 0.59 }),
       det({ bbox: { x: 0, y: 0, width: 640, height: 360 } }),
-      det({ bbox: { x: 10, y: 10, width: 24, height: 40 } }),
+      det({ ...unread, bbox: { x: 10, y: 10, width: 13, height: 40 } }),
     ];
     const { hook } = setup(dets, 0);
     stepFrame();
-    expect(hook.result.current.activeDetections.map((d) => d.event_id)).toEqual([keep.event_id]);
+    expect(hook.result.current.activeDetections.map((d) => d.event_id)).toEqual([keep.event_id, keepUnread.event_id]);
+  });
+
+  it('keeps small or unknown-class vehicles whose plate was read', () => {
+    const d = det({ vehicle_type: 'unknown', confidence_score: 0.3, plate_confidence: 0.9, bbox: { x: 5, y: 5, width: 10, height: 10 } });
+    expect(isDrawableDetection(d)).toBe(true);
+  });
+
+  it('classifies plate reads: text ≥ 75 % → read, below → reading, none → none', () => {
+    expect(plateReadState(det({ plate_confidence: 0.75 }))).toBe('read');
+    expect(plateReadState(det({ plate_confidence: 0.74 }))).toBe('reading');
+    expect(plateReadState(det({ plate_text_raw: 'UNKNOWN', plate_confidence: null }))).toBe('none');
+    expect(plateReadState(det({ plate_text_raw: '' }))).toBe('none');
+    // no separate OCR score → detector score is used
+    expect(plateReadState(det({ confidence_score: 0.7 }))).toBe('reading');
+  });
+
+  it('labels reads with plate · confidence · class and low reads as "reading…"', () => {
+    const read = det({ plate_text_raw: 'MH 02 FG 0919', plate_confidence: 0.98 });
+    const low = det({ plate_text_raw: 'MH 02 AB 1111', plate_confidence: 0.5, bbox: { x: 300, y: 200, width: 60, height: 50 } });
+    setup([read, low], 0);
+    stepFrame();
+    const texts = ctx.fillText.mock.calls.map((c) => c[0]);
+    expect(texts).toContain('MH 02 FG 0919');
+    expect(texts).toContain('98%');
+    expect(texts).toContain('CAR');
+    expect(texts).toContain('reading…');
+    expect(texts).not.toContain('MH 02 AB 1111');
+  });
+
+  it('draws watchlist reads in red with a WATCHLIST tag', () => {
+    const read = det({ plate_text_raw: 'MH 01 CS 0126', plate_confidence: 0.9 });
+    const video = document.createElement('video');
+    Object.defineProperty(video, 'currentTime', { value: 0, writable: true });
+    video.getBoundingClientRect = () => ({ width: 640, height: 360, x: 0, y: 0, top: 0, left: 0, right: 640, bottom: 360, toJSON: () => ({}) }) as DOMRect;
+    const canvas = document.createElement('canvas');
+    const watchlist = new Set(['MH01CS0126']);
+    renderHook(() => useDetectionOverlay({ current: video }, { current: canvas }, [read], { watchlist }));
+    stepFrame();
+    expect(ctx.fillText.mock.calls.map((c) => c[0])).toContain('WATCHLIST');
+  });
+
+  it('tile variant draws only the plate text', () => {
+    const read = det({ plate_text_raw: 'MH 02 FG 0919', plate_confidence: 0.98 });
+    const low = det({ plate_text_raw: 'MH 02 AB 1111', plate_confidence: 0.5 });
+    const video = document.createElement('video');
+    Object.defineProperty(video, 'currentTime', { value: 0, writable: true });
+    video.getBoundingClientRect = () => ({ width: 640, height: 360, x: 0, y: 0, top: 0, left: 0, right: 640, bottom: 360, toJSON: () => ({}) }) as DOMRect;
+    const canvas = document.createElement('canvas');
+    renderHook(() => useDetectionOverlay({ current: video }, { current: canvas }, [read, low], { variant: 'tile' }));
+    stepFrame();
+    expect(ctx.fillText.mock.calls.map((c) => c[0])).toEqual(['MH 02 FG 0919']);
   });
 
   it('parses "MM:SS.mmm" string timestamps when frame_timestamp_sec is absent', () => {
@@ -118,13 +174,13 @@ describe('useDetectionOverlay', () => {
     expect(ids).toEqual([near.event_id, other.event_id].sort());
   });
 
-  it('caps the overlay at the 15 most confident vehicles', () => {
-    const dets = Array.from({ length: 20 }, (_, i) => det({ confidence_score: 0.8 + i * 0.005 }));
+  it('caps the overlay at the 20 most confident vehicles', () => {
+    const dets = Array.from({ length: 25 }, (_, i) => det({ confidence_score: 0.8 + i * 0.005 }));
     const { hook } = setup(dets, 0);
     stepFrame();
     const active = hook.result.current.activeDetections;
-    expect(active).toHaveLength(15);
-    expect(active[0].confidence_score).toBeCloseTo(0.8 + 19 * 0.005);
+    expect(active).toHaveLength(20);
+    expect(active[0].confidence_score).toBeCloseTo(0.8 + 24 * 0.005);
     expect(active.every((d, i) => i === 0 || active[i - 1].confidence_score >= d.confidence_score)).toBe(true);
   });
 
@@ -231,10 +287,11 @@ describe('useDetectionOverlay', () => {
 
 describe('detection index', () => {
   it('drops undrawable rows up front', () => {
-    const idx = buildDetectionIndex([det(), det({ confidence_score: 0.5 }), det({ vehicle_type: 'person' as Detection['vehicle_type'] })]);
+    const unread = { plate_text_raw: 'UNKNOWN', plate_text_normalized: '' };
+    const idx = buildDetectionIndex([det(), det({ ...unread, confidence_score: 0.5 }), det({ vehicle_type: 'person' as Detection['vehicle_type'] })]);
     expect(idx.size).toBe(1);
-    expect(isDrawableDetection(det({ bbox: { x: 0, y: 0, width: 25, height: 25 } }))).toBe(true);
-    expect(isDrawableDetection(det({ bbox: { x: 0, y: 0, width: 24.9, height: 25 } }))).toBe(false);
+    expect(isDrawableDetection(det({ ...unread, bbox: { x: 0, y: 0, width: 14, height: 14 } }))).toBe(true);
+    expect(isDrawableDetection(det({ ...unread, bbox: { x: 0, y: 0, width: 13.9, height: 14 } }))).toBe(false);
   });
 
   it('matches a brute-force linear scan at every playhead position', () => {
@@ -256,7 +313,7 @@ describe('detection index', () => {
         const e = best.get(k);
         if (!e || diff < e.diff) best.set(k, { d, diff });
       }
-      return [...best.values()].map((v) => v.d).sort((a, b) => b.confidence_score - a.confidence_score).slice(0, 15);
+      return [...best.values()].map((v) => v.d).sort((a, b) => b.confidence_score - a.confidence_score).slice(0, 20);
     };
     const idx = buildDetectionIndex(rows);
     for (let t = -0.5; t <= 20.5; t += 0.033) {

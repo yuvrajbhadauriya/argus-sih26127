@@ -48,6 +48,8 @@ export interface Detection {
   plate_text_raw: string;
   plate_text_normalized: string;
   confidence_score: number;
+  /** OCR confidence of the plate read (0–1), when the pipeline reports it separately from the detector score. */
+  plate_confidence?: number | null;
   vehicle_type: VehicleType;
   timestamp: string | number;
   frame_timestamp_sec?: number;

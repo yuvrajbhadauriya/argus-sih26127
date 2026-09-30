@@ -8,7 +8,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   CctvIcon, DownloadIcon, FilterXIcon, GaugeIcon, ListIcon, RefreshCwIcon, RouteIcon, ScanLineIcon,
-  SearchIcon, TagIcon, TriangleAlertIcon,
+  CarIcon, SearchIcon, TagIcon,
 } from 'lucide-react';
 import type { Detection } from '@/types';
 import { useCameras } from '@/features/cameras/hooks/useCameras';
@@ -24,8 +24,9 @@ import { ErrorState } from '@/shared/ui/ErrorState';
 import { PlateChip } from '@/shared/ui/PlateChip';
 import { vehicleClassToPlateVariant } from '@/shared/lib/plate';
 import { useDetectionsLog } from '../hooks/useDetectionsLog';
+import { DISPLAY_READ_MIN_CONFIDENCE } from '../api';
 import {
-  EMPTY_FILTERS, LOW_CONFIDENCE, detectionStats, detectionsToCsv, filterDetections, filtersFromParams,
+  EMPTY_FILTERS, detectionStats, detectionsToCsv, filterDetections, filtersFromParams,
   filtersToParams, formatFrameTime, hasActiveFilters, plateKey, type DetectionFilters,
 } from '../lib/log';
 import { ConfidenceBar } from '../components/ConfidenceBar';
@@ -56,7 +57,7 @@ export function DetectionsPage() {
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const filters = useMemo(() => filtersFromParams(params), [params]);
-  const { rows, watchlist, loading, error, refetch } = useDetectionsLog();
+  const { rows, vehiclesDetected, watchlist, loading, error, refetch } = useDetectionsLog();
   const { cameras } = useCameras();
   const [selected, setSelected] = useState<Detection | null>(null);
 
@@ -92,7 +93,7 @@ export function DetectionsPage() {
   const trace = (plate: string) => navigate(`/vehicles?plate=${encodeURIComponent(plateKey(plate))}`);
 
   const columns: Column<Detection>[] = [
-    { key: 'time', header: 'Frame time', width: '104px', mono: true, cell: (d) => formatFrameTime(d.timestamp), sortValue: (d) => String(d.timestamp) },
+    { key: 'time', header: 'Frame time', width: '104px', mono: true, cell: (d) => formatFrameTime(d.timestamp), sortValue: (d) => Number(d.frame_timestamp_sec ?? d.timestamp) || 0 },
     {
       key: 'plate', header: 'Plate', width: '150px',
       cell: (d) => <PlateChip plate={d.plate_text_raw} size="xs" variant={vehicleClassToPlateVariant(d.vehicle_type)} flag={watchlist.has(plateKey(d.plate_text_raw)) ? 'watchlist' : null} />,
@@ -127,7 +128,7 @@ export function DetectionsPage() {
     <Page>
       <PageHeader
         title="Detections"
-        description="ANPR event log across all cameras"
+        description={`Verified plate reads (OCR confidence ≥ ${Math.round(DISPLAY_READ_MIN_CONFIDENCE * 100)} %, valid Indian plate format) from the AI ANPR engine, one per vehicle`}
         icon={ScanLineIcon}
         meta={<Badge tone="neutral" size="sm" className="tabular-nums">{`${rows.length} events`}</Badge>}
         actions={
@@ -145,7 +146,13 @@ export function DetectionsPage() {
         <KpiTile label="Events" value={stats.events.toLocaleString('en-IN')} icon={<ListIcon size={16} />} loading={loading} hint={active ? `of ${rows.length} total` : 'all cameras'} />
         <KpiTile label="Unique plates" value={stats.uniquePlates.toLocaleString('en-IN')} icon={<TagIcon size={16} />} loading={loading} />
         <KpiTile label="Mean confidence" value={pct(stats.meanConfidence)} unit={stats.meanConfidence == null ? undefined : '%'} icon={<GaugeIcon size={16} />} tone="success" loading={loading} />
-        <KpiTile label="Low confidence" value={stats.lowConfidence} icon={<TriangleAlertIcon size={16} />} tone="warning" hint={`below ${LOW_CONFIDENCE * 100}%`} loading={loading} />
+        <KpiTile
+          label="Vehicles detected"
+          value={vehiclesDetected.toLocaleString('en-IN')}
+          icon={<CarIcon size={16} />}
+          loading={loading}
+          hint={vehiclesDetected > 0 ? `${Math.round((rows.length / vehiclesDetected) * 100)}% with a verified plate read` : 'on the published clips'}
+        />
       </div>
 
       <Panel flush>

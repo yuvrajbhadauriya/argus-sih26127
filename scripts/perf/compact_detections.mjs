@@ -25,8 +25,9 @@ import { gzipSync } from 'node:zlib';
 const dir = process.argv[2] || join(process.cwd(), 'public', 'detections');
 
 // ── Keep in sync with isDrawableDetection() in useDetectionOverlay.ts ──
-const MIN_CONFIDENCE = 0.8;
-const EXCLUDED_TYPES = new Set(['person', 'pedestrian', 'unknown']);
+const PLATE_READ_MIN = 0.8;
+const MIN_VEHICLE_CONFIDENCE = 0.6;
+const MIN_VEHICLE_BOX = 14;
 function isDrawable(row) {
   const vehicleType = String(row.vehicle_type || 'car').toLowerCase();
   const confidence = row.confidence ?? 0.85;
@@ -34,13 +35,18 @@ function isDrawable(row) {
   const y = row.bbox?.y ?? 0;
   const width = row.bbox?.width ?? 0;
   const height = row.bbox?.height ?? 0;
-  if (EXCLUDED_TYPES.has(vehicleType)) return false;
-  if (confidence < MIN_CONFIDENCE) return false;
+  if (vehicleType === 'person' || vehicleType === 'pedestrian') return false;
   if (width >= 520 || height >= 290) return false;
   if ((x <= 3 && width >= 630) || (y <= 3 && height >= 350)) return false;
-  if (width < 25 || height < 25) return false;
+  const plate = String(row.plate_text || '').trim();
+  const hasPlate = plate && plate.toUpperCase() !== 'UNKNOWN';
+  if (hasPlate) return width >= 8 && height >= 8;
+  if (vehicleType === 'unknown') return false;
+  if (confidence < MIN_VEHICLE_CONFIDENCE) return false;
+  if (width < MIN_VEHICLE_BOX || height < MIN_VEHICLE_BOX) return false;
   return true;
 }
+void PLATE_READ_MIN;
 
 const round = (v, dp) => (typeof v === 'number' ? Math.round(v * 10 ** dp) / 10 ** dp : v);
 
