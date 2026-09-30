@@ -49,3 +49,4 @@ pipeline/data/
 
 # Local agent state
 .claude/
+.vercel
