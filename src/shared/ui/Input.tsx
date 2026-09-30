@@ -54,21 +54,28 @@ export type SelectProps = SelectHTMLAttributes<HTMLSelectElement> & {
 };
 
 export function Select({ icon, uiSize = 'md', label, className, children, ...rest }: SelectProps) {
+  // The wrapper draws the control chrome so an inline label/icon never overlaps the value.
   return (
-    <div className={cn('relative inline-flex min-w-0 items-center', className)}>
+    <div
+      className={cn(
+        'relative inline-flex min-w-0 items-center rounded-sm border border-line-strong bg-surface text-[13px] text-fg transition-colors dark:bg-surface-2',
+        'focus-within:border-primary focus-within:ring-2 focus-within:ring-focus/25',
+        'has-[select:disabled]:cursor-not-allowed has-[select:disabled]:opacity-50',
+        uiSize === 'sm' ? 'h-7' : 'h-8',
+        className,
+      )}
+    >
       {(icon || label) && (
-        <span className="pointer-events-none absolute left-2.5 inline-flex items-center gap-1.5 text-xs text-fg-subtle [&>svg]:h-4 [&>svg]:w-4">
+        <span className="pointer-events-none inline-flex shrink-0 items-center gap-1.5 pl-2.5 text-xs text-fg-subtle [&>span>svg]:h-3.5 [&>span>svg]:w-3.5">
           {icon && <span className="inline-flex" aria-hidden>{icon}</span>}
-          {label && <span className="font-medium">{label}</span>}
+          {label && <span className="font-medium" aria-hidden>{label}</span>}
         </span>
       )}
       <select
         aria-label={rest['aria-label'] ?? label}
         className={cn(
-          CONTROL,
-          'cursor-pointer appearance-none border-line-strong pr-8',
-          uiSize === 'sm' ? 'h-7' : 'h-8',
-          label ? (icon ? 'pl-[4.5rem]' : 'pl-12') : icon ? 'pl-8' : 'pl-2.5',
+          'h-full min-w-0 flex-1 cursor-pointer appearance-none truncate rounded-sm bg-transparent pr-8 text-[13px] text-fg focus:outline-none disabled:cursor-not-allowed',
+          icon || label ? 'pl-1.5' : 'pl-2.5',
         )}
         {...rest}
       >

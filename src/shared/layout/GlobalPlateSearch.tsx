@@ -12,6 +12,14 @@ import { Input, Kbd } from '@/shared/ui/Input';
 
 const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/i.test(navigator.platform || navigator.userAgent || '');
 
+function isNarrow(): boolean {
+  try {
+    return typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 639px)').matches;
+  } catch {
+    return false;
+  }
+}
+
 function isTypingTarget(el: EventTarget | null): boolean {
   if (!(el instanceof HTMLElement)) return false;
   return el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName);
@@ -40,7 +48,7 @@ export function GlobalPlateSearch({ className }: { className?: string }) {
   return (
     <form
       role="search"
-      className={cn('w-full max-w-[360px]', className)}
+      className={cn('w-full min-w-[140px] max-w-[360px]', className)}
       onSubmit={(e) => {
         e.preventDefault();
         const plate = normalizePlate(value);
@@ -62,14 +70,14 @@ export function GlobalPlateSearch({ className }: { className?: string }) {
             e.currentTarget.blur();
           }
         }}
-        placeholder="Search plate — e.g. DL 04 RS 9598"
+        placeholder={isNarrow() ? 'Search plate' : 'Search plate — e.g. DL 04 RS 9598'}
         aria-label="Search vehicle plate"
         autoComplete="off"
         spellCheck={false}
         icon={<SearchIcon size={16} strokeWidth={1.75} />}
-        className="w-full [&_input]:uppercase [&_input]:placeholder:normal-case [&_input]:placeholder:font-sans"
+        className="w-full max-md:[&_input]:pr-2.5 [&_input]:uppercase [&_input]:placeholder:normal-case [&_input]:placeholder:font-sans"
         trailing={
-          <Kbd className="hidden sm:inline-flex">
+          <Kbd className="hidden md:inline-flex">
             {isMac ? <CommandIcon size={12} aria-label="Command" /> : 'Ctrl'}
             {isMac ? 'K' : ' K'}
           </Kbd>

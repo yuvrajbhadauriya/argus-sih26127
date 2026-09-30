@@ -41,7 +41,7 @@ export function UserMenu() {
             <ChevronDownIcon size={14} className="text-fg-subtle" aria-hidden />
           </>
         }
-        panelClassName="w-64 p-1"
+        panelClassName="w-72 p-1"
       >
         {(close) => (
           <>
@@ -50,9 +50,9 @@ export function UserMenu() {
               <div className="text-xs text-fg-muted">Control Room · Operator</div>
             </div>
             <div className="my-1 h-px bg-line" />
-            <div className="flex items-center justify-between gap-2 px-2 py-1.5">
-              <span className="text-xs text-fg-muted">Theme</span>
-              <ThemeToggle variant="segmented" />
+            <div className="px-2 py-1.5">
+              <div className="mb-1.5 text-2xs font-semibold uppercase tracking-[0.06em] text-fg-subtle">Theme</div>
+              <ThemeToggle variant="segmented" className="flex w-full [&>button]:flex-1 [&>button]:justify-center" />
             </div>
             <div className="my-1 h-px bg-line" />
             <button

@@ -103,8 +103,8 @@ export function VideoTile({
 
       <div className="pointer-events-none absolute inset-x-0 top-0 z-[2] flex items-start justify-between gap-2 p-2">
         <span className={cn(CHIP, 'min-w-0 max-w-[75%]')} style={chipStyle}>
-          <span className="font-mono text-2xs font-semibold">{code}</span>
-          <span className={cn('truncate opacity-85', size === 'sm' && 'max-w-[10rem]')}>{name}</span>
+          <span className="shrink-0 whitespace-nowrap font-mono text-2xs font-semibold">{code}</span>
+          <span className={cn('min-w-0 truncate opacity-85', size === 'sm' && 'max-w-[10rem] max-sm:hidden')}>{name}</span>
           {zone && size === 'lg' && <span className="truncate opacity-70">· {zone}</span>}
         </span>
         <span className="flex shrink-0 items-center gap-1.5">
