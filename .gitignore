@@ -11,7 +11,10 @@ node_modules
 dist
 dist-ssr
 *.local
-.env
+
+# Env files (keep the template)
+.env*
+!.env.example
 
 # Editor directories and files
 .vscode/*
@@ -30,9 +33,18 @@ public/videos/*
 *.mp4
 *.zip
 
-# Python test venv / caches
-.venv-test
+# Python venvs / caches
+.venv*/
 .pytest_cache
-__pycache__
+__pycache__/
+*.pyc
 .coverage
-coverage
+coverage/
+
+# Pipeline artefacts (model weights, local videos, generated data)
+*.pt
+videos/
+pipeline/data/
+
+# Local agent state
+.claude/
