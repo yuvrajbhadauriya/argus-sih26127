@@ -18,6 +18,8 @@ describe('mockCameras + helpers', () => {
       expect(c.lat).toBeLessThan(29);
       expect(c.lng).toBeGreaterThan(76);
       expect(c.lng).toBeLessThan(78);
+      expect(c.road, c.code).toBeTruthy();
+      expect(['Northbound', 'Southbound', 'Eastbound', 'Westbound']).toContain(c.direction);
     }
   });
 
@@ -80,6 +82,15 @@ describe('mockTrajectories integrity', () => {
         expect(t.waypoints[i].time_since_previous_seconds).toBe(Math.round((cur - prev) / 1000));
       }
       expect(t.camera_count).toBe(new Set(t.waypoints.map((w) => w.camera_id)).size);
+    }
+  });
+
+  it('waypoint coordinates come from the shared camera registry', () => {
+    for (const t of Object.values(mockTrajectories)) {
+      for (const w of t.waypoints) {
+        const cam = mockCameras.find((c) => c.id === w.camera_id)!;
+        expect([w.lat, w.lng, w.camera_name, w.camera_code]).toEqual([cam.lat, cam.lng, cam.name, cam.code]);
+      }
     }
   });
 

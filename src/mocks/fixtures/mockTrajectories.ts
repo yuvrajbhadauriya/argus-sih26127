@@ -1,9 +1,17 @@
 // ═══════════════════════════════════════════════════
 // Mock Vehicles & Trajectories Data (Phase 3)
-// Multi-camera journeys reconstructed per plate
+// Small, hand-written fixtures kept for unit tests. The Vehicles page itself
+// now uses Supabase or the simulated city network (public/sim/*.json).
+// Camera coordinates come from the shared registry in mockCameras.ts.
 // ═══════════════════════════════════════════════════
 
 import type { Vehicle, Trajectory } from '@/types';
+import { mockCameras } from './mockCameras';
+
+const cam = (id: string) => {
+  const c = mockCameras.find((x) => x.id === id)!;
+  return { camera_id: c.id, camera_name: c.name, camera_code: c.code, lat: c.lat, lng: c.lng };
+};
 
 export const mockVehicles: Vehicle[] = [
   {
@@ -55,26 +63,17 @@ export const mockTrajectories: Record<string, Trajectory> = {
     vehicle_type: 'car',
     waypoints: [
       {
-        camera_id: 'cam-001',
-        camera_name: 'India Gate Junction',
-        lat: 28.6129,
-        lng: 77.2295,
+        ...cam('cam-001'),
         timestamp: '2026-09-25T08:12:00Z',
         time_since_previous_seconds: null,
       },
       {
-        camera_id: 'cam-002',
-        camera_name: 'Connaught Place Circle',
-        lat: 28.6315,
-        lng: 77.2167,
+        ...cam('cam-002'),
         timestamp: '2026-09-25T08:27:00Z',
         time_since_previous_seconds: 900, // 15 mins
       },
       {
-        camera_id: 'cam-003',
-        camera_name: 'Karol Bagh Crossing',
-        lat: 28.6519,
-        lng: 77.1905,
+        ...cam('cam-003'),
         timestamp: '2026-09-25T08:45:00Z',
         time_since_previous_seconds: 1080, // 18 mins
       },
@@ -90,18 +89,12 @@ export const mockTrajectories: Record<string, Trajectory> = {
     vehicle_type: 'truck',
     waypoints: [
       {
-        camera_id: 'cam-001',
-        camera_name: 'India Gate Junction',
-        lat: 28.6129,
-        lng: 77.2295,
+        ...cam('cam-001'),
         timestamp: '2026-09-25T07:30:00Z',
         time_since_previous_seconds: null,
       },
       {
-        camera_id: 'cam-005',
-        camera_name: 'AIIMS T-Junction',
-        lat: 28.5672,
-        lng: 77.2100,
+        ...cam('cam-005'),
         timestamp: '2026-09-25T09:15:00Z',
         time_since_previous_seconds: 6300, // 1h 45m
       },
@@ -117,18 +110,12 @@ export const mockTrajectories: Record<string, Trajectory> = {
     vehicle_type: 'car',
     waypoints: [
       {
-        camera_id: 'cam-005',
-        camera_name: 'AIIMS T-Junction',
-        lat: 28.5672,
-        lng: 77.2100,
+        ...cam('cam-005'),
         timestamp: '2026-09-25T09:00:00Z',
         time_since_previous_seconds: null,
       },
       {
-        camera_id: 'cam-006',
-        camera_name: 'Nehru Place Underpass',
-        lat: 28.5494,
-        lng: 77.2530,
+        ...cam('cam-006'),
         timestamp: '2026-09-25T09:20:00Z',
         time_since_previous_seconds: 1200, // 20 mins
       },
