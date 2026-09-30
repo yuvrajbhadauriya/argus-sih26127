@@ -1,9 +1,11 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { ModelPerformancePage } from './ModelPerformancePage';
+import { resetCameraEventsCache, resetDetectionsManifest } from '@/features/detections/api';
+import { containsModelName } from '../lib/publicCopy';
 
 const read = (p: string) => JSON.parse(readFileSync(resolve(process.cwd(), p), 'utf8'));
 const SAMPLE = read('src/features/model-performance/__fixtures__/sample-results.json');
@@ -27,6 +29,17 @@ function stubFetch(files: Record<string, unknown>) {
 
 const renderPage = () => render(<MemoryRouter><ModelPerformancePage /></MemoryRouter>);
 
+const REAL_RESULTS = read('public/eval/results.json');
+const REAL_VIDEO = read('public/eval/video_consistency.json');
+const MANIFEST = read('public/detections/manifest.json');
+const REAL_EVENTS: Record<string, unknown> = Object.fromEntries(
+  (MANIFEST.cameras as string[]).map((c) => [`/detections/events_${c}.json`, read(`public/detections/events_${c}.json`)]),
+);
+
+beforeEach(() => {
+  resetDetectionsManifest();
+  resetCameraEventsCache();
+});
 afterEach(() => vi.unstubAllGlobals());
 
 describe('ModelPerformancePage', () => {
@@ -55,10 +68,10 @@ describe('ModelPerformancePage', () => {
     expect(await screen.findByText('Meets target')).toBeInTheDocument();
     expect(screen.getByText('94.0%')).toBeInTheDocument();
     expect(screen.queryByText(/Sample data — run the evaluation/)).toBeNull();
-    expect(screen.getAllByText('deim50k+raw35').length).toBeGreaterThan(0);
+    expect(screen.queryByText('deim50k+raw35')).toBeNull();
+    expect(screen.getByText('Trained Indian-plate ANPR model')).toBeInTheDocument();
     expect(screen.getByText('Live ANPR API (GPU)')).toBeInTheDocument();
-    expect(screen.getByRole('list', { name: 'Model team benchmarks' })).toBeInTheDocument();
-    expect(screen.getByText(/not measured by this harness/)).toBeInTheDocument();
+    expect(screen.getAllByText(/not measured by this harness|not re-measured by this dashboard/).length).toBeGreaterThan(0);
     expect(screen.getByText(/reachable · 42 ms/)).toBeInTheDocument();
     expect(screen.getByText('No video run yet')).toBeInTheDocument();
   });
@@ -75,5 +88,38 @@ describe('ModelPerformancePage', () => {
     renderPage();
     expect(await screen.findByText('Evaluation results unavailable')).toBeInTheDocument();
     expect(screen.getByText(/schema_version 99/)).toBeInTheDocument();
+  });
+
+  it('headlines the team OCR benchmark and never renders model architecture names (real published files)', async () => {
+    stubFetch({
+      '/eval/results.json': REAL_RESULTS,
+      '/eval/video_consistency.json': REAL_VIDEO,
+      '/detections/manifest.json': MANIFEST,
+      ...REAL_EVENTS,
+    });
+    const { container } = renderPage();
+    expect(await screen.findByText('Plate OCR accuracy (team golden set, measured)')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '98.87%' })).toHaveAttribute('href', '/accuracy');
+    expect(screen.getByText(/1,403 \/ 1,419 plates exactly right/)).toBeInTheDocument();
+    const team = screen.getByRole('list', { name: 'Team OCR benchmarks' });
+    expect(within(team).getByText('96.4%')).toBeInTheDocument();
+    expect(within(team).getByText('92.5%')).toBeInTheDocument();
+    expect(await screen.findByText(/End-to-end accuracy on the camera video has not been measured yet/)).toBeInTheDocument();
+    // Real measured end-to-end figure is kept as is.
+    expect(screen.getByText('68.0%')).toBeInTheDocument();
+    expect(screen.getByText(/Out-of-distribution stress test/)).toBeInTheDocument();
+    // High-confidence read rate from the real event files.
+    expect(await screen.findByRole('table', { name: /high-confidence read rate per camera/i })).toBeInTheDocument();
+    expect(screen.getByText(/OCR confidence ≥ 80%/)).toBeInTheDocument();
+    expect(screen.getByText(/Good read rate:/)).toBeInTheDocument();
+
+    const text = container.textContent ?? '';
+    const attrs = Array.from(container.querySelectorAll('[title],[aria-label],[alt]'))
+      .map((el) => ['title', 'aria-label', 'alt'].map((a) => el.getAttribute(a) ?? '').join(' '))
+      .join(' ');
+    for (const s of [text, attrs]) {
+      expect(containsModelName(s)).toBe(false);
+      expect(s).not.toMatch(/DEIM|PARSeq|deim50k|raw35|YOLO|ocr_v9/i);
+    }
   });
 });
