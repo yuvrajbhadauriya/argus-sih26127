@@ -4,9 +4,10 @@
 // ═══════════════════════════════════════════════════
 
 import { createClient } from '@supabase/supabase-js';
+import { env } from '@/config/env';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabaseUrl = env.supabaseUrl;
+const supabaseAnonKey = env.supabaseAnonKey;
 
 const isValidUrl = Boolean(supabaseUrl && supabaseUrl.startsWith('http'));
 const safeUrl = isValidUrl ? supabaseUrl! : 'https://placeholder.supabase.co';

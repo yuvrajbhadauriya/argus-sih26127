@@ -5,6 +5,7 @@
 
 import type { AlertRecord, BlacklistEntry, AlertPriority, WatchlistCategory } from '@/types';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase/client';
+import { DEFAULT_LOCATION } from '@/config/constants';
 import { mockAlerts, mockBlacklistEntries } from '@/mocks/fixtures/mockAlerts';
 
 /** Fetch all alerts from Supabase or fallback */
@@ -38,8 +39,8 @@ export async function fetchAlerts(): Promise<AlertRecord[]> {
         category: (a.category as WatchlistCategory) || 'stolen',
         reason: a.reason || 'Watchlist threat alert matched by YOLOv7',
         timestamp: a.created_at || new Date().toISOString(),
-        lat: a.lat || 28.6129,
-        lng: a.lng || 77.2295,
+        lat: a.lat || DEFAULT_LOCATION.lat,
+        lng: a.lng || DEFAULT_LOCATION.lng,
         acknowledged: a.status === 'acknowledged',
       }));
     }
@@ -59,8 +60,8 @@ export async function fetchAlerts(): Promise<AlertRecord[]> {
         category: (bl.category || a.category || 'stolen') as WatchlistCategory,
         reason: bl.notes || a.reason || 'Stolen vehicle matched by camera ANPR',
         timestamp: a.created_at || det.detected_at || new Date().toISOString(),
-        lat: det.latitude || det.lat || 28.6129,
-        lng: det.longitude || det.lng || 77.2295,
+        lat: det.latitude || det.lat || DEFAULT_LOCATION.lat,
+        lng: det.longitude || det.lng || DEFAULT_LOCATION.lng,
         acknowledged: a.status === 'acknowledged',
         acknowledged_by: a.acknowledged_by,
         acknowledged_at: a.acknowledged_at,

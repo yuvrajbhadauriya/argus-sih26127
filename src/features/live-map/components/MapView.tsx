@@ -3,7 +3,9 @@
 // Dark-themed map with camera markers
 // ═══════════════════════════════════════════════════
 
-import { MapContainer, TileLayer } from 'react-leaflet';
+import { MapContainer } from 'react-leaflet';
+import { BaseTileLayer } from '@/shared/map/BaseTileLayer';
+import { DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM } from '@/config/constants';
 import type { Camera } from '@/types/camera';
 import { CameraMarker } from './CameraMarker';
 
@@ -15,15 +17,11 @@ interface MapViewProps {
   className?: string;
 }
 
-// Default center: New Delhi
-const DEFAULT_CENTER: [number, number] = [28.6100, 77.2000];
-const DEFAULT_ZOOM = 12;
-
 export function MapView({
   cameras,
   onCameraClick,
-  center = DEFAULT_CENTER,
-  zoom = DEFAULT_ZOOM,
+  center = DEFAULT_MAP_CENTER,
+  zoom = DEFAULT_MAP_ZOOM,
   className = '',
 }: MapViewProps) {
   return (
@@ -34,11 +32,7 @@ export function MapView({
       zoomControl={true}
       attributionControl={true}
     >
-      <TileLayer
-        attribution='Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ'
-        url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"
-        maxZoom={20}
-      />
+      <BaseTileLayer />
 
       {/* Camera markers */}
       {cameras.map((camera) => (

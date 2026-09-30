@@ -8,8 +8,10 @@ import type { Camera } from '@/types/camera';
 import type { CameraFeed } from '@/types';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase/client';
 import { mockCameras } from '@/mocks/fixtures/mockCameras';
+import { SUPABASE_STORAGE_BASE } from '@/config/constants';
 
-export const SUPABASE_STORAGE_BASE = 'https://ngwrbxiaeressvmhfopb.supabase.co/storage/v1/object/public/videos/';
+// Re-exported for existing callers/tests.
+export { SUPABASE_STORAGE_BASE };
 
 export const CAMERA_VIDEOS: { code: string; aliases: string[]; filename: string }[] = [
   { code: 'IG-01', aliases: ['cam-001', 'cam_001', 'ig-01', 'cam-a'], filename: '13052823_3840_2160_30fps.mp4' },

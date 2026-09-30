@@ -5,6 +5,7 @@
 
 import type { Vehicle, Trajectory } from '@/types';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase/client';
+import { DEFAULT_LOCATION } from '@/config/constants';
 import { mockVehicles, mockTrajectories } from '@/mocks/fixtures/mockTrajectories';
 
 /** Search vehicles by plate substring or list recent vehicles */
@@ -90,8 +91,8 @@ export async function fetchTrajectoryByPlate(plate: string): Promise<Trajectory 
         return {
           camera_id: d.camera_id,
           camera_name: cam.name || 'CCTV Node',
-          lat: d.latitude || d.lat || 28.6129,
-          lng: d.longitude || d.lng || 77.2295,
+          lat: d.latitude || d.lat || DEFAULT_LOCATION.lat,
+          lng: d.longitude || d.lng || DEFAULT_LOCATION.lng,
           timestamp: d.detected_at,
           time_since_previous_seconds: diffSec,
         };

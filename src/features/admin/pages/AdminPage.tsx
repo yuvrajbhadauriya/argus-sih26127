@@ -6,6 +6,7 @@
 import { useEffect, useState } from 'react';
 import type { BlacklistEntry, AlertPriority, WatchlistCategory } from '@/types';
 import type { Camera } from '@/types/camera';
+import { DEFAULT_MAP_CENTER } from '@/config/constants';
 import { fetchCameras } from '@/features/cameras/api';
 import { fetchBlacklistEntries } from '@/features/alerts/api';
 import { mockUsers, mockAuditLogs } from '@/mocks/fixtures/mockAdmin';
@@ -76,8 +77,8 @@ export function AdminPage() {
       id: `cam-00${cameras.length + 1}`,
       name: newCamName,
       code: newCamCode,
-      latitude: 28.6100,
-      longitude: 77.2000,
+      latitude: DEFAULT_MAP_CENTER[0],
+      longitude: DEFAULT_MAP_CENTER[1],
       zone: newCamZone,
       direction: 'North',
       status: 'online',

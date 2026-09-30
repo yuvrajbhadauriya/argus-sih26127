@@ -3,10 +3,11 @@
 // Renders polyline route + numbered stop pins on Leaflet map
 // ═══════════════════════════════════════════════════
 
-import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap } from 'react-leaflet';
+import { MapContainer, Polyline, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { useEffect } from 'react';
 import type { TrajectoryWaypoint } from '@/types';
+import { BaseTileLayer } from '@/shared/map/BaseTileLayer';
 
 interface TrajectoryMapProps {
   waypoints: TrajectoryWaypoint[];
@@ -68,11 +69,7 @@ export function TrajectoryMap({ waypoints, className = '' }: TrajectoryMapProps)
       className={`h-full w-full rounded-xl ${className}`}
       zoomControl={true}
     >
-      <TileLayer
-        attribution='Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ'
-        url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"
-        maxZoom={20}
-      />
+      <BaseTileLayer />
 
       <MapBoundsFitter waypoints={waypoints} />
 
