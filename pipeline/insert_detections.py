@@ -1,41 +1,64 @@
 #!/usr/bin/env python3
 """
-NERO Pipeline — Supabase Detections Bulk Ingestion Script
-==========================================================
-Reads precomputed detection JSON files from run_detection.py, resolves
-camera UUIDs from the Supabase `cameras` table, converts relative frame
-timestamps to absolute timestamps, and bulk-inserts rows into the
-`detections` table.
+NERO Pipeline — Supabase detections ingestion
+=============================================
+Reads the per-camera files written by pipeline/detect/run_remote_detection.py
+(``detections_<CAMERA_CODE>.json`` + ``summary.json``) and upserts them into the
+``detections`` table (schema: supabase/migrations/20261001000000_reconcile_schema.sql).
 
-This is a separate, independently re-runnable step from inference.
-Uses the Supabase service role key (NOT the anon key) for trusted
-backend access.
+Guarantees
+  * Idempotent: ``event_id = sha1(camera_code|source_video|frame_timestamp_sec|tracked_vehicle_id)``
+    and rows are upserted on ``event_id``, so re-running never duplicates.
+  * Deterministic time base: absolute ``detected_at = start_time + frame_timestamp_sec``.
+    ``--start_time`` is timezone-aware (naive values are read in ``--tz``,
+    default Asia/Kolkata). If omitted it is derived from the simulated day in
+    public/sim/summary.json (08:00 local) so real reads line up with the
+    simulated network; without that file it is required.
+  * Trusted writer: requires SUPABASE_SERVICE_ROLE_KEY (no anon fallback).
+  * Cameras are resolved by ``code`` from the ``cameras`` table only. Unknown
+    codes abort before anything is written.
+  * Each chunk is retried with exponential backoff; any chunk that still fails
+    makes the script exit non-zero.
 
-Usage:
-    python pipeline/insert_detections.py --detections_dir ./public/detections
+Usage
+    python pipeline/insert_detections.py --detections_dir ./public/detections \
+        [--start_time 2026-09-29T08:00:00] [--tz Asia/Kolkata] [--dry_run]
 
-Prerequisites:
-    - Run the migration to add tracked_vehicle_id + frame_timestamp_sec columns
-    - Set SUPABASE_SERVICE_ROLE_KEY in your .env file
+Exit codes: 0 ok · 1 nothing to ingest · 2 configuration error · 3 some chunks failed
 """
+
+from __future__ import annotations
 
 import argparse
 import glob
+import hashlib
 import json
 import os
 import sys
-import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from db.supabase_admin import (
+    EXIT_PARTIAL,
+    ConfigError,
+    chunked,
+    fetch_cameras_by_code,
+    get_service_client,
+    missing_codes,
+    normalize_plate,
+    with_retries,
+)
 from dotenv import load_dotenv
 
-# camera_config.json lives next to this script
-DEFAULT_CONFIG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "camera_config.json")
+PIPELINE_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.dirname(PIPELINE_DIR)
+DEFAULT_CONFIG = os.path.join(PIPELINE_DIR, "camera_config.json")
+DEFAULT_SIM_SUMMARY = os.path.join(ROOT_DIR, "public", "sim", "summary.json")
+DEFAULT_TZ = "Asia/Kolkata"
+DERIVED_START_CLOCK = "08:00:00"
 
-# Load .env from project root
 load_dotenv()
 
-# Ensure UTF-8 stdout on Windows
 if sys.stdout and hasattr(sys.stdout, "reconfigure"):
     try:
         sys.stdout.reconfigure(encoding="utf-8")
@@ -44,284 +67,233 @@ if sys.stdout and hasattr(sys.stdout, "reconfigure"):
 
 
 # ──────────────────────────────────────────────────────────────────────
-# Supabase Client Initialization
+# Helpers (pure — unit tested)
 # ──────────────────────────────────────────────────────────────────────
-
 def get_supabase_client():
-    """
-    Initialize the Supabase Python client using the service role key
-    for trusted backend access. Falls back to anon key with a warning.
-    """
-    try:
-        from supabase import create_client
-    except ImportError:
-        print("[!] Error: 'supabase' package not installed.")
-        print("    Install it: pip install supabase")
-        sys.exit(1)
-
-    # Resolve URL — accept both SUPABASE_URL and VITE_SUPABASE_URL
-    url = os.getenv("SUPABASE_URL") or os.getenv("VITE_SUPABASE_URL")
-    if not url or "your-project" in url:
-        print("[!] Error: SUPABASE_URL is not configured in .env")
-        print("    Set SUPABASE_URL=https://<project-id>.supabase.co")
-        sys.exit(1)
-
-    # Prefer service role key for backend scripts (bypasses RLS)
-    key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-    if not key or "your-" in key:
-        print("[!] Warning: SUPABASE_SERVICE_ROLE_KEY not set.")
-        print("    Falling back to VITE_SUPABASE_ANON_KEY (RLS restrictions apply).")
-        key = os.getenv("VITE_SUPABASE_ANON_KEY")
-        if not key or "your-" in key:
-            print("[!] Error: No valid Supabase key found in .env")
-            sys.exit(1)
-
-    print(f"[*] Connecting to Supabase: {url[:50]}...")
-    return create_client(url, key)
+    """Service-role client; exits 2 when SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are missing."""
+    return get_service_client()
 
 
-# ──────────────────────────────────────────────────────────────────────
-# Camera Code → UUID Mapping
-# ──────────────────────────────────────────────────────────────────────
-
-def fetch_camera_mapping(supabase) -> dict:
-    """
-    Fetch all cameras from the `cameras` table.
-    Returns: { camera_code: { id, lat, lng, name } }
-    Supports both IG-01 and CAM-A style camera codes, as well as latitude/longitude column names.
-    """
-    print("[*] Fetching camera lookup from Supabase `cameras` table...")
-    try:
-        res = supabase.table("cameras").select("*").execute()
-        rows = res.data or []
-        mapping = {}
-
-        # Mappings between pipeline codes (IG-01) and DB codes (CAM-A)
-        code_alias = {
-            "IG-01": ["IG-01", "CAM-A"],
-            "CP-01": ["CP-01", "CAM-B"],
-            "KB-01": ["KB-01", "CAM-C"],
-            "DW-01": ["DW-01", "CAM-D"],
-            "LN-01": ["LN-01", "CAM-E"],
-            "DK-01": ["DK-01", "CAM-F"],
-            "AI-01": ["AI-01", "CAM-G"],
-            "NP-01": ["NP-01", "CAM-H"],
-            "CC-01": ["CC-01", "CAM-I"],
-        }
-
-        for row in rows:
-            code = row.get("code")
-            # Normalize lat/lng column names
-            row["lat"] = row.get("lat") if row.get("lat") is not None else row.get("latitude", 28.6129)
-            row["lng"] = row.get("lng") if row.get("lng") is not None else row.get("longitude", 77.2295)
-
-            if code:
-                mapping[code] = row
-            
-            # Map aliases
-            for pipeline_code, aliases in code_alias.items():
-                if code in aliases:
-                    mapping[pipeline_code] = row
-
-        print(f"[OK] {len(mapping)} camera mappings established: {', '.join(sorted(mapping.keys()))}")
-        return mapping
-    except Exception as e:
-        print(f"[!] Could not fetch cameras from DB: {e}")
-        return {}
+def fetch_camera_mapping(client) -> dict:
+    """{camera code: cameras row} straight from the database (no alias maps)."""
+    return fetch_cameras_by_code(client)
 
 
 def load_config_fallback(config_path: str) -> dict:
-    """Load camera_config.json as fallback mapping."""
-    if not os.path.exists(config_path):
+    """camera_config.json keyed by camera_code (used only for source-video names)."""
+    if not config_path or not os.path.exists(config_path):
         return {}
     with open(config_path, "r", encoding="utf-8") as f:
         items = json.load(f)
-    return {item["camera_code"]: item for item in items}
+    return {item["camera_code"]: item for item in items if "camera_code" in item}
+
+
+def load_run_summary(detections_dir: str) -> dict:
+    """summary.json written next to the detection files, keyed by camera_code."""
+    path = os.path.join(detections_dir, "summary.json")
+    if not os.path.exists(path):
+        return {}
+    with open(path, "r", encoding="utf-8") as f:
+        items = json.load(f)
+    if isinstance(items, dict):  # tolerate {"cameras": [...]} shapes
+        items = items.get("cameras", [])
+    return {item["camera_code"]: item for item in items if isinstance(item, dict) and "camera_code" in item}
+
+
+def resolve_tz(name: str):
+    try:
+        return ZoneInfo(name)
+    except (ZoneInfoNotFoundError, ValueError) as exc:
+        raise ConfigError(f"Unknown --tz '{name}' (use an IANA name such as Asia/Kolkata).") from exc
+
+
+def parse_start_time(value: str, tz_name: str = DEFAULT_TZ) -> datetime:
+    """ISO 8601 -> aware datetime. Naive values are interpreted in tz_name."""
+    try:
+        dt = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ConfigError(
+            f"Invalid --start_time '{value}'. Expected ISO 8601, e.g. 2026-09-29T08:00:00 or 2026-09-29T02:30:00Z."
+        ) from exc
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=resolve_tz(tz_name))
+    return dt
+
+
+def derive_start_time(sim_summary_path: str, tz_name: str = DEFAULT_TZ) -> datetime | None:
+    """08:00 local on the simulated day from public/sim/summary.json, else None."""
+    if not sim_summary_path or not os.path.exists(sim_summary_path):
+        return None
+    try:
+        with open(sim_summary_path, "r", encoding="utf-8") as f:
+            meta = json.load(f)
+    except (OSError, ValueError):
+        return None
+    day = meta.get("date") if isinstance(meta, dict) else None
+    if not day:
+        return None
+    offset = meta.get("timezone") or ""
+    stamp = f"{day}T{DERIVED_START_CLOCK}{offset}"
+    try:
+        return parse_start_time(stamp, tz_name)
+    except SystemExit:
+        return None
+
+
+def make_event_id(camera_code: str, source_video: str, frame_ts: float, tracked_vehicle_id: str) -> str:
+    """Stable id for one (camera, clip, frame, track) observation."""
+    key = f"{camera_code}|{source_video}|{frame_ts:.3f}|{tracked_vehicle_id}"
+    return hashlib.sha1(key.encode("utf-8")).hexdigest()
+
+
+def _float_or_none(value):
+    try:
+        return None if value is None else float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def build_rows(
+    camera_code: str,
+    detections: list[dict],
+    camera: dict,
+    base_time: datetime,
+    source_video: str,
+    run_meta: dict | None = None,
+) -> list[dict]:
+    """detections_<code>.json records -> `detections` table rows (deduplicated by event_id)."""
+    run_meta = run_meta or {}
+    rows: dict[str, dict] = {}
+    for det in detections:
+        frame_ts = float(det.get("frame_timestamp_sec") or 0.0)
+        track = str(det.get("tracked_vehicle_id") or "trk_0000")
+        raw_plate = (det.get("plate_text") or "UNKNOWN").strip() or "UNKNOWN"
+        detected_at = (base_time + timedelta(seconds=frame_ts)).isoformat()
+        event_id = make_event_id(camera_code, source_video, frame_ts, track)
+        rows[event_id] = {
+            "event_id": event_id,
+            "camera_id": camera["id"],
+            "plate_text_raw": raw_plate[:32],
+            "plate_text_normalized": normalize_plate(raw_plate)[:32] or "UNKNOWN",
+            "confidence_score": float(det.get("confidence") or 0.0),
+            "plate_confidence": _float_or_none(det.get("plate_confidence")),
+            "vehicle_type": det.get("vehicle_type") or "car",
+            "detected_at": detected_at,
+            "timestamp": detected_at,
+            "lat": _float_or_none(camera.get("lat")),
+            "lng": _float_or_none(camera.get("lng")),
+            "bbox": det.get("bbox") or {"x": 0, "y": 0, "width": 0, "height": 0},
+            "tracked_vehicle_id": track,
+            "frame_timestamp_sec": frame_ts,
+            "engine": det.get("engine") or run_meta.get("engine"),
+            "model_version": det.get("model_version") or run_meta.get("model_version"),
+            "source_video": source_video or None,
+        }
+    return list(rows.values())
 
 
 # ──────────────────────────────────────────────────────────────────────
-# Main Ingestion Logic
+# Main
 # ──────────────────────────────────────────────────────────────────────
+def parse_args(argv=None):
+    p = argparse.ArgumentParser(description="NERO — upsert ANPR detections into Supabase")
+    p.add_argument("--detections_dir", default=os.path.join(ROOT_DIR, "public", "detections"),
+                   help="Directory with detections_<camera_code>.json (+ summary.json)")
+    p.add_argument("--config", default=DEFAULT_CONFIG,
+                   help="camera_config.json (source-video names when summary.json is absent)")
+    p.add_argument("--start_time", default=None,
+                   help="Clip start, ISO 8601. Naive values use --tz. Default: 08:00 on the simulated day.")
+    p.add_argument("--tz", default=DEFAULT_TZ, help=f"Timezone for a naive --start_time (default {DEFAULT_TZ})")
+    p.add_argument("--sim_summary", default=DEFAULT_SIM_SUMMARY,
+                   help="Simulation summary used to derive --start_time")
+    p.add_argument("--batch_size", type=int, default=500, help="Rows per upsert (default 500)")
+    p.add_argument("--retries", type=int, default=4, help="Attempts per chunk (default 4)")
+    p.add_argument("--retry_base_delay", type=float, default=1.0, help="First backoff delay in seconds")
+    p.add_argument("--dry_run", action="store_true", help="Build rows and print a summary; write nothing")
+    return p.parse_args(argv)
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="NERO — Supabase Detection Data Bulk Ingestor"
-    )
-    parser.add_argument(
-        "--detections_dir",
-        type=str,
-        default="./detections",
-        help="Directory with detections_<camera_code>.json files (default: ./detections)",
-    )
-    parser.add_argument(
-        "--config",
-        type=str,
-        default=DEFAULT_CONFIG,
-        help="Camera config file for fallback lookups (default: pipeline/camera_config.json)",
-    )
-    parser.add_argument(
-        "--start_time",
-        type=str,
-        default=None,
-        help="Base ISO start timestamp (e.g. 2026-09-27T12:00:00Z). "
-        "Defaults to now() minus longest video duration.",
-    )
-    parser.add_argument(
-        "--batch_size",
-        type=int,
-        default=500,
-        help="Rows per insert batch (default: 500)",
-    )
 
-    args = parser.parse_args()
+def main(argv=None) -> int:
+    args = parse_args(argv)
+    print("\n" + "=" * 60 + "\n  NERO — Supabase Detection Ingestor\n" + "=" * 60)
 
-    print()
-    print("=" * 60)
-    print("  NERO — Supabase Detection Data Ingestor")
-    print("=" * 60)
-
-    # Validate detections directory
-    if not os.path.exists(args.detections_dir):
+    if args.batch_size < 1:
+        raise ConfigError("--batch_size must be >= 1")
+    if not os.path.isdir(args.detections_dir):
         print(f"[!] Detections directory not found: {args.detections_dir}")
-        print("    Run 'python run_detection.py' first to generate detection data.")
-        sys.exit(1)
+        return 1
+    files = sorted(glob.glob(os.path.join(args.detections_dir, "detections_*.json")))
+    if not files:
+        print(f"[!] No detections_*.json files in '{args.detections_dir}'. Run pipeline/detect/run_remote_detection.py first.")
+        return 1
 
-    json_files = sorted(glob.glob(os.path.join(args.detections_dir, "detections_*.json")))
-    if not json_files:
-        print(f"[!] No detections_*.json files found in '{args.detections_dir}'.")
-        print("    Run 'python run_detection.py' first.")
-        sys.exit(1)
-
-    print(f"[*] Found {len(json_files)} detection files to ingest.")
-
-    # Initialize Supabase
-    supabase = get_supabase_client()
-    db_cameras = fetch_camera_mapping(supabase)
-    config_cameras = load_config_fallback(args.config)
-
-    # Determine base timestamp for absolute detection times
     if args.start_time:
-        try:
-            base_time = datetime.fromisoformat(args.start_time.replace("Z", "+00:00"))
-        except ValueError:
-            print(f"[!] Invalid --start_time format: '{args.start_time}'")
-            print("    Expected ISO format like: 2026-09-27T12:00:00Z")
-            base_time = datetime.now(timezone.utc)
+        base_time = parse_start_time(args.start_time, args.tz)
     else:
-        # Default: now minus 30 minutes (reasonable for batch replays)
-        base_time = datetime.now(timezone.utc) - timedelta(minutes=30)
+        base_time = derive_start_time(args.sim_summary, args.tz)
+        if base_time is None:
+            raise ConfigError("--start_time is required (no simulated day found in --sim_summary to derive it from).")
+    print(f"[*] Clip start time (t=0): {base_time.isoformat()}")
 
-    print(f"[*] Base timestamp for detections: {base_time.isoformat()}")
+    per_camera: dict[str, list] = {}
+    for path in files:
+        code = os.path.basename(path)[len("detections_"):-len(".json")]
+        with open(path, "r", encoding="utf-8") as f:
+            per_camera[code] = json.load(f) or []
 
-    total_inserted = 0
-    total_skipped = 0
+    run_summary = load_run_summary(args.detections_dir)
+    config = load_config_fallback(args.config)
 
-    for json_file in json_files:
-        filename = os.path.basename(json_file)
-        # Extract camera code from filename: detections_IG-01.json → IG-01
-        cam_code = filename.replace("detections_", "").replace(".json", "")
-
-        print(f"\n{'─'*50}")
-        print(f"  Ingesting: {cam_code} ({filename})")
-        print(f"{'─'*50}")
-
-        with open(json_file, "r", encoding="utf-8") as f:
-            det_list = json.load(f)
-
-        if not det_list:
-            print(f"  Empty file — skipping.")
-            continue
-
-        # Resolve camera UUID from DB, then config fallback
-        cam_info = db_cameras.get(cam_code)
-        if cam_info:
-            cam_id = cam_info["id"]
-            cam_lat = cam_info.get("lat", 28.6129)
-            cam_lng = cam_info.get("lng", 77.2295)
-            print(f"  Camera ID: {cam_id} (from database)")
-        else:
-            # Build a deterministic fallback ID matching the migration seed format
-            print(f"  [!] Camera code '{cam_code}' not in database.")
-            conf = config_cameras.get(cam_code, {})
-            cam_id = conf.get("camera_id", f"cam-{cam_code.lower()}")
-            cam_lat = conf.get("lat", 28.6129)
-            cam_lng = conf.get("lng", 77.2295)
-            print(f"  Using fallback ID: {cam_id}")
-
-        # Build insertion rows
-        rows = []
-        for det in det_list:
-            frame_ts = float(det.get("frame_timestamp_sec", 0.0))
-            detected_at = (base_time + timedelta(seconds=frame_ts)).isoformat()
-
-            raw_plate = det.get("plate_text", "UNKNOWN")
-            norm_plate = raw_plate.replace(" ", "").replace("-", "").upper()
-
-            rows.append(
-                {
-                    "event_id": str(uuid.uuid4()),
-                    "camera_id": cam_id,
-                    "plate_text_raw": raw_plate,
-                    "plate_text_normalized": norm_plate,
-                    "confidence_score": float(det.get("confidence", 0.0)),
-                    "vehicle_type": det.get("vehicle_type", "car"),
-                    "detected_at": detected_at,
-                    "lat": float(cam_lat),
-                    "lng": float(cam_lng),
-                    "latitude": float(cam_lat),
-                    "longitude": float(cam_lng),
-                    "bbox": det.get("bbox", {"x": 0, "y": 0, "width": 0, "height": 0}),
-                    "tracked_vehicle_id": det.get("tracked_vehicle_id", "trk_0000"),
-                    "frame_timestamp_sec": frame_ts,
-                }
+    client = None
+    if args.dry_run:
+        cameras = {code: {"id": f"<{code}>", "lat": None, "lng": None} for code in per_camera}
+    else:
+        client = get_supabase_client()
+        try:
+            cameras = fetch_camera_mapping(client)
+        except Exception as exc:
+            raise ConfigError(f"Could not read the cameras table: {exc}") from exc
+        unknown = missing_codes([c for c, d in per_camera.items() if d], cameras)
+        if unknown:
+            raise ConfigError(
+                f"Camera code(s) not in the cameras table: {', '.join(unknown)}. "
+                "Apply the camera-network migration (or fix the file names) and re-run."
             )
 
-        print(f"  Prepared {len(rows)} rows for insertion...")
-
-        # Chunked bulk insert with fallback
-        for i in range(0, len(rows), args.batch_size):
-            chunk = rows[i : i + args.batch_size]
-            chunk_num = i // args.batch_size + 1
-
+    written = failed = 0
+    failed_chunks: list[str] = []
+    for code, dets in per_camera.items():
+        if not dets:
+            print(f"  {code}: empty file — skipped")
+            continue
+        meta = run_summary.get(code, {})
+        source_video = meta.get("video_filename") or config.get(code, {}).get("video_filename") or ""
+        rows = build_rows(code, dets, cameras[code], base_time, source_video, meta)
+        print(f"  {code}: {len(rows)} rows (camera {cameras[code]['id']}, clip '{source_video or '?'}')")
+        if args.dry_run:
+            continue
+        for n, chunk in enumerate(chunked(rows, args.batch_size), start=1):
+            label = f"{code} chunk {n}"
             try:
-                supabase.table("detections").insert(chunk).execute()
-                total_inserted += len(chunk)
-                print(f"  [OK] Chunk {chunk_num}: {len(chunk)} rows inserted")
-            except Exception as e:
-                err_msg = str(e)
-                # If pipeline columns don't exist yet, retry without them
-                if "tracked_vehicle_id" in err_msg or "frame_timestamp_sec" in err_msg:
-                    print(f"  [!] Schema mismatch on chunk {chunk_num} — retrying without pipeline columns...")
-                    fallback_chunk = []
-                    for row in chunk:
-                        r = dict(row)
-                        r.pop("tracked_vehicle_id", None)
-                        r.pop("frame_timestamp_sec", None)
-                        fallback_chunk.append(r)
-                    try:
-                        supabase.table("detections").insert(fallback_chunk).execute()
-                        total_inserted += len(fallback_chunk)
-                        print(f"  [OK] Fallback insert succeeded: {len(fallback_chunk)} rows")
-                    except Exception as e2:
-                        total_skipped += len(chunk)
-                        print(f"  [!] Fallback also failed: {e2}")
-                else:
-                    total_skipped += len(chunk)
-                    print(f"  [!] Insert failed on chunk {chunk_num}: {e}")
+                with_retries(
+                    lambda chunk=chunk: client.table("detections").upsert(chunk, on_conflict="event_id").execute(),
+                    attempts=args.retries, base_delay=args.retry_base_delay, label=label,
+                )
+                written += len(chunk)
+            except Exception as exc:  # noqa: BLE001
+                failed += len(chunk)
+                failed_chunks.append(label)
+                print(f"  [!] {label}: giving up after {args.retries} attempts: {exc}")
 
-    # Final report
-    print()
+    print("\n" + "=" * 60)
+    print(f"  Files: {len(files)} · rows upserted: {written} · rows failed: {failed}")
+    print(f"  Clip start time: {base_time.isoformat()}")
     print("=" * 60)
-    print("  INGESTION COMPLETE")
-    print("=" * 60)
-    print(f"  Files processed  : {len(json_files)}")
-    print(f"  Rows inserted    : {total_inserted}")
-    if total_skipped:
-        print(f"  Rows skipped     : {total_skipped}")
-    print(f"  Base timestamp   : {base_time.isoformat()}")
-    print("=" * 60)
-    print()
+    if failed_chunks:
+        print(f"[!] Failed chunks: {', '.join(failed_chunks)} — re-run to retry (upserts are idempotent).")
+        return EXIT_PARTIAL
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

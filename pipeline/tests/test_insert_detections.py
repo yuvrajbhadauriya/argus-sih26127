@@ -1,11 +1,14 @@
-"""Tests for insert_detections.py — camera mapping, row shaping, batching, timestamps."""
+"""Tests for insert_detections.py — idempotent, timezone-aware, service-role-only ingestion."""
 
 import json
 from datetime import datetime, timedelta, timezone
 
 import pytest
-
 from conftest import PIPELINE_DIR
+from db.fake import FakeClient
+
+IST = timezone(timedelta(hours=5, minutes=30))
+CAMS = [{"id": "cam-001", "code": "JG-01", "lat": 19.1, "lng": 72.8, "name": "Jogeshwari"}]
 
 
 def write_dets(dirpath, code, n, **over):
@@ -13,11 +16,14 @@ def write_dets(dirpath, code, n, **over):
         {
             "camera_code": code,
             "tracked_vehicle_id": f"trk_{i:04d}",
-            "plate_text": "DL 01 AB 1234",
+            "plate_text": "MH 01 AB 1234",
+            "plate_confidence": 0.8,
             "vehicle_type": "car",
             "confidence": 0.9,
             "frame_timestamp_sec": i * 0.2,
             "bbox": {"x": 1, "y": 2, "width": 3, "height": 4},
+            "engine": "yolov7-tiny",
+            "model_version": "anpr-2026.09",
             **over,
         }
         for i in range(n)
@@ -27,42 +33,55 @@ def write_dets(dirpath, code, n, **over):
 
 
 @pytest.fixture
-def run_main(insert_detections, monkeypatch, tmp_path, fake_supabase_cls):
-    """Run insert_detections.main() against a FakeSupabase; returns the fake."""
+def dets_dir(tmp_path):
+    d = tmp_path / "dets"
+    d.mkdir()
+    return d
 
-    def _run(*extra_args, cameras=None, insert_hook=None, config=None):
-        fake = fake_supabase_cls(select_data={"cameras": cameras or []}, insert_hook=insert_hook)
-        monkeypatch.setattr(insert_detections, "get_supabase_client", lambda: fake)
+
+@pytest.fixture
+def run_main(insert_detections, monkeypatch, dets_dir, tmp_path):
+    """Run insert_detections.main() against a FakeClient; returns (exit code, client)."""
+
+    def _run(*extra, client=None, cameras=CAMS):
+        client = client or FakeClient({"cameras": cameras})
+        monkeypatch.setattr(insert_detections, "get_supabase_client", lambda: client)
         cfg = tmp_path / "cfg.json"
-        cfg.write_text(json.dumps(config or []))
-        monkeypatch.setattr("sys.argv", ["insert_detections.py", "--detections_dir", str(tmp_path / "dets"), "--config", str(cfg), *extra_args])
-        insert_detections.main()
-        return fake
+        cfg.write_text("[]")
+        code = insert_detections.main([
+            "--detections_dir", str(dets_dir), "--config", str(cfg),
+            "--sim_summary", str(tmp_path / "no-sim.json"), "--retry_base_delay", "0", *extra,
+        ])
+        return code, client
 
-    (tmp_path / "dets").mkdir()
     return _run
 
 
-CAMS = [{"id": "cam-001", "code": "IG-01", "lat": 28.1, "lng": 77.1, "name": "IG"}]
+def rows_of(client):
+    return [r for q in client.writes("detections") for r in q.payload]
 
 
+# ── helpers ──────────────────────────────────────────────────────────────
 class TestFetchCameraMapping:
-    def test_maps_code_and_aliases_and_normalises_coords(self, insert_detections, fake_supabase_cls):
-        fake = fake_supabase_cls(select_data={"cameras": [
+    def test_keys_by_db_code_only_and_normalises_coords(self, insert_detections):
+        fake = FakeClient({"cameras": [
             {"id": "a", "code": "CAM-D", "latitude": 1.0, "longitude": 2.0},
-            {"id": "b", "code": "IG-01", "lat": 0.0, "lng": 0.0},
+            {"id": "b", "code": "JG-01", "lat": 0.0, "lng": 0.0},
         ]})
         m = insert_detections.fetch_camera_mapping(fake)
-        assert m["CAM-D"]["id"] == "a"
-        assert m["DW-01"]["id"] == "a"  # alias → pipeline code
-        assert (m["DW-01"]["lat"], m["DW-01"]["lng"]) == (1.0, 2.0)
-        assert (m["IG-01"]["lat"], m["IG-01"]["lng"]) == (0.0, 0.0)  # 0 preserved
+        assert set(m) == {"CAM-D", "JG-01"}  # no alias table
+        assert (m["CAM-D"]["lat"], m["CAM-D"]["lng"]) == (1.0, 2.0)
+        assert (m["JG-01"]["lat"], m["JG-01"]["lng"]) == (0.0, 0.0)  # 0 preserved
 
-    def test_returns_empty_on_error(self, insert_detections):
+    def test_raises_on_error_instead_of_returning_empty(self, insert_detections, monkeypatch):
+        monkeypatch.setattr("time.sleep", lambda s: None)
+
         class Boom:
             def table(self, _):
                 raise RuntimeError("down")
-        assert insert_detections.fetch_camera_mapping(Boom()) == {}
+
+        with pytest.raises(RuntimeError):
+            insert_detections.fetch_camera_mapping(Boom())
 
 
 class TestLoadConfigFallback:
@@ -71,24 +90,35 @@ class TestLoadConfigFallback:
 
     def test_keys_by_camera_code(self, insert_detections):
         m = insert_detections.load_config_fallback(str(PIPELINE_DIR / "camera_config.json"))
-        assert "IG-01" in m and m["IG-01"]["video_filename"].endswith(".mp4")
+        assert m and all(v["video_filename"].endswith(".mp4") for v in m.values())
 
 
 class TestGetSupabaseClient:
-    def test_exits_without_url(self, insert_detections, monkeypatch):
+    def test_exits_2_without_url(self, insert_detections, monkeypatch):
         for k in ("SUPABASE_URL", "VITE_SUPABASE_URL"):
             monkeypatch.delenv(k, raising=False)
-        with pytest.raises(SystemExit):
+        monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "service")
+        with pytest.raises(SystemExit) as e:
             insert_detections.get_supabase_client()
+        assert e.value.code == 2
 
-    def test_exits_without_any_key(self, insert_detections, monkeypatch):
+    def test_exits_2_without_service_key_even_if_anon_key_present(self, insert_detections, monkeypatch):
+        import supabase
+        monkeypatch.setattr(supabase, "create_client", lambda *a: pytest.fail("must not connect"))
         monkeypatch.setenv("SUPABASE_URL", "https://abc.supabase.co")
         monkeypatch.delenv("SUPABASE_SERVICE_ROLE_KEY", raising=False)
-        monkeypatch.delenv("VITE_SUPABASE_ANON_KEY", raising=False)
+        monkeypatch.setenv("VITE_SUPABASE_ANON_KEY", "anon")
+        with pytest.raises(SystemExit) as e:
+            insert_detections.get_supabase_client()
+        assert e.value.code == 2
+
+    def test_placeholder_key_is_rejected(self, insert_detections, monkeypatch):
+        monkeypatch.setenv("SUPABASE_URL", "https://abc.supabase.co")
+        monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "your-service-role-key")
         with pytest.raises(SystemExit):
             insert_detections.get_supabase_client()
 
-    def test_prefers_service_role_key(self, insert_detections, monkeypatch):
+    def test_uses_service_role_key(self, insert_detections, monkeypatch):
         import supabase
         seen = {}
         monkeypatch.setattr(supabase, "create_client", lambda url, key: seen.update(url=url, key=key) or "client")
@@ -99,105 +129,167 @@ class TestGetSupabaseClient:
         assert seen == {"url": "https://abc.supabase.co", "key": "service"}
 
 
+class TestStartTime:
+    def test_naive_start_time_is_read_in_asia_kolkata(self, insert_detections):
+        dt = insert_detections.parse_start_time("2026-09-29T08:00:00")
+        assert dt.utcoffset() == timedelta(hours=5, minutes=30)
+
+    def test_explicit_offset_is_kept(self, insert_detections):
+        dt = insert_detections.parse_start_time("2026-09-29T02:30:00Z")
+        assert dt == datetime(2026, 9, 29, 8, 0, tzinfo=IST)
+
+    def test_custom_tz(self, insert_detections):
+        assert insert_detections.parse_start_time("2026-09-29T08:00:00", "UTC").utcoffset() == timedelta(0)
+
+    def test_invalid_start_time_exits_2(self, insert_detections):
+        with pytest.raises(SystemExit) as e:
+            insert_detections.parse_start_time("yesterday")
+        assert e.value.code == 2
+
+    def test_derived_from_sim_summary(self, insert_detections, tmp_path):
+        p = tmp_path / "summary.json"
+        p.write_text(json.dumps({"date": "2026-09-29", "timezone": "+05:30"}))
+        assert insert_detections.derive_start_time(str(p)) == datetime(2026, 9, 29, 8, 0, tzinfo=IST)
+
+    def test_derived_none_without_summary(self, insert_detections, tmp_path):
+        assert insert_detections.derive_start_time(str(tmp_path / "none.json")) is None
+
+
+class TestEventId:
+    def test_deterministic_and_sensitive_to_each_part(self, insert_detections):
+        f = insert_detections.make_event_id
+        base = f("JG-01", "clip.mp4", 1.2, "trk_0001")
+        assert base == f("JG-01", "clip.mp4", 1.2000001, "trk_0001")
+        assert len({base, f("AN-01", "clip.mp4", 1.2, "trk_0001"), f("JG-01", "other.mp4", 1.2, "trk_0001"),
+                    f("JG-01", "clip.mp4", 1.4, "trk_0001"), f("JG-01", "clip.mp4", 1.2, "trk_0002")}) == 5
+        assert len(base) <= 64
+
+
+# ── main() ───────────────────────────────────────────────────────────────
 class TestMainIngestion:
-    def test_row_shape_timestamps_and_plate_normalisation(self, run_main, tmp_path):
-        write_dets(tmp_path / "dets", "IG-01", 3)
-        fake = run_main("--start_time", "2026-09-27T12:00:00Z", cameras=CAMS)
-        rows = [r for chunk in fake.inserted["detections"] for r in chunk]
+    def test_row_shape_timestamps_and_plate_normalisation(self, run_main, dets_dir):
+        write_dets(dets_dir, "JG-01", 3)
+        code, client = run_main("--start_time", "2026-09-29T08:00:00")
+        assert code == 0
+        rows = rows_of(client)
         assert len(rows) == 3
         r = rows[2]
         assert r["camera_id"] == "cam-001"
-        assert r["plate_text_raw"] == "DL 01 AB 1234"
-        assert r["plate_text_normalized"] == "DL01AB1234"
-        assert r["lat"] == 28.1 and r["lng"] == 77.1
+        assert r["plate_text_raw"] == "MH 01 AB 1234"
+        assert r["plate_text_normalized"] == "MH01AB1234"
+        assert (r["lat"], r["lng"]) == (19.1, 72.8)
         assert r["tracked_vehicle_id"] == "trk_0002"
         assert r["frame_timestamp_sec"] == pytest.approx(0.4)
-        base = datetime(2026, 9, 27, 12, tzinfo=timezone.utc)
-        assert datetime.fromisoformat(r["detected_at"]) == base + timedelta(seconds=0.4)
+        assert (r["engine"], r["model_version"], r["plate_confidence"]) == ("yolov7-tiny", "anpr-2026.09", 0.8)
+        detected = datetime.fromisoformat(r["detected_at"])
+        assert detected.utcoffset() == timedelta(hours=5, minutes=30)
+        assert detected == datetime(2026, 9, 29, 8, 0, tzinfo=IST) + timedelta(seconds=0.4)
+        assert r["timestamp"] == r["detected_at"]
 
-    def test_batches_by_batch_size(self, run_main, tmp_path):
-        write_dets(tmp_path / "dets", "IG-01", 5)
-        fake = run_main("--batch_size", "2", cameras=CAMS)
-        assert [len(c) for c in fake.inserted["detections"]] == [2, 2, 1]
+    def test_upserts_on_event_id(self, run_main, dets_dir):
+        write_dets(dets_dir, "JG-01", 2)
+        _, client = run_main("--start_time", "2026-09-29T08:00:00")
+        assert {q.kwargs.get("on_conflict") for q in client.writes("detections")} == {"event_id"}
+        assert {q.op for q in client.writes("detections")} == {"upsert"}
 
-    def test_empty_file_is_skipped(self, run_main, tmp_path):
-        (tmp_path / "dets" / "detections_IG-01.json").write_text("[]")
-        fake = run_main(cameras=CAMS)
-        assert "detections" not in fake.inserted
+    def test_reingestion_is_idempotent(self, run_main, dets_dir):
+        write_dets(dets_dir, "JG-01", 4)
+        client = FakeClient({"cameras": CAMS})
+        run_main("--start_time", "2026-09-29T08:00:00", client=client)
+        first = sorted(r["event_id"] for r in client.tables["detections"])
+        run_main("--start_time", "2026-09-29T08:00:00", client=client)
+        assert sorted(r["event_id"] for r in client.tables["detections"]) == first
+        assert len(first) == 4
 
-    def test_retries_without_pipeline_columns_on_schema_mismatch(self, run_main, tmp_path):
-        write_dets(tmp_path / "dets", "IG-01", 2)
-        calls = {"n": 0}
+    def test_source_video_from_run_summary_is_part_of_event_id(self, run_main, dets_dir, insert_detections):
+        write_dets(dets_dir, "JG-01", 1)
+        (dets_dir / "summary.json").write_text(json.dumps([
+            {"camera_code": "JG-01", "video_filename": "clip-a.mp4", "engine": "e", "model_version": "m"}]))
+        _, client = run_main("--start_time", "2026-09-29T08:00:00")
+        r = rows_of(client)[0]
+        assert r["source_video"] == "clip-a.mp4"
+        assert r["event_id"] == insert_detections.make_event_id("JG-01", "clip-a.mp4", 0.0, "trk_0000")
 
-        def hook(table, rows):
-            calls["n"] += 1
-            if "tracked_vehicle_id" in rows[0]:
-                raise RuntimeError("column tracked_vehicle_id does not exist")
+    def test_batches_by_batch_size(self, run_main, dets_dir):
+        write_dets(dets_dir, "JG-01", 5)
+        _, client = run_main("--start_time", "2026-09-29T08:00:00", "--batch_size", "2")
+        assert [len(q.payload) for q in client.writes("detections")] == [2, 2, 1]
 
-        fake = run_main(cameras=CAMS, insert_hook=hook)
-        assert calls["n"] == 2
-        assert "tracked_vehicle_id" not in fake.inserted["detections"][-1][0]
+    def test_empty_file_is_skipped(self, run_main, dets_dir):
+        (dets_dir / "detections_JG-01.json").write_text("[]")
+        code, client = run_main("--start_time", "2026-09-29T08:00:00")
+        assert code == 0 and client.writes("detections") == []
 
-    def test_invalid_start_time_falls_back_to_now(self, run_main, tmp_path):
-        write_dets(tmp_path / "dets", "IG-01", 1)
-        fake = run_main("--start_time", "yesterday", cameras=CAMS)
-        ts = datetime.fromisoformat(fake.inserted["detections"][0][0]["detected_at"])
-        assert abs((datetime.now(timezone.utc) - ts).total_seconds()) < 60
+    def test_start_time_derived_when_omitted(self, run_main, dets_dir, tmp_path):
+        write_dets(dets_dir, "JG-01", 1)
+        sim = tmp_path / "sim.json"
+        sim.write_text(json.dumps({"date": "2026-09-29", "timezone": "+05:30"}))
+        code, client = run_main("--sim_summary", str(sim))
+        assert code == 0
+        assert datetime.fromisoformat(rows_of(client)[0]["detected_at"]) == datetime(2026, 9, 29, 8, 0, tzinfo=IST)
 
-    def test_exits_when_dir_missing(self, insert_detections, monkeypatch, tmp_path):
-        monkeypatch.setattr("sys.argv", ["x", "--detections_dir", str(tmp_path / "none")])
-        with pytest.raises(SystemExit):
-            insert_detections.main()
+    def test_start_time_required_when_not_derivable(self, run_main, dets_dir):
+        write_dets(dets_dir, "JG-01", 1)
+        with pytest.raises(SystemExit) as e:
+            run_main()
+        assert e.value.code == 2
 
-    @pytest.mark.xfail(strict=True, reason=(
-        "BUG insert_detections.py:226-235 — `--start_time 2026-09-27T12:00:00` (no 'Z'/offset) "
-        "yields a naive datetime and tz-less ISO strings; Postgres then interprets them in the "
-        "server's timezone, silently shifting detected_at."))
-    def test_naive_start_time_is_treated_as_utc(self, run_main, tmp_path):
-        write_dets(tmp_path / "dets", "IG-01", 1)
-        fake = run_main("--start_time", "2026-09-27T12:00:00", cameras=CAMS)
-        assert datetime.fromisoformat(fake.inserted["detections"][0][0]["detected_at"]).tzinfo is not None
+    def test_unknown_camera_code_aborts_before_writing(self, run_main, dets_dir):
+        write_dets(dets_dir, "JG-01", 1)
+        write_dets(dets_dir, "ZZ-99", 1)
+        client = FakeClient({"cameras": CAMS})
+        with pytest.raises(SystemExit) as e:
+            run_main("--start_time", "2026-09-29T08:00:00", client=client)
+        assert e.value.code == 2
+        assert client.writes("detections") == []
 
-    @pytest.mark.xfail(strict=True, reason=(
-        "BUG insert_detections.py:262 — event_id is uuid4() per run, so the 'independently "
-        "re-runnable' ingestion duplicates every detection on each re-run (no upsert key)."))
-    def test_reingestion_is_idempotent(self, run_main, tmp_path):
-        write_dets(tmp_path / "dets", "IG-01", 2)
-        a = run_main("--start_time", "2026-09-27T12:00:00Z", cameras=CAMS)
-        b = run_main("--start_time", "2026-09-27T12:00:00Z", cameras=CAMS)
-        ids = lambda f: sorted(r["event_id"] for c in f.inserted["detections"] for r in c)
-        assert ids(a) == ids(b)
+    def test_transient_failure_is_retried_with_backoff(self, run_main, dets_dir, monkeypatch):
+        write_dets(dets_dir, "JG-01", 2)
+        sleeps = []
+        monkeypatch.setattr("time.sleep", sleeps.append)
+        attempts = {"n": 0}
 
-    @pytest.mark.xfail(strict=True, reason=(
-        "BUG insert_detections.py:246 — for cameras missing from the DB the fallback id is "
-        "f'cam-{code.lower()}' (e.g. 'cam-np-01') because camera_config.json has no camera_id; "
-        "that id matches no cameras.id ('cam-006'), so every insert violates the FK."))
-    def test_fallback_camera_id_matches_seeded_id_format(self, run_main, tmp_path):
-        write_dets(tmp_path / "dets", "NP-01", 1)
-        fake = run_main(cameras=[], config=json.loads((PIPELINE_DIR / "camera_config.json").read_text()))
-        assert fake.inserted["detections"][0][0]["camera_id"] == "cam-006"
+        def flaky(q):
+            attempts["n"] += 1
+            return RuntimeError("502 Bad Gateway") if attempts["n"] <= 2 else None
+
+        client = FakeClient({"cameras": CAMS}, fail=flaky)
+        code, _ = run_main("--start_time", "2026-09-29T08:00:00", "--retry_base_delay", "0.5", client=client)
+        assert code == 0
+        assert attempts["n"] == 3
+        assert sleeps == [0.5, 1.0]
+        assert len(client.tables["detections"]) == 2
+
+    def test_persistent_chunk_failure_exits_non_zero(self, run_main, dets_dir):
+        write_dets(dets_dir, "JG-01", 4)
+        client = FakeClient({"cameras": CAMS},
+                            fail=lambda q: RuntimeError("boom") if q.payload[0]["tracked_vehicle_id"] == "trk_0000" else None)
+        code, _ = run_main("--start_time", "2026-09-29T08:00:00", "--batch_size", "2", "--retries", "2", client=client)
+        assert code == 3
+        assert len(client.tables["detections"]) == 2  # the other chunk still landed
+
+    def test_dry_run_needs_no_credentials(self, run_main, dets_dir, insert_detections, monkeypatch):
+        write_dets(dets_dir, "JG-01", 2)
+        monkeypatch.setattr(insert_detections, "get_supabase_client", lambda: pytest.fail("must not connect"))
+        cfg = dets_dir / "cfg.json"
+        cfg.write_text("[]")
+        assert insert_detections.main(["--detections_dir", str(dets_dir), "--config", str(cfg),
+                                       "--start_time", "2026-09-29T08:00:00", "--dry_run"]) == 0
+
+    def test_missing_dir_exits_1(self, insert_detections, tmp_path):
+        assert insert_detections.main(["--detections_dir", str(tmp_path / "none")]) == 1
 
 
 class TestSchemaContract:
     """Rows written by the pipeline must fit supabase/migrations."""
 
-    @pytest.mark.xfail(strict=True, reason=(
-        "BUG (schema drift) insert_detections.py:261-276 writes detected_at/latitude/longitude, "
-        "which the migrations never create, and omits `timestamp` which is NOT NULL. Against a "
-        "migration-built DB every chunk fails and is counted as skipped (the retry path only "
-        "handles tracked_vehicle_id/frame_timestamp_sec errors)."))
-    def test_inserted_detection_columns_exist(self, run_main, tmp_path, columns_of):
-        write_dets(tmp_path / "dets", "IG-01", 1)
-        fake = run_main(cameras=CAMS)
-        row = fake.inserted["detections"][0][0]
-        cols = columns_of("detections")
-        assert set(row) - cols == set()
-        assert "timestamp" in row
+    def test_inserted_detection_columns_exist(self, run_main, dets_dir, columns_of):
+        write_dets(dets_dir, "JG-01", 1)
+        _, client = run_main("--start_time", "2026-09-29T08:00:00")
+        row = rows_of(client)[0]
+        assert set(row) - columns_of("detections") == set()
 
     def test_every_config_camera_is_seeded(self, columns_of, migrations_sql):
         cfg = json.loads((PIPELINE_DIR / "camera_config.json").read_text())
         missing = [c["camera_code"] for c in cfg if f"'{c['camera_code']}'" not in migrations_sql]
-        if missing:
-            pytest.xfail(
-                "BUG supabase/migrations/20260925_init_schema.sql:101-107 seeds only 5 cameras; "
-                f"pipeline cameras {missing} have no cameras row → FK failures on ingestion")
+        assert not missing, f"pipeline cameras {missing} have no cameras row in supabase/migrations"
