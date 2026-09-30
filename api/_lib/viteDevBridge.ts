@@ -1,13 +1,18 @@
 // ═══════════════════════════════════════════════════════════════════════
-// Dev-only bridge: serves /api/detect and /api/health from `npm run dev`.
+// Dev-only bridge: serves the /api functions (detect, health, data/*,
+// media/sign) from `npm run dev`.
 //
 // Plain `vite` has no serverless functions, so the Live-detect panel had no
 // backend locally. This Vite plugin (apply: 'serve', never part of a build)
-// mounts the SAME handlers Vercel runs (api/detect.ts, api/health.ts) as
-// dev-server middleware:
+// mounts the SAME handlers Vercel runs (api/detect.ts, api/health.ts,
+// api/data → api/_lib/dataRoutes.ts, api/media/sign.ts) as dev-server
+// middleware:
 //
+//   - /api/media/sign (signed URLs for the private Storage buckets) is mounted
+//     too; it gets SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY the same way.
 //   - The model API config is read server-side with Vite's loadEnv(mode, root, '')
-//     from .env / .env.local, keeping only DETECTION_API_* / ANPR_API_* keys, and
+//     from .env / .env.local, keeping only DETECTION_API_* / ANPR_API_* keys and
+//     SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY (server-only), and
 //     passed to the handlers as `deps.env`. Nothing is `define`d or exposed via
 //     import.meta.env — only VITE_* keys ever reach the browser bundle, and
 //     these keys must never be renamed to VITE_*.
@@ -28,10 +33,19 @@ type Handler = (request: Request, deps: { env: Record<string, string | undefined
 const ROUTES: Record<string, { module: string; handler: string }> = {
   '/api/detect': { module: '/api/detect.ts', handler: 'handleDetect' },
   '/api/health': { module: '/api/health.ts', handler: 'handleHealth' },
+  '/api/media/sign': { module: '/api/media/sign.ts', handler: 'handleSign' },
+  // Every /api/data/<route> (see api/data/index.ts and the vercel.json rewrite).
+  '/api/data': { module: '/api/_lib/dataRoutes.ts', handler: 'handleData' },
 };
 
-/** Only these env keys are handed to the handlers. */
-export const SERVER_ENV_KEY = /^(DETECTION_API_|ANPR_API_)/;
+/** Route for a request path (/api/data/<anything> → the data handler). */
+export function matchRoute(pathname: string): { module: string; handler: string } | undefined {
+  const p = pathname.replace(/\/+$/, '');
+  return ROUTES[p] ?? (p.startsWith('/api/data/') ? ROUTES['/api/data'] : undefined);
+}
+
+/** Only these env keys are handed to the handlers (Supabase ones for /api/data and /api/media/sign). */
+export const SERVER_ENV_KEY = /^(DETECTION_API_|ANPR_API_|SUPABASE_URL$|SUPABASE_SERVICE_ROLE_KEY$)/;
 const MAX_BODY_BYTES = 8 * 1024 * 1024;
 
 export function pickServerEnv(all: Record<string, string | undefined>): Record<string, string | undefined> {
@@ -87,7 +101,7 @@ export function apiDevBridge(): Plugin {
       const allowLan = process.env.NERO_DEV_API_ALLOW_LAN === '1';
 
       server.middlewares.use(async (req, res, next) => {
-        const route = ROUTES[(req.url ?? '').split('?')[0].replace(/\/+$/, '')];
+        const route = matchRoute((req.url ?? '').split('?')[0]);
         if (!route) return next();
         if (!allowLan && !isLoopback(req.socket.remoteAddress)) {
           return sendJson(res, 403, { error: 'Dev API bridge only serves localhost (set NERO_DEV_API_ALLOW_LAN=1)' });
