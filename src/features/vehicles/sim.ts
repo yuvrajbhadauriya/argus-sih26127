@@ -47,6 +47,10 @@ export interface PlateSuggestion {
   plate_text: string;
   label: string;
   kind: 'watchlist' | 'anomaly' | 'multi-camera';
+  /** Watchlist priority (watchlist suggestions from summary.json). */
+  priority?: 'critical' | 'high' | 'medium' | 'low';
+  /** Watchlist reason / anomaly description. */
+  reason?: string;
 }
 
 async function getJson<T>(url: string): Promise<T> {
@@ -140,8 +144,18 @@ export async function getPlateSuggestions(limit = 10): Promise<PlateSuggestion[]
   };
   try {
     const summary = await loadSimSummary();
-    summary.demo.watchlist.forEach((w) => push({ plate_text: w.plate_text, kind: 'watchlist', label: CATEGORY_LABEL[w.category] ?? 'Watchlist' }));
-    summary.demo.anomalies.forEach((a) => push({ plate_text: a.plate_text, kind: 'anomaly', label: ANOMALY_LABEL[a.kind] ?? 'Anomaly' }));
+    summary.demo.watchlist.forEach((w) =>
+      push({
+        plate_text: w.plate_text,
+        kind: 'watchlist',
+        label: CATEGORY_LABEL[w.category] ?? 'Watchlist',
+        priority: (['critical', 'high', 'medium', 'low'] as const).find((p) => p === w.priority),
+        reason: w.reason,
+      }),
+    );
+    summary.demo.anomalies.forEach((a) =>
+      push({ plate_text: a.plate_text, kind: 'anomaly', label: ANOMALY_LABEL[a.kind] ?? 'Anomaly', reason: a.description.replace(/\s*\u2194\s*/g, ' and ') }),
+    );
     summary.demo.suggested_plates.forEach((p) => push({ plate_text: p, kind: 'multi-camera', label: 'Multi-camera' }));
     return out;
   } catch {

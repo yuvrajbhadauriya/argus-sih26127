@@ -2,19 +2,24 @@
 // TrajectoryMap Component
 // Road-snapped journey path, numbered stops in time order, direction arrows,
 // per-hop time/speed/distance labels and an animated replay.
+// Overlays follow the UI theme: divIcons use var(--map-…), Leaflet paths use
+// useThemeTokens().
 // ═══════════════════════════════════════════════════
 
-import { MapContainer, Polyline, Marker, Popup, Tooltip, CircleMarker, useMap } from 'react-leaflet';
+import { MapContainer, Polyline, Marker, Popup, Tooltip, CircleMarker, ZoomControl, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PauseIcon, PlayIcon, RotateCcwIcon, SkipBackIcon, SkipForwardIcon } from 'lucide-react';
 import type { Trajectory, TrajectoryWaypoint } from '@/types';
 import { BaseTileLayer } from '@/shared/map/BaseTileLayer';
+import { IconButton } from '@/shared/ui/Button';
+import { MapLegend, MapPanel, type LegendItem } from '@/shared/ui/MapLegend';
+import { useThemeTokens } from '@/shared/theme/tokens';
 import { mockCameras } from '@/mocks/fixtures/mockCameras';
 import { usePrefersReducedMotion } from '../hooks/usePrefersReducedMotion';
 import { cumulativeM, formatDistance, formatIstHm, formatIstTime, formatSpeed, pointAlong, type LatLngTuple } from '../lib/geo';
 import { buildReplayModel, positionsAt, realTimeAt, replayMsAt, stopIndexAt, type ReplayModel } from '../lib/replay';
-import { tripColors } from '../lib/colors';
+import { textOn, tripColors } from '../lib/colors';
 import { SimulationBadge } from './SimulationBadge';
 
 interface TrajectoryMapProps {
@@ -27,6 +32,8 @@ interface TrajectoryMapProps {
   focusRequest?: { index: number; nonce: number } | null;
   className?: string;
 }
+
+const REPLAY_SPEEDS = [0.5, 1, 2, 4] as const;
 
 // ── Icon factories (cached; Leaflet icons are immutable) ──
 
@@ -42,13 +49,14 @@ function cachedIcon(key: string, make: () => L.DivIcon): L.DivIcon {
 
 function stopIcon(label: string, color: string, active: boolean): L.DivIcon {
   return cachedIcon(`stop|${label}|${color}|${active}`, () => {
-    const size = active ? 34 : 28;
+    const size = active ? 30 : 26;
     const wide = label.length > 2;
     return L.divIcon({
       className: 'trajectory-stop-icon',
-      html: `<div style="min-width:${size}px;height:${size}px;padding:0 ${wide ? 8 : 0}px;background:${color};color:#000;
-        border:2px solid ${active ? '#fff' : '#000'};border-radius:9999px;display:flex;align-items:center;justify-content:center;
-        font:800 ${active ? 13 : 12}px/1 Inter,system-ui,sans-serif;box-shadow:0 0 ${active ? 18 : 10}px ${color}b3;
+      html: `<div style="min-width:${size}px;height:${size}px;padding:0 ${wide ? 8 : 0}px;background:${color};color:${textOn(color)};
+        border:2px solid var(--map-marker-halo);border-radius:9999px;display:flex;align-items:center;justify-content:center;
+        font:700 ${active ? 13 : 12}px/1 Inter,system-ui,sans-serif;font-variant-numeric:tabular-nums;
+        box-shadow:${active ? '0 0 0 3px var(--map-selected),' : ''}0 1px 3px rgba(0,0,0,.35);
         transform:translate(-50%,-50%);position:absolute;left:0;top:0;white-space:nowrap">${label}</div>`,
       iconSize: [0, 0],
       iconAnchor: [0, 0],
@@ -63,7 +71,7 @@ function arrowIcon(bearing: number, color: string): L.DivIcon {
     L.divIcon({
       className: 'trajectory-arrow-icon',
       html: `<div style="width:14px;height:14px;transform:translate(-50%,-50%) rotate(${deg}deg);position:absolute;left:0;top:0">
-        <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M12 3 L20 20 L12 15 L4 20 Z" fill="${color}" stroke="#000" stroke-width="1.5" stroke-linejoin="round"/></svg></div>`,
+        <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M12 3 L20 20 L12 15 L4 20 Z" fill="${color}" stroke="var(--map-marker-halo)" stroke-width="2" stroke-linejoin="round"/></svg></div>`,
       iconSize: [0, 0],
       iconAnchor: [0, 0],
     }),
@@ -75,9 +83,10 @@ function hopLabelIcon(text: string, sub: string, color: string): L.DivIcon {
     L.divIcon({
       className: 'trajectory-hop-label',
       html: `<div style="transform:translate(-50%,-135%);position:absolute;left:0;top:0;white-space:nowrap;pointer-events:none;
-        background:rgba(10,10,10,.88);border:1px solid ${color}66;border-radius:8px;padding:3px 7px;color:#e4e4e7;
-        font:600 10px/1.35 Inter,system-ui,sans-serif;box-shadow:0 4px 12px rgba(0,0,0,.5)">
-        <div style="color:${color}">${text}</div><div style="color:#a1a1aa;font-weight:500">${sub}</div></div>`,
+        background:var(--map-label-bg);border:1px solid var(--map-label-border);border-left:3px solid ${color};border-radius:4px;
+        padding:2px 6px;color:var(--map-label-fg);font:600 11px/1.35 Inter,system-ui,sans-serif;font-variant-numeric:tabular-nums;
+        box-shadow:var(--shadow-pop)">
+        <div>${text}</div><div style="color:var(--fg-muted);font-weight:500">${sub}</div></div>`,
       iconSize: [0, 0],
       iconAnchor: [0, 0],
     }),
@@ -89,7 +98,7 @@ function vehicleIcon(color: string): L.DivIcon {
     L.divIcon({
       className: 'trajectory-vehicle-icon',
       html: `<div style="position:absolute;left:0;top:0;transform:translate(-50%,-50%);width:18px;height:18px;border-radius:9999px;
-        background:${color};border:3px solid #fff;box-shadow:0 0 0 6px ${color}40,0 0 18px ${color}"></div>`,
+        background:${color};border:3px solid var(--map-marker-halo);box-shadow:0 0 0 5px ${color}40,0 1px 4px rgba(0,0,0,.4)"></div>`,
       iconSize: [0, 0],
       iconAnchor: [0, 0],
     }),
@@ -180,7 +189,7 @@ function FocusOnStop({ request, waypoints, reduced }: {
   return null;
 }
 
-const NetworkCameras = memo(function NetworkCameras({ visited }: { visited: Set<string> }) {
+const NetworkCameras = memo(function NetworkCameras({ visited, idle, fill }: { visited: Set<string>; idle: string; fill: string }) {
   return (
     <>
       {mockCameras
@@ -190,11 +199,11 @@ const NetworkCameras = memo(function NetworkCameras({ visited }: { visited: Set<
             key={c.id}
             center={[c.lat, c.lng]}
             radius={5}
-            pathOptions={{ color: '#71717a', weight: 1.5, fillColor: '#27272a', fillOpacity: 0.9 }}
+            pathOptions={{ color: idle, weight: 2, fillColor: fill, fillOpacity: 1 }}
           >
             <Tooltip direction="top" offset={[0, -6]}>
               <span className="text-xs font-semibold">{c.name}</span>
-              <span className="block text-[10px] text-zinc-500">{c.code} · not on this journey</span>
+              <span className="block text-2xs text-fg-subtle">{c.code} · not on this journey</span>
             </Tooltip>
           </CircleMarker>
         ))}
@@ -202,19 +211,17 @@ const NetworkCameras = memo(function NetworkCameras({ visited }: { visited: Set<
   );
 });
 
-const HopLayer = memo(function HopLayer({ hops, colorFor, showLabels }: {
+const HopLayer = memo(function HopLayer({ hops, colorFor, showLabels, casing }: {
   hops: Hop[];
   colorFor: (trip: number) => string;
   showLabels: boolean;
+  casing: string;
 }) {
   return (
     <>
-      {hops.map((h) => {
-        const color = colorFor(h.trip);
-        return (
-          <Polyline key={`glow-${h.key}`} positions={h.path} pathOptions={{ color, weight: 10, opacity: 0.16, lineCap: 'round' }} interactive={false} />
-        );
-      })}
+      {hops.map((h) => (
+        <Polyline key={`case-${h.key}`} positions={h.path} pathOptions={{ color: casing, weight: 7, opacity: 0.9, lineCap: 'round', lineJoin: 'round' }} interactive={false} />
+      ))}
       {hops.map((h) => {
         const color = colorFor(h.trip);
         return <Polyline key={`line-${h.key}`} positions={h.path} pathOptions={{ color, weight: 4, opacity: 0.95, lineCap: 'round', lineJoin: 'round' }} interactive={false} />;
@@ -234,7 +241,7 @@ const HopLayer = memo(function HopLayer({ hops, colorFor, showLabels }: {
             keyboard={false}
             icon={hopLabelIcon(
               `${formatDistance(h.to.distance_m_from_prev)} · ${formatSpeed(h.to.speed_kmph_from_prev)}`,
-              `${h.from ? formatIstHm(h.from.timestamp) : ''} → ${formatIstHm(h.to.timestamp)}`,
+              `${h.from ? formatIstHm(h.from.timestamp) : ''}–${formatIstHm(h.to.timestamp)}`,
               colorFor(h.trip),
             )}
           />
@@ -257,20 +264,20 @@ const StopMarker = memo(function StopMarker({ group, waypoints, color, active, o
   return (
     <Marker position={group.at} icon={stopIcon(label, color, active)} eventHandlers={handlers} zIndexOffset={active ? 1000 : 500}>
       <Tooltip direction="top" offset={[0, -18]}>
-        <span className="text-xs font-bold">{group.name}</span>
-        <span className="block text-[10px] text-zinc-500">
+        <span className="text-xs font-semibold">{group.name}</span>
+        <span className="block font-mono text-2xs text-fg-subtle">
           {group.indices.map((i) => formatIstHm(waypoints[i].timestamp)).join(' · ')}
         </span>
       </Tooltip>
       <Popup>
         <div className="space-y-1 p-1">
-          <h4 className="text-sm font-bold">{group.name}</h4>
-          {group.code && <p className="font-mono text-[10px] text-zinc-500">{group.code}</p>}
+          <h4 className="text-[13px] font-semibold text-fg">{group.name}</h4>
+          {group.code && <p className="font-mono text-2xs text-fg-subtle">{group.code}</p>}
           {group.indices.map((i) => {
             const w = waypoints[i];
             return (
-              <p key={i} className="text-xs">
-                <strong>#{i + 1}</strong> {formatIstTime(w.timestamp)} IST{w.heading ? ` · heading ${w.heading}` : ''}
+              <p key={i} className="text-xs tabular-nums text-fg-muted">
+                <strong className="text-fg">#{i + 1}</strong> {formatIstTime(w.timestamp)} IST{w.heading ? ` · heading ${w.heading}` : ''}
                 {w.speed_kmph_from_prev != null && ` · ${formatSpeed(w.speed_kmph_from_prev)}`}
               </p>
             );
@@ -282,9 +289,10 @@ const StopMarker = memo(function StopMarker({ group, waypoints, color, active, o
 });
 
 /** Imperatively moves vehicle marker(s) along the road during a replay. */
-function ReplayLayer({ model, playing, seek, visible, colorFor, onTick, onEnd }: {
+function ReplayLayer({ model, playing, speed, seek, visible, colorFor, onTick, onEnd }: {
   model: ReplayModel;
   playing: boolean;
+  speed: number;
   seek: { ms: number; nonce: number };
   visible: boolean;
   colorFor: (trip: number) => string;
@@ -307,8 +315,11 @@ function ReplayLayer({ model, playing, seek, visible, colorFor, onTick, onEnd }:
     for (const p of positions) {
       seen.add(p.trip);
       const m = live.get(p.trip);
-      if (m) m.setLatLng(p.at);
-      else live.set(p.trip, L.marker(p.at, { icon: vehicleIcon(colorFor(p.trip)), interactive: false, keyboard: false, zIndexOffset: 2000 }).addTo(map));
+      if (m) {
+        m.setLatLng(p.at);
+        const icon = vehicleIcon(colorFor(p.trip));
+        if (m.options.icon !== icon) m.setIcon(icon); // theme switched mid-replay
+      } else live.set(p.trip, L.marker(p.at, { icon: vehicleIcon(colorFor(p.trip)), interactive: false, keyboard: false, zIndexOffset: 2000 }).addTo(map));
     }
     live.forEach((m, trip) => {
       if (!seen.has(trip)) {
@@ -328,7 +339,7 @@ function ReplayLayer({ model, playing, seek, visible, colorFor, onTick, onEnd }:
     let raf = 0;
     let last = performance.now();
     const step = (now: number) => {
-      msRef.current = Math.min(model.duration, msRef.current + (now - last));
+      msRef.current = Math.min(model.duration, msRef.current + (now - last) * speed);
       last = now;
       draw();
       onTick(msRef.current);
@@ -340,7 +351,7 @@ function ReplayLayer({ model, playing, seek, visible, colorFor, onTick, onEnd }:
     };
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
-  }, [playing, model, draw, onTick, onEnd]);
+  }, [playing, speed, model, draw, onTick, onEnd]);
 
   useEffect(() => {
     const live = markers.current;
@@ -357,9 +368,10 @@ function ReplayLayer({ model, playing, seek, visible, colorFor, onTick, onEnd }:
 
 export function TrajectoryMap({ trajectory, activeIndex = null, onActiveIndexChange, focusRequest = null, className = '' }: TrajectoryMapProps) {
   const reduced = usePrefersReducedMotion();
+  const tokens = useThemeTokens();
   const waypoints = trajectory.waypoints;
 
-  const colorFor = useMemo(() => tripColors(trajectory), [trajectory]);
+  const colorFor = useMemo(() => tripColors(trajectory, tokens.series, tokens.danger), [trajectory, tokens]);
   const groups = useMemo(() => groupStops(waypoints), [waypoints]);
   const hops = useMemo(() => buildHops(waypoints), [waypoints]);
   const visited = useMemo(() => new Set(waypoints.map((w) => w.camera_code ?? '')), [waypoints]);
@@ -372,6 +384,7 @@ export function TrajectoryMap({ trajectory, activeIndex = null, onActiveIndexCha
 
   const [playing, setPlaying] = useState(false);
   const [started, setStarted] = useState(false);
+  const [speed, setSpeed] = useState<number>(1);
   const [seek, setSeek] = useState({ ms: 0, nonce: 0 });
   const [progressMs, setProgressMs] = useState(0);
   const currentMs = useRef(0);
@@ -418,6 +431,7 @@ export function TrajectoryMap({ trajectory, activeIndex = null, onActiveIndexCha
   }, [focusRequest?.nonce]);
 
   const togglePlay = () => {
+    if (reduced) return;
     if (playing) {
       setPlaying(false);
       seekTo(currentMs.current);
@@ -441,23 +455,58 @@ export function TrajectoryMap({ trajectory, activeIndex = null, onActiveIndexCha
   };
 
   const step = (dir: 1 | -1) => {
+    setPlaying(false);
     const base = activeIndex ?? (dir === 1 ? -1 : waypoints.length);
     const next = Math.max(0, Math.min(waypoints.length - 1, base + dir));
     seekToStop(next);
   };
 
+  const scrub = (ms: number) => {
+    setStarted(true);
+    seekTo(ms);
+    const stop = stopIndexAt(model, realTimeAt(model, ms));
+    if (stop >= 0 && stop !== lastStop.current) {
+      lastStop.current = stop;
+      onActiveIndexChange?.(stop);
+    }
+  };
+
+  /** `[` / `]` step through stops, Space plays/pauses — while the map area has focus. */
+  const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const tag = (e.target as HTMLElement).tagName;
+    if (!canReplay || tag === 'INPUT' || tag === 'SELECT' || tag === 'BUTTON' || tag === 'TEXTAREA') return;
+    if (e.key === '[') step(-1);
+    else if (e.key === ']') step(1);
+    else if (e.key === ' ' && !reduced) togglePlay();
+    else return;
+    e.preventDefault();
+  };
+
+  const trips = useMemo(() => [...new Set(waypoints.map((w) => w.trip_index ?? 0))].sort((a, b) => a - b), [waypoints]);
+  const hasClone = trajectory.anomalies?.some((a) => a.kind === 'cloned_plate') ?? false;
+  const legend: LegendItem[] = [
+    ...trips.slice(0, 6).map((t): LegendItem => {
+      const c = colorFor(t);
+      return { label: c === tokens.danger ? `Trip ${t + 1} (suspect)` : trips.length > 1 ? `Trip ${t + 1}` : 'Journey', color: c, shape: 'line' };
+    }),
+    { label: 'Stop (visit order)', color: tokens.series[0], shape: 'dot' },
+    { label: 'Direction of travel', color: tokens.fgMuted, shape: 'arrow' },
+    { label: 'Camera not on journey', color: tokens.map.camIdle, shape: 'ring' },
+    ...(hasClone && !trips.some((t) => colorFor(t) === tokens.danger) ? [{ label: 'Anomaly', color: tokens.danger, shape: 'line' as const }] : []),
+  ];
+
   if (waypoints.length === 0) return null;
   const clock = started ? formatIstTime(realTimeAt(model, progressMs)) : formatIstTime(waypoints[0].timestamp);
-  const pct = Math.min(100, (progressMs / model.duration) * 100);
 
   return (
-    <div className={`relative h-full w-full ${className}`}>
-      <MapContainer center={[waypoints[0].lat, waypoints[0].lng]} zoom={12} className="h-full w-full rounded-xl" zoomControl={true}>
+    <div className={`relative h-full w-full ${className}`} onKeyDown={onKeyDown}>
+      <MapContainer center={[waypoints[0].lat, waypoints[0].lng]} zoom={12} className="h-full w-full" zoomControl={false} style={{ background: 'var(--map-bg)' }}>
         <BaseTileLayer />
+        <ZoomControl position="topright" />
         <FitBounds points={boundsPoints} id={trajectory.id} />
         <FocusOnStop request={focusRequest} waypoints={waypoints} reduced={reduced} />
-        <NetworkCameras visited={visited} />
-        <HopLayer hops={hops} colorFor={colorFor} showLabels={hops.length <= 12} />
+        <NetworkCameras visited={visited} idle={tokens.map.camIdle} fill={tokens.surface} />
+        <HopLayer hops={hops} colorFor={colorFor} showLabels={hops.length <= 12} casing={tokens.map.markerHalo} />
         {groups.map((g) => (
           <StopMarker
             key={g.key}
@@ -472,6 +521,7 @@ export function TrajectoryMap({ trajectory, activeIndex = null, onActiveIndexCha
           <ReplayLayer
             model={model}
             playing={playing && !reduced}
+            speed={speed}
             seek={seek}
             visible={started}
             colorFor={colorFor}
@@ -481,50 +531,55 @@ export function TrajectoryMap({ trajectory, activeIndex = null, onActiveIndexCha
         )}
       </MapContainer>
 
+      <MapLegend title="Legend" position="top-left" items={legend} />
+
       {trajectory.source === 'simulation' && (
-        <div className="pointer-events-none absolute right-3 top-3 z-[1000]">
-          <SimulationBadge compact className="bg-black/70 backdrop-blur" />
-        </div>
+        <MapPanel position="top-right" className="pointer-events-none mr-14 p-1">
+          <SimulationBadge compact />
+        </MapPanel>
       )}
 
       {canReplay && (
-        <div className="absolute bottom-3 left-3 right-3 z-[1000] flex items-center gap-3 rounded-xl border border-nero-border bg-nero-bg/85 px-3 py-2 backdrop-blur sm:right-auto sm:w-[380px]">
-          {reduced ? (
-            <>
-              <button type="button" onClick={() => step(-1)} aria-label="Previous stop" className="rounded-lg border border-nero-border p-1.5 text-nero-text-secondary hover:text-nero-accent">
-                <SkipBackIcon size={14} />
-              </button>
-              <button type="button" onClick={() => step(1)} aria-label="Next stop" className="rounded-lg bg-nero-accent p-1.5 text-nero-bg hover:bg-nero-accent-hover">
-                <SkipForwardIcon size={14} />
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                type="button"
+        <MapPanel position="bottom-center" className="w-[min(460px,calc(100%-24px))] px-2 py-1.5">
+          <div className="flex items-center gap-1" role="group" aria-label="Journey replay controls">
+            {!reduced && (
+              <IconButton
+                size="sm"
+                variant="primary"
+                label={playing ? 'Pause replay' : 'Replay journey'}
+                icon={playing ? <PauseIcon size={14} /> : <PlayIcon size={14} />}
                 onClick={togglePlay}
-                aria-label={playing ? 'Pause replay' : 'Replay journey'}
-                className="rounded-lg bg-nero-accent p-1.5 text-nero-bg transition-colors hover:bg-nero-accent-hover"
+              />
+            )}
+            <IconButton size="sm" label="Previous stop" icon={<SkipBackIcon size={14} />} onClick={() => step(-1)} />
+            <IconButton size="sm" variant={reduced ? 'primary' : 'ghost'} label="Next stop" icon={<SkipForwardIcon size={14} />} onClick={() => step(1)} />
+            {!reduced && <IconButton size="sm" label="Reset replay" icon={<RotateCcwIcon size={14} />} onClick={restart} />}
+            <input
+              type="range"
+              min={0}
+              max={Math.round(model.duration)}
+              step={1}
+              value={Math.round(progressMs)}
+              onChange={(e) => scrub(Number(e.target.value))}
+              aria-label="Replay position"
+              aria-valuetext={`${clock} IST`}
+              className="mx-1 h-1 min-w-0 flex-1 cursor-pointer accent-[var(--primary)]"
+            />
+            <span className="shrink-0 font-mono text-xs font-medium tabular-nums text-fg" aria-live="off">{clock} IST</span>
+            {!reduced && (
+              <select
+                value={speed}
+                onChange={(e) => setSpeed(Number(e.target.value))}
+                aria-label="Replay speed"
+                className="ml-1 h-7 shrink-0 cursor-pointer rounded-sm border border-line-strong bg-surface px-1 text-xs tabular-nums text-fg"
               >
-                {playing ? <PauseIcon size={14} /> : <PlayIcon size={14} />}
-              </button>
-              <button type="button" onClick={restart} aria-label="Reset replay" className="rounded-lg border border-nero-border p-1.5 text-nero-text-secondary hover:text-nero-accent">
-                <RotateCcwIcon size={14} />
-              </button>
-            </>
-          )}
-          <div className="min-w-0 flex-1">
-            <div className="flex items-baseline justify-between gap-2">
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-nero-text-muted">
-                {reduced ? 'Step through stops' : 'Journey replay'}
-              </span>
-              <span className="font-mono text-[11px] font-bold text-nero-text-primary">{clock} IST</span>
-            </div>
-            <div className="mt-1 h-1 overflow-hidden rounded-full bg-nero-border" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct)}>
-              <div className="h-full rounded-full bg-nero-accent" style={{ width: `${pct}%` }} />
-            </div>
+                {REPLAY_SPEEDS.map((s) => (
+                  <option key={s} value={s}>{s}×</option>
+                ))}
+              </select>
+            )}
           </div>
-        </div>
+        </MapPanel>
       )}
     </div>
   );

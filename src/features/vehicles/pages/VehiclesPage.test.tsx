@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, within, fireEvent, waitFor } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useNavigate } from 'react-router-dom';
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { ReactNode } from 'react';
@@ -9,7 +9,7 @@ vi.mock('react-leaflet', () => {
   const Pass = ({ children }: { children?: ReactNode }) => <div data-testid="leaflet">{children}</div>;
   return {
     MapContainer: Pass, TileLayer: () => null, Marker: Pass, Popup: Pass, Tooltip: Pass,
-    Polyline: () => <div data-testid="polyline" />, CircleMarker: Pass,
+    Polyline: () => <div data-testid="polyline" />, CircleMarker: Pass, ZoomControl: () => null,
     useMap: () => ({ fitBounds: vi.fn(), setView: vi.fn(), flyTo: vi.fn(), invalidateSize: vi.fn(), addLayer: vi.fn(), removeLayer: vi.fn() }),
   };
 });
@@ -39,12 +39,21 @@ beforeEach(() => {
 
 afterEach(() => vi.unstubAllGlobals());
 
+/** Stand-in for the top-bar global search: navigates while the page stays mounted. */
+function GlobalSearchStub() {
+  const navigate = useNavigate();
+  return <button type="button" onClick={() => navigate(`/vehicles?plate=${encodeURIComponent(W2.replace(/ /g, ''))}`)}>global-search</button>;
+}
+
 const renderPage = (path = '/vehicles') =>
   render(
     <MemoryRouter initialEntries={[path]}>
+      <GlobalSearchStub />
       <VehiclesPage />
     </MemoryRouter>,
   );
+
+const targetPlate = () => document.getElementById('vehicle-target')?.querySelector('[aria-label^="Plate "]')?.getAttribute('aria-label') ?? '';
 
 describe('VehiclesPage', () => {
   it('opens on the first watchlist plate with a road-snapped journey and synced timeline', async () => {
@@ -71,7 +80,20 @@ describe('VehiclesPage', () => {
     const input = screen.getByRole('textbox', { name: /licence plate/i });
     fireEvent.change(input, { target: { value: W2.toLowerCase().replace(/ /g, '') } });
     fireEvent.submit(input.closest('form')!);
-    await waitFor(() => expect(screen.getByText(W2, { selector: 'dd' })).toBeInTheDocument());
+    await waitFor(() => expect(targetPlate()).toContain(W2));
+  });
+
+  it('follows ?plate= changes while the page is open (global search)', async () => {
+    renderPage();
+    await waitFor(() => expect(targetPlate()).toContain(W1));
+    fireEvent.click(screen.getByRole('button', { name: 'global-search' }));
+    await waitFor(() => expect(targetPlate()).toContain(W2));
+    expect(screen.getByRole('textbox', { name: /licence plate/i })).toHaveValue(W2);
+  });
+
+  it('shows a not-found state for an unknown plate', async () => {
+    renderPage('/vehicles?plate=ZZ99ZZ9999');
+    expect(await screen.findByText(/No sightings for ZZ 99 ZZ 9999/)).toBeInTheDocument();
   });
 
   it('shows the anomaly banner for the cloned plate from the URL', async () => {

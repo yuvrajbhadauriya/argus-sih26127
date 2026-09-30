@@ -287,7 +287,7 @@ export function detectAnomalies(t: Trajectory): TrajectoryAnomaly[] {
     const names = [...new Set(idxs.map((i) => w[i].camera_name))];
     out.push({
       kind: 'circling',
-      message: `Circled ${names.join(' ↔ ')} ${Math.max(...loops.map((l) => l.length)) - 1} times in ${formatDuration(span)} without a destination.`,
+      message: `Circled ${names.join(' and ')} ${Math.max(...loops.map((l) => l.length)) - 1} times in ${formatDuration(span)} without a destination.`,
       waypoint_indices: idxs,
     });
   }
