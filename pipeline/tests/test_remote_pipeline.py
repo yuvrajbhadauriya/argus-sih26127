@@ -108,6 +108,28 @@ def test_end_to_end_with_mock_server(tmp_path, fake_capture, stub_encode, mock_a
     assert json.loads((out_dir / "detections_IG-01.json").read_text()) == dets
 
 
+def test_cache_is_ignored_when_the_camera_clip_changes(tmp_path):
+    class Client:
+        calls = 0
+
+        def detect_video(self, data, query):
+            Client.calls += 1
+            return {"events": [{"plate": f"MH01AB{Client.calls:04d}"}]}
+
+    old, new = tmp_path / "old_clip.mp4", tmp_path / "new_clip.mp4"
+    old.write_bytes(b"old")
+    new.write_bytes(b"new")
+    cache = str(tmp_path / "video_KR-01.json")
+    first = R.fetch_video_events(Client(), str(old), "q", cache)
+    assert first["video"] == "old_clip.mp4"
+    assert R.fetch_video_events(Client(), str(old), "q", cache) == first  # same clip: cache hit
+    fresh = R.fetch_video_events(Client(), str(new), "q", cache)  # camera now plays another clip
+    assert Client.calls == 2 and fresh["video"] == "new_clip.mp4"
+    # A cache written before clip names were recorded is still used.
+    (tmp_path / "legacy.json").write_text(json.dumps({"events": []}))
+    assert R.fetch_video_events(Client(), str(new), "q", str(tmp_path / "legacy.json")) == {"events": []}
+
+
 def test_weak_reads_keep_boxes_but_not_text(tmp_path, fake_capture, stub_encode, mock_api):
     fake_capture.spec = {"fps": 10.0, "frames": 4, "shape": (720, 1280, 3), "opened": True}
     vids, cfg = _setup_videos(tmp_path)

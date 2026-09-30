@@ -290,13 +290,22 @@ def _write_json(path: str, doc) -> None:
     os.replace(tmp, path)
 
 
+def _cache_matches_clip(doc: dict | None, video_path: str) -> bool:
+    """A cached response belongs to the clip it was made from (the cache is per camera, the clip can change).
+    Docs written before the clip name was recorded (no "video" key) are still accepted."""
+    return bool(doc) and doc.get("video", os.path.basename(video_path)) == os.path.basename(video_path)
+
+
 def fetch_video_events(client: RemoteDetectionClient, video_path: str, query: str, cache: str | None) -> dict:
     if cache and os.path.exists(cache):
-        return _read_json(cache)
+        doc = _read_json(cache)
+        if _cache_matches_clip(doc, video_path):
+            return doc
     with open(video_path, "rb") as f:
         data = f.read()
     raw = client.detect_video(data, query=query)
     raw["query"] = query
+    raw["video"] = os.path.basename(video_path)
     if cache:
         _write_json(cache, raw)
     return raw
@@ -314,10 +323,13 @@ def fetch_frame_samples(
 ) -> dict:
     """Raw /v1/frame responses for frames sampled every `sample_interval` s (resumable via `cache`)."""
     doc = _read_json(cache) if cache and os.path.exists(cache) else None
+    if not _cache_matches_clip(doc, video_path):
+        doc = None
     if doc and doc.get("complete") and doc.get("query") == query and doc.get("sample_interval") == sample_interval:
         return doc
     if not doc or doc.get("query") != query or doc.get("sample_interval") != sample_interval:
         doc = {"query": query, "sample_interval": sample_interval, "complete": False, "samples": []}
+    doc["video"] = os.path.basename(video_path)
     done = {s["frame"] for s in doc["samples"]}
     since_save = 0
     for frame_idx, ts, frame in iter_sampled_frames(video_path, sample_interval):
