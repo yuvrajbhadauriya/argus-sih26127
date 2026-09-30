@@ -7,7 +7,17 @@ const h = vi.hoisted(() => ({ configured: false, fake: null as unknown as Return
 vi.mock('@/lib/supabase/client', async () => {
   const { createFakeSupabase } = await import('@/test/supabaseMock');
   h.fake = createFakeSupabase();
-  return { supabase: h.fake.client, isSupabaseConfigured: () => h.configured };
+  // The shared fake builder has no .abortSignal(); add a pass-through so the
+  // signal-aware api.ts query chain works here.
+  const client = {
+    ...h.fake.client,
+    from: (table: string) => {
+      const b = h.fake.client.from(table);
+      if (!b.abortSignal) b.abortSignal = () => b;
+      return b;
+    },
+  };
+  return { supabase: client, isSupabaseConfigured: () => h.configured };
 });
 
 import { useCameraDetections } from './useCameraDetections';
@@ -48,7 +58,7 @@ describe('useCameraDetections', () => {
     fetchMock.mockReturnValue(jsonResponse([pipelineRow]));
     const { result } = renderHook(() => useCameraDetections('IG-01', 'cam-001'));
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(fetchMock).toHaveBeenCalledWith('/detections/detections_IG-01.json');
+    expect(fetchMock.mock.calls[0][0]).toBe('/detections/detections_IG-01.json');
     expect(result.current.detections[0]).toEqual({
       event_id: 'det-IG-01-0',
       camera_id: 'IG-01',
@@ -66,7 +76,7 @@ describe('useCameraDetections', () => {
   it('maps legacy CAM-X codes through the alias table', async () => {
     fetchMock.mockReturnValue(jsonResponse([]));
     renderHook(() => useCameraDetections('CAM-D'));
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/detections/detections_DW-01.json'));
+    await waitFor(() => expect(fetchMock.mock.calls[0]?.[0]).toBe('/detections/detections_DW-01.json'));
   });
 
   it('fills defaults for missing fields', async () => {
@@ -118,6 +128,44 @@ describe('useCameraDetections', () => {
     const { result } = renderHook(() => useCameraDetections('IG-01', 'cam-001'));
     await waitFor(() => expect(result.current.detections).toHaveLength(1));
     expect(result.current.detections[0].event_id).toBe('det-IG-01-0');
+  });
+
+  it('does not fetch while disabled, then fetches once enabled', async () => {
+    fetchMock.mockReturnValue(jsonResponse([pipelineRow]));
+    const { result, rerender } = renderHook(({ enabled }) => useCameraDetections('IG-01', undefined, { enabled }), {
+      initialProps: { enabled: false },
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(result.current.loading).toBe(false);
+    rerender({ enabled: true });
+    await waitFor(() => expect(result.current.detections).toHaveLength(1));
+  });
+
+  it('aborts the in-flight request on unmount and ignores its result', async () => {
+    let signal: AbortSignal | undefined;
+    fetchMock.mockImplementation((_url: string, init?: RequestInit) => {
+      signal = init?.signal ?? undefined;
+      return new Promise(() => {}); // never resolves
+    });
+    const { unmount } = renderHook(() => useCameraDetections('IG-01'));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(signal).toBeDefined();
+    expect(signal!.aborted).toBe(false);
+    unmount();
+    expect(signal!.aborted).toBe(true);
+  });
+
+  it('aborts the previous request when the camera changes', async () => {
+    const signals: AbortSignal[] = [];
+    fetchMock.mockImplementation((_url: string, init?: RequestInit) => {
+      if (init?.signal) signals.push(init.signal);
+      return jsonResponse([pipelineRow]);
+    });
+    const { rerender, result } = renderHook(({ code }) => useCameraDetections(code), { initialProps: { code: 'IG-01' } });
+    rerender({ code: 'CP-01' });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(signals[0].aborted).toBe(true);
+    expect(fetchMock.mock.calls.at(-1)![0]).toBe('/detections/detections_CP-01.json');
   });
 
   // BUG: the Supabase query has no .range()/.limit() and no ordering. PostgREST caps
