@@ -72,8 +72,12 @@ export function CameraAiPanel({ camera, videoRef, feedStatus, detections, resolu
             <EmptyState
               compact
               icon={<ListIcon size={20} />}
-              title={feedStatus === 'playing' ? 'No plate reads in this clip' : 'Waiting for the feed'}
-              description={feedStatus === 'playing' ? undefined : 'Pipeline detections load once the feed is on screen.'}
+              title={feedStatus === 'playing' ? 'No detections yet — run the AI pipeline' : 'Waiting for the feed'}
+              description={
+                feedStatus === 'playing'
+                  ? 'No recorded plate reads for this clip. Run the ANPR pipeline on it, or detect the current frame above.'
+                  : 'Pipeline detections load once the feed is on screen.'
+              }
             />
           }
         />

@@ -8,14 +8,21 @@
 // guaranteed to point at the same project as the video bucket.
 export const SUPABASE_PROJECT_REF = 'ngwrbxiaeressvmhfopb';
 export const SUPABASE_STORAGE_BASE = `https://${SUPABASE_PROJECT_REF}.supabase.co/storage/v1/object/public/videos/`;
+/** Folder of the Mumbai camera clips inside the bucket (<slug>.mp4 + <slug>.jpg poster). */
+export const SUPABASE_VIDEO_PREFIX = 'mumbai/720p/';
+/** Local dev copies of the same clips (public/videos-local/, gitignored). */
+export const LOCAL_VIDEO_BASE = '/videos-local/';
 
 // ── Map ───────────────────────────────────────────
-/** Fallback coordinates (India Gate, New Delhi) for records with no lat/lng. */
-export const DEFAULT_LOCATION = { lat: 28.6129, lng: 77.2295 } as const;
+/** Fallback coordinates (Kurla, geographic centre of Mumbai) for records with no lat/lng. */
+export const DEFAULT_LOCATION = { lat: 19.076, lng: 72.8777 } as const;
 
-/** Initial Leaflet view for the live camera map (central New Delhi). */
-export const DEFAULT_MAP_CENTER: [number, number] = [28.61, 77.2];
+/** Initial Leaflet view for the live camera map (Mumbai: WEH, LBS Marg, Dadar–Sion). */
+export const DEFAULT_MAP_CENTER: [number, number] = [19.08, 72.885];
 export const DEFAULT_MAP_ZOOM = 12;
+
+/** Command sector shown in the app chrome. */
+export const SECTOR_LABEL = 'Mumbai · Central Command Sector';
 
 /** Esri Canvas base maps per theme (base + separate reference labels layer). */
 export const MAP_TILES = {

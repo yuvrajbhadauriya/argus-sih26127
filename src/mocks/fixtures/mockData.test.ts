@@ -14,10 +14,10 @@ describe('mockCameras + helpers', () => {
     expect(cameraIds.size).toBe(mockCameras.length);
     expect(new Set(mockCameras.map((c) => c.code)).size).toBe(mockCameras.length);
     for (const c of mockCameras) {
-      expect(c.lat).toBeGreaterThan(28);
-      expect(c.lat).toBeLessThan(29);
-      expect(c.lng).toBeGreaterThan(76);
-      expect(c.lng).toBeLessThan(78);
+      expect(c.lat).toBeGreaterThan(18.89);
+      expect(c.lat).toBeLessThan(19.28);
+      expect(c.lng).toBeGreaterThan(72.77);
+      expect(c.lng).toBeLessThan(72.99);
       expect(c.road, c.code).toBeTruthy();
       expect(['Northbound', 'Southbound', 'Eastbound', 'Westbound']).toContain(c.direction);
     }

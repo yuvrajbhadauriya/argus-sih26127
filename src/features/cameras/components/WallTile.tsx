@@ -1,6 +1,7 @@
-// Video-wall tile. Wall tiles never stream (the source clips are 4K at
-// 16–20 Mbps each) — they show a poster if the camera has one, otherwise a
-// neutral frame. Selecting a tile moves it into the primary feed.
+// Video-wall tile. Wall tiles never stream — they show the clip's poster frame
+// if the camera has one, otherwise a neutral frame. Selecting a tile moves it
+// into the primary feed.
+import { useState } from 'react';
 import { CctvIcon } from 'lucide-react';
 import type { Camera } from '@/types/camera';
 import { VideoTile } from '@/shared/ui/VideoTile';
@@ -12,8 +13,8 @@ interface WallTileProps {
 }
 
 export function WallTile({ camera, selected, onSelect }: WallTileProps) {
-  // `thumbnail_url` exists on the mock feed shape but not on `Camera`; use it when present.
-  const poster = (camera as Camera & { thumbnail_url?: string }).thumbnail_url;
+  const [posterFailed, setPosterFailed] = useState(false);
+  const poster = posterFailed ? undefined : camera.poster_url;
   const offline = camera.status === 'offline';
 
   return (
@@ -34,7 +35,7 @@ export function WallTile({ camera, selected, onSelect }: WallTileProps) {
       }
     >
       {poster ? (
-        <img src={poster} alt="" loading="lazy" className="h-full w-full object-cover" />
+        <img src={poster} alt="" loading="lazy" onError={() => setPosterFailed(true)} className="h-full w-full object-cover" />
       ) : (
         <div className="flex h-full w-full flex-col items-center justify-center gap-1.5" style={{ color: 'var(--overlay-fg)' }}>
           <CctvIcon size={22} strokeWidth={1.5} aria-hidden="true" className="opacity-50" />

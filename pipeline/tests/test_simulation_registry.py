@@ -1,4 +1,4 @@
-"""The Delhi camera registry must agree across frontend, pipeline, SQL and routes."""
+"""The Mumbai camera registry must agree across frontend, pipeline, SQL and routes."""
 
 import json
 import re
@@ -9,7 +9,8 @@ from conftest import PIPELINE_DIR, ROOT_DIR
 
 CONFIG = json.loads((PIPELINE_DIR / "camera_config.json").read_text())
 MOCK_TS = (ROOT_DIR / "src" / "mocks" / "fixtures" / "mockCameras.ts").read_text()
-SQL = (ROOT_DIR / "supabase" / "migrations" / "20260930_delhi_camera_network.sql").read_text()
+SQL = (ROOT_DIR / "supabase" / "migrations" / "20261001000200_mumbai_camera_network.sql").read_text()
+SLUG = re.compile(r"^[a-z0-9]+_[a-z0-9-]+_(pexels|pixabay)\d+$")
 ROUTES = ROOT_DIR / "public" / "sim" / "road_routes.json"
 
 
@@ -51,14 +52,31 @@ def test_camera_registry_is_consistent(cam):
     assert mock["id"] == sql["id"]
 
 
-def test_all_cameras_are_in_delhi_and_distinct():
-    assert len(CONFIG) == 9
-    pts = {(c["lat"], c["lng"]) for c in CONFIG}
-    assert len(pts) == 9
+def test_all_cameras_are_in_mumbai_and_distinct():
+    assert len(CONFIG) == 8
+    assert len({(c["lat"], c["lng"]) for c in CONFIG}) == len(CONFIG)
+    assert len({c["camera_code"] for c in CONFIG}) == len(CONFIG)
     for c in CONFIG:
-        # NCT of Delhi bounding box
-        assert 28.40 < c["lat"] < 28.88 and 76.84 < c["lng"] < 77.35, c["camera_code"]
+        # Mumbai city + suburban district (Colaba to Dahisar / Mulund)
+        assert 18.89 < c["lat"] < 19.28 and 72.77 < c["lng"] < 72.99, c["camera_code"]
         assert c["direction"] in {"Northbound", "Southbound", "Eastbound", "Westbound"}
+        assert c["zone"] in {"Island City", "Western Suburbs", "Eastern Suburbs"}
+
+
+def test_every_camera_has_its_own_clip_in_both_sources():
+    slugs = [c["video_slug"] for c in CONFIG]
+    assert len(set(slugs)) == len(slugs), "two cameras share a clip"
+    for c in CONFIG:
+        slug = c["video_slug"]
+        assert SLUG.match(slug), slug
+        assert c["video_filename"] == f"{slug}.mp4"
+        assert c["video_url"].endswith(f"/videos/mumbai/720p/{slug}.mp4")
+        assert c["poster_url"].endswith(f"/videos/mumbai/720p/{slug}.jpg")
+        assert f"video_slug: '{slug}'" in MOCK_TS
+        assert c["video_url"] in SQL
+        # The clip exists in the candidate set the network was built from.
+        assert (ROOT_DIR / "pipeline" / "data" / "candidate_clips" / f"{slug}.jpg").exists() or \
+            not (ROOT_DIR / "pipeline" / "data" / "candidate_clips").exists()
 
 
 def test_routes_file_uses_the_same_registry():

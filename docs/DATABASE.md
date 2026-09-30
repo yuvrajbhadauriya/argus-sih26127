@@ -12,10 +12,10 @@ The Supabase CLI applies migrations in **byte order of the filename**.
 | `20260925_init_schema.sql` | Original tables and the old `vehicles` view (legacy). |
 | `20260927_add_detection_pipeline_columns.sql` | `tracked_vehicle_id`, `frame_timestamp_sec` (legacy). |
 | `20260927_add_detection_tracking.sql` | Same columns again. **Its version duplicates the file above** (see Known issues). |
-| `20260930150000_mumbai_camera_network.sql` | Mumbai camera registry (cam-001..cam-008). |
 | `20260930_delhi_camera_network.sql` | Old Delhi camera registry (kept for history). |
 | `20261001000000_reconcile_schema.sql` | **Makes the schema match the code** (details below). |
 | `20261001000100_rls.sql` | **RLS, grants, audit triggers, `purge_old_detections()`.** |
+| `20261001000200_mumbai_camera_network.sql` | Mumbai camera registry (cam-001..cam-008, new clips); retires cam-009. Sorts after the Delhi seed, so it wins on a fresh reset. |
 
 The two `20261001*` files are idempotent and don't depend on the camera-network
 files, so you can apply them to any project built from the older migrations.
@@ -131,15 +131,15 @@ supabase db push
 
 Paste and run each file in this order:
 
-1. `20260930150000_mumbai_camera_network.sql`, if the Mumbai cameras aren't
+1. `20261001000000_reconcile_schema.sql`
+2. `20261001000100_rls.sql`
+3. `20261001000200_mumbai_camera_network.sql`, if the Mumbai cameras aren't
    loaded yet
-2. `20261001000000_reconcile_schema.sql`
-3. `20261001000100_rls.sql`
 
 If you use the CLI later, record these files as applied:
 
 ```bash
-supabase migration repair --status applied 20260930150000 20261001000000 20261001000100
+supabase migration repair --status applied 20261001000000 20261001000100 20261001000200
 ```
 
 ### Retention (pg_cron)
@@ -232,8 +232,3 @@ Re-running is always safe:
   `20260927_add_detection_tracking.sql` to `20260927000001_add_detection_tracking.sql`,
   or delete it: the reconcile migration covers it. If you rename it, also
   update `src/features/vehicles/api.test.ts`, which reads it by name.
-* **Delhi sorts after Mumbai.** `20260930_delhi_camera_network.sql` sorts
-  *after* `20260930150000_mumbai_camera_network.sql`, because `_` > digits in
-  byte order. On a fresh `supabase db reset` or `db start`, the Delhi seed
-  therefore overwrites the Mumbai cameras. Give the Delhi file a lower
-  full-timestamp version, such as `20260930000000_…`, or delete it.

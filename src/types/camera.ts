@@ -15,5 +15,7 @@ export interface Camera {
   road?: string;
   status: 'online' | 'offline';
   video_url: string;
+  /** Poster frame for the clip (resolved alongside video_url). */
+  poster_url?: string;
   created_at: string;
 }

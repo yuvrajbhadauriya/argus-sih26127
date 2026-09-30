@@ -23,8 +23,8 @@ function setVisible(visible: boolean) {
 }
 
 const camera: Camera = {
-  id: 'cam-001', name: 'India Gate Junction', code: 'IG-01', latitude: 28.6, longitude: 77.2,
-  zone: 'Central Delhi', direction: 'N', status: 'online', video_url: 'https://x/a.mp4', created_at: 't',
+  id: 'cam-001', name: 'Jogeshwari JVLR Junction', code: 'JG-01', latitude: 19.14, longitude: 72.85,
+  zone: 'Western Suburbs', direction: 'N', status: 'online', video_url: 'https://x/a.mp4', created_at: 't',
 };
 
 let play: ReturnType<typeof vi.fn<() => Promise<void>>>;
@@ -70,7 +70,7 @@ describe('CameraVideoPlayer', () => {
     setVisible(true);
     expect(play).toHaveBeenCalledTimes(1);
     expect(video().preload).toBe('auto');
-    expect(h.fetchCameraDetections).toHaveBeenCalledWith('IG-01', 'cam-001', expect.objectContaining({ signal: expect.any(AbortSignal) }));
+    expect(h.fetchCameraDetections).toHaveBeenCalledWith('JG-01', 'cam-001', expect.objectContaining({ signal: expect.any(AbortSignal) }));
     Object.defineProperty(video(), 'paused', { configurable: true, value: false });
     setVisible(false);
     expect(pause).toHaveBeenCalled();

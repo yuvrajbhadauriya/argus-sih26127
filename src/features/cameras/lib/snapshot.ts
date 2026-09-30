@@ -28,7 +28,7 @@ export function downloadDataUrl(dataUrl: string, filename: string): void {
   a.remove();
 }
 
-/** "IG-01_2026-09-30_15-04-05.png" (IST wall time). */
+/** "VP-01_2026-09-30_15-04-05.png" (IST wall time). */
 export function snapshotFilename(code: string, now: Date = new Date()): string {
   const parts = new Intl.DateTimeFormat('en-GB', {
     timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit',

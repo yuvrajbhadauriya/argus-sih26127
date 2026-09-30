@@ -13,13 +13,16 @@ vi.mock('@/lib/supabase/client', async () => {
 });
 
 import {
+  resolveCameraMedia,
   resolveSupabaseVideoUrl,
+  resolveVideoUrl,
   CAMERA_VIDEOS,
   SUPABASE_STORAGE_BASE,
   getCameras,
   getCameraById,
   getCamerasByZone,
 } from './api';
+import { CODE_ALIAS_MAP } from '@/features/detections/api';
 import { mockCameras } from '@/mocks/fixtures/mockCameras';
 
 beforeEach(() => {
@@ -27,61 +30,63 @@ beforeEach(() => {
   h.fake.reset();
 });
 
-describe('resolveSupabaseVideoUrl', () => {
-  it('passes through absolute http(s) URLs', () => {
-    expect(resolveSupabaseVideoUrl('https://a.b/c.mp4')).toBe('https://a.b/c.mp4');
-    expect(resolveSupabaseVideoUrl('http://a.b/c.mp4')).toBe('http://a.b/c.mp4');
+const LOCAL = '/videos-local/';
+const BUCKET = `${SUPABASE_STORAGE_BASE}mumbai/720p/`;
+
+describe('resolveCameraMedia / resolveVideoUrl', () => {
+  const vp = CAMERA_VIDEOS.find((c) => c.code === 'VP-01')!;
+
+  it('plays each registry camera from the configured source, with the other as fallback', () => {
+    expect(resolveCameraMedia(undefined, 'VP-01', undefined, 'local')).toEqual({
+      video: `${LOCAL}${vp.slug}.mp4`,
+      poster: `${LOCAL}${vp.slug}.jpg`,
+      fallback: `${BUCKET}${vp.slug}.mp4`,
+    });
+    expect(resolveCameraMedia(undefined, 'VP-01', undefined, 'supabase')).toEqual({
+      video: `${BUCKET}${vp.slug}.mp4`,
+      poster: `${BUCKET}${vp.slug}.jpg`,
+      fallback: `${LOCAL}${vp.slug}.mp4`,
+    });
   });
 
-  it('maps a relative path containing a known filename to the storage bucket', () => {
-    const f = CAMERA_VIDEOS[3].filename;
-    expect(resolveSupabaseVideoUrl(`/videos/${f}`)).toBe(`${SUPABASE_STORAGE_BASE}${f}`);
+  it('ignores a stale database video_url for registry cameras', () => {
+    const old = 'https://x.supabase.co/storage/v1/object/public/videos/13052823_3840_2160_30fps.mp4';
+    expect(resolveVideoUrl(old, 'VP-01', 'cam-003', 'supabase')).toBe(`${BUCKET}${vp.slug}.mp4`);
   });
 
-  it('matches by code case-insensitively and by id alias', () => {
-    const ig = `${SUPABASE_STORAGE_BASE}${CAMERA_VIDEOS[0].filename}`;
-    expect(resolveSupabaseVideoUrl(undefined, 'ig-01')).toBe(ig);
-    expect(resolveSupabaseVideoUrl(undefined, 'IG-01')).toBe(ig);
-    expect(resolveSupabaseVideoUrl('/videos/cam_001.mp4', undefined, 'cam-001')).toBe(ig);
+  it('matches by slug in a URL, by code case-insensitively and by id alias', () => {
+    const url = `${BUCKET}${vp.slug}.mp4`;
+    expect(resolveVideoUrl(`/videos/${vp.slug}.mp4`, undefined, undefined, 'supabase')).toBe(url);
+    expect(resolveVideoUrl(undefined, 'vp-01', undefined, 'supabase')).toBe(url);
+    const id = mockCameras.find((c) => c.code === 'VP-01')!.id;
+    expect(resolveVideoUrl(undefined, undefined, id, 'supabase')).toBe(url);
+    expect(resolveSupabaseVideoUrl).toBe(resolveVideoUrl);
   });
 
-  it('is deterministic for unknown codes and always returns a bucket URL', () => {
-    const a = resolveSupabaseVideoUrl(undefined, 'ZZ-99');
-    expect(a).toBe(resolveSupabaseVideoUrl(undefined, 'ZZ-99'));
-    expect(a.startsWith(SUPABASE_STORAGE_BASE)).toBe(true);
-    expect(resolveSupabaseVideoUrl()).toMatch(/\.mp4$/);
+  it('passes through absolute URLs of unknown cameras', () => {
+    expect(resolveVideoUrl('https://a.b/c.mp4', 'ZZ-99')).toBe('https://a.b/c.mp4');
+    expect(resolveCameraMedia('http://a.b/c.mp4', 'ZZ-99').fallback).toBe('');
   });
 
-  // BUG: commit cab6ab3 claims "all 9 cameras load their unique video ... without
-  // repeating", but CAMERA_VIDEOS maps CC-01, DW-01 and DK-01 onto the same files
-  // as IG-01, CP-01 and KB-01 (src/features/cameras/api.ts:21-23).
-  it.fails('BUG: each of the 9 cameras resolves to a unique video file', () => {
-    const files = new Set(CAMERA_VIDEOS.map((c) => c.filename));
-    expect(files.size).toBe(CAMERA_VIDEOS.length);
+  it('is deterministic for unknown codes and always returns a registry clip', () => {
+    const a = resolveVideoUrl(undefined, 'ZZ-99', undefined, 'supabase');
+    expect(a).toBe(resolveVideoUrl(undefined, 'ZZ-99', undefined, 'supabase'));
+    expect(a.startsWith(BUCKET)).toBe(true);
+    expect(resolveVideoUrl()).toMatch(/\.mp4$/);
   });
 
-  // BUG: the frontend video map disagrees with camera_config.json (the file the
-  // detection pipeline actually ran on) for KB-01, CC-01, DW-01, DK-01, so the
-  // bbox overlay for those cameras is drawn on top of a *different* video.
-  it.fails('BUG: frontend video per camera matches camera_config.json used by the pipeline', async () => {
-    const cfg = (await import('../../../pipeline/camera_config.json')).default as {
-      camera_code: string;
-      video_filename: string;
-    }[];
-    for (const c of cfg) {
-      const fe = CAMERA_VIDEOS.find((v) => v.code === c.camera_code);
-      expect({ code: c.camera_code, file: fe?.filename }).toEqual({ code: c.camera_code, file: c.video_filename });
-    }
+  it('gives every camera its own clip, matching pipeline/camera_config.json', async () => {
+    expect(new Set(CAMERA_VIDEOS.map((c) => c.slug)).size).toBe(CAMERA_VIDEOS.length);
+    const cfg = (await import('../../../pipeline/camera_config.json')).default as { camera_code: string; video_slug: string }[];
+    expect(CAMERA_VIDEOS.map((c) => [c.code, c.slug])).toEqual(cfg.map((c) => [c.camera_code, c.video_slug]));
   });
 
-  // BUG: three different CAM-X → code alias tables exist and disagree.
-  // features/cameras/api.ts says cam-d → LN-01, cam-e → AI-01, cam-h → DW-01;
-  // features/detections/api.ts and pipeline/insert_detections.py say CAM-D → DW-01, CAM-E → LN-01, CAM-G → AI-01.
-  it.fails('BUG: CAM-D alias resolves to DW-01 as in useCameraDetections/insert_detections', () => {
-    const dw = `${SUPABASE_STORAGE_BASE}${CAMERA_VIDEOS.find((v) => v.code === 'DW-01')!.filename}`;
-    const lnAliases = CAMERA_VIDEOS.find((v) => v.code === 'LN-01')!.aliases;
-    expect(lnAliases).not.toContain('cam-d');
-    expect(resolveSupabaseVideoUrl(undefined, 'CAM-D')).toBe(dw);
+  it('CAM-X aliases follow registry order, as in detections/api CODE_ALIAS_MAP', () => {
+    CAMERA_VIDEOS.forEach((c, i) => {
+      const alias = `CAM-${String.fromCharCode(65 + i)}`;
+      expect(CODE_ALIAS_MAP[alias]).toBe(c.code);
+      expect(resolveVideoUrl(undefined, alias, undefined, 'supabase')).toBe(`${BUCKET}${c.slug}.mp4`);
+    });
   });
 });
 
@@ -93,7 +98,8 @@ describe('getCameras (mock fallback, Supabase not configured)', () => {
       expect(typeof c.latitude).toBe('number');
       expect(typeof c.longitude).toBe('number');
       expect(['online', 'offline']).toContain(c.status);
-      expect(c.video_url.startsWith('http')).toBe(true);
+      expect(c.video_url).toMatch(/\/(videos-local|mumbai\/720p)\/[a-z0-9_-]+\.mp4$/);
+      expect(c.poster_url).toMatch(/\.jpg$/);
     }
     expect(h.fake.from).not.toHaveBeenCalled();
   });
@@ -125,12 +131,13 @@ describe('getCameras (Supabase configured, mocked client)', () => {
   it('queries cameras ordered by code and normalises lat/lng', async () => {
     h.fake.enqueue('cameras', {
       data: [
-        { id: 'cam-001', name: 'A', code: 'IG-01', lat: 1.5, lng: 2.5, zone: 'Z', direction: 'N', status: 'online', video_url: '/videos/cam_001.mp4', created_at: 't' },
+        { id: 'cam-001', name: 'A', code: 'JG-01', lat: 1.5, lng: 2.5, zone: 'Z', direction: 'N', status: 'online', video_url: '/videos/cam_001.mp4', created_at: 't' },
       ],
     });
     const cams = await getCameras();
     expect(cams[0]).toMatchObject({ id: 'cam-001', latitude: 1.5, longitude: 2.5 });
-    expect(cams[0].video_url).toBe(`${SUPABASE_STORAGE_BASE}${CAMERA_VIDEOS[0].filename}`);
+    expect(cams[0].video_url).toBe(resolveVideoUrl(undefined, 'JG-01'));
+    expect(cams[0].video_url).toContain(CAMERA_VIDEOS[0].slug);
     const call = h.fake.calls[0];
     expect(call.table).toBe('cameras');
     expect(h.fake.opsFor(call, 'order')[0]).toEqual(['code']);
@@ -154,7 +161,7 @@ describe('getCameras (Supabase configured, mocked client)', () => {
   });
 
   it('getCameraById uses eq(id).single()', async () => {
-    h.fake.enqueue('cameras', { data: { id: 'cam-002', code: 'CP-01', lat: 1, lng: 2 } });
+    h.fake.enqueue('cameras', { data: { id: 'cam-002', code: 'AN-01', lat: 1, lng: 2 } });
     const cam = await getCameraById('cam-002');
     expect(cam?.id).toBe('cam-002');
     const call = h.fake.calls[0];

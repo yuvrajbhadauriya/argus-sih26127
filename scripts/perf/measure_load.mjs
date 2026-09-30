@@ -104,7 +104,7 @@ async function measure(browser, route, profileName) {
   let afterClick = null;
   if (route.clickFirstCard) {
     const before = [...reqs.values()].reduce((s, r) => s + r.bytes, 0);
-    const card = page.getByText('IG-01', { exact: true }).first();
+    const card = page.getByText('JG-01', { exact: true }).first();
     if (await card.count()) {
       await card.click();
       await page.waitForTimeout(5000);

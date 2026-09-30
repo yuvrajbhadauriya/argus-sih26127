@@ -18,8 +18,8 @@ import { pickCamera } from '../lib/pickCamera';
 import { useCameras, clearCamerasCache, prefetchCameras } from '@/features/cameras/hooks/useCameras';
 
 const cam = (over: Partial<Camera>): Camera => ({
-  id: 'cam-001', name: 'India Gate Junction', code: 'IG-01', latitude: 28.6, longitude: 77.2,
-  zone: 'Central Delhi', direction: 'N', status: 'online', video_url: 'https://x/a.mp4', created_at: 't', ...over,
+  id: 'cam-001', name: 'Jogeshwari JVLR Junction', code: 'JG-01', latitude: 19.14, longitude: 72.85,
+  zone: 'Western Suburbs', direction: 'N', status: 'online', video_url: 'https://x/a.mp4', created_at: 't', ...over,
 });
 
 beforeEach(() => {
@@ -82,7 +82,7 @@ describe('CamerasPage', () => {
   it('renders the wall + selected feed and filters by zone (the zone Select is the only combobox)', async () => {
     api.getCameras.mockResolvedValue([
       cam({ id: 'c1', name: 'Alpha Cam', zone: 'Z1' }),
-      cam({ id: 'c2', name: 'Beta Cam', code: 'CP-01', zone: 'Z2', status: 'offline' }),
+      cam({ id: 'c2', name: 'Beta Cam', code: 'AN-01', zone: 'Z2', status: 'offline' }),
     ]);
     render(<MemoryRouter><CamerasPage /></MemoryRouter>);
     expect((await screen.findAllByText('Alpha Cam')).length).toBeGreaterThan(0);
@@ -141,6 +141,6 @@ describe('CamerasPage', () => {
     expect(await screen.findByText('boom')).toBeInTheDocument();
     api.getCameras.mockResolvedValue([cam({})]);
     await userEvent.click(screen.getByRole('button', { name: /try again/i }));
-    expect((await screen.findAllByText('India Gate Junction')).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText('Jogeshwari JVLR Junction')).length).toBeGreaterThan(0);
   });
 });

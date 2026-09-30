@@ -2,7 +2,10 @@
 // CameraVideoPlayer Component
 // Pure CCTV Video Feed with robust CORS & Supabase Storage video playback
 //
-// Bandwidth rules (the source clips are 4K/30fps, ~16–20 Mbps each):
+// Clips are the 720p Mumbai renditions (local dev copy or Supabase Storage,
+// see VITE_VIDEO_SOURCE); if the configured source fails, the other source is
+// tried once before the tile goes "Feed offline".
+// Bandwidth rules:
 // - nothing but metadata is requested until the player is on screen
 // - it only plays while visible (IntersectionObserver) and the tab is shown,
 //   and pauses as soon as it scrolls away
@@ -18,7 +21,7 @@ import type { Camera } from '@/types/camera';
 import type { Detection } from '@/types';
 import { useDetectionOverlay } from '@/features/detections/hooks/useDetectionOverlay';
 import { useCameraDetections } from '@/features/detections/hooks/useCameraDetections';
-import { resolveSupabaseVideoUrl } from '@/features/cameras/api';
+import { resolveCameraMedia } from '@/features/cameras/api';
 import { useInViewport } from '@/features/cameras/hooks/useInViewport';
 import { VIDEO_OVERLAY } from '@/shared/theme/tokens';
 import { VideoTile } from '@/shared/ui/VideoTile';
@@ -69,8 +72,10 @@ function PlayerInner({
 
   if (inView && !hasBeenVisible) setHasBeenVisible(true);
 
-  const videoSrc = resolveSupabaseVideoUrl(camera.video_url, camera.code, camera.id);
-  const fallbackSrc = resolveSupabaseVideoUrl('', camera.code, camera.id);
+  const media = resolveCameraMedia(camera.video_url, camera.code, camera.id);
+  const videoSrc = media.video;
+  const fallbackSrc = media.fallback;
+  const poster = camera.poster_url || media.poster || undefined;
 
   // Fetch real pipeline detections only once the feed is actually on screen.
   const hasPropDetections = !!propDetections && propDetections.length > 0;
@@ -134,7 +139,7 @@ function PlayerInner({
     const target = e.currentTarget;
     if (!usedFallbackRef.current && fallbackSrc && target.currentSrc !== fallbackSrc && target.src !== fallbackSrc) {
       usedFallbackRef.current = true;
-      console.warn(`Video load error for camera ${camera.code}. Falling back to unique Supabase video URL.`);
+      console.warn(`Video load error for camera ${camera.code}; trying the other video source.`);
       target.src = fallbackSrc;
       target.load();
       return;
@@ -179,6 +184,7 @@ function PlayerInner({
           <video
             ref={videoRef}
             src={videoSrc}
+            poster={poster}
             // Nothing until first visible, then metadata; upgraded to 'auto' when it starts playing.
             preload={hasBeenVisible ? 'metadata' : 'none'}
             loop

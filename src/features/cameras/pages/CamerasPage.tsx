@@ -2,7 +2,7 @@
 // CamerasPage — video wall, selected (streaming) feed and AI detection rail.
 // Selection lives in the URL (?cam=CODE); it defaults to the first online
 // camera in the current zone. Only the primary feed streams — wall tiles are
-// posters, because each source clip is 4K at 16–20 Mbps.
+// posters, so only one clip streams at a time.
 // ═══════════════════════════════════════════════════
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
