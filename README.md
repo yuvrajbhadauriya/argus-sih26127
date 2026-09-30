@@ -1,6 +1,49 @@
 # NERO — Traffic Video Intelligence & ANPR Analytics System
 
-NERO is an automated traffic monitoring and licence plate tracking system (Smart India Hackathon, BEL PS 127). This repository contains the React + TypeScript dashboard (deployed on Vercel from the repo root) and the Python offline detection / Supabase ingest pipeline.
+NERO is a city-wide multi-camera ANPR trajectory-tracking and traffic-analytics platform (Smart India Hackathon 2026, BEL PS **SIH26127**). This repository contains the React + TypeScript dashboard (deployed on Vercel from the repo root) and the Python detection / Supabase ingest / simulation / evaluation pipeline.
+
+| Doc | What's in it |
+| --- | --- |
+| [docs/PS_COMPLIANCE.md](docs/PS_COMPLIANCE.md) | Every PS requirement → screen, code, how to demo, status |
+| [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md) | 5–7 minute judge walkthrough (plates, clicks, talking points) |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Current architecture + production scale-out (edge inference, event bus, partitioned PostGIS, HLS/CDN) |
+| [docs/DATABASE.md](docs/DATABASE.md) | Migrations, RLS matrix, Realtime, applying to the hosted project |
+| [pipeline/detect/README.md](pipeline/detect/README.md) | Model API contract and how to plug in the trained GPU model |
+
+## Quick start
+
+```bash
+npm install
+python3 pipeline/tools/link_local_videos.py   # optional: local camera clips for `npm run dev`
+npm run dev                                   # http://localhost:5173
+```
+
+With no `.env` the app runs on the **simulated Mumbai network** (status pill: *Simulated*). Sign in
+at `/login` with the **demo operator** to acknowledge alerts and edit the watchlist, and press
+**Replay the day** on the Live Map or Alerts page to watch plate reads stream in and alerts fire
+live. With `VITE_SUPABASE_URL` set the same screens read the database (status pill: *Live*),
+sign-in uses Supabase Auth and new alerts arrive through Supabase Realtime.
+
+### Environment variables
+
+| Variable | Where | Purpose |
+| --- | --- | --- |
+| `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` | browser | Live mode (read with the anon key; writes need a signed-in operator/admin). Unset → simulated/demo mode. |
+| `VITE_VIDEO_SOURCE` | browser | `local` → `/videos-local/<slug>.mp4` (default in `npm run dev`), `supabase` → Storage `videos/mumbai/720p/<slug>.mp4` (default in builds). The player falls back to the other source once. |
+| `DETECTION_API_URL`, `DETECTION_API_KEY` | server only | Trained ANPR model API used by `/api/detect` and the batch pipeline. **Never** prefix with `VITE_`. |
+| `DETECTION_API_AUTH_HEADER`, `DETECTION_API_TIMEOUT_MS`, `DETECTION_API_REQUEST_FORMAT`, `DETECTION_API_IMAGE_FIELD`, `DETECTION_API_HEALTH_URL` | server only | Optional adapter settings (see `.env.example`, `pipeline/detect/README.md`). |
+| `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | pipeline only | Ingest / seeding scripts (bypass RLS). |
+
+### What is real and what is simulated
+
+* **Real:** 8 Mumbai traffic clips at their real junctions, the road network and OSRM routes, the
+  database schema / RLS / auth / Realtime, the alert, trajectory and analytics engines.
+* **Simulated:** the vehicles travelling *between* cameras (2,600 plates, 3,471 journeys, 8,523
+  reads on 29 Sep 2026) and the watchlist/anomaly cases — marked with the *Simulated city network*
+  badge and the top-bar data-source pill.
+* **Needs the model API:** plate reads from the clips themselves and the > 90 % accuracy figure
+  (Model Performance page shows a sample run until `pipeline/eval/evaluate.py` is run against the
+  trained model).
 
 ## Repository layout
 
@@ -13,17 +56,19 @@ NERO is an automated traffic monitoring and licence plate tracking system (Smart
 │   ├── main.tsx              # entry: ErrorBoundary + App
 │   ├── app/                  # App router, ErrorBoundary, cross-page smoke test
 │   ├── config/               # env.ts (import.meta.env), constants.ts (map, tiles, storage)
-│   ├── lib/supabase/         # client.ts — the single Supabase client
+│   ├── lib/                  # supabase/client.ts (lazy SDK), dataSource.ts (Live/Simulated/Demo)
 │   ├── shared/               # generic ui/, layout/, map/ (BaseTileLayer)
 │   ├── features/
 │   │   ├── cameras/          # api.ts, hooks/useCameras, components/CameraVideoPlayer, pages/
 │   │   ├── live-map/         # components/MapView + CameraMarker, pages/LiveMapPage
 │   │   ├── detections/       # api.ts, hooks/useCameraDetections + useDetectionOverlay, pages/
 │   │   ├── vehicles/         # api.ts, components/TrajectoryMap, pages/
-│   │   ├── alerts/           # api.ts, pages/
-│   │   ├── analytics/        # api.ts, pages/
-│   │   └── admin/            # pages/
-│   ├── mocks/fixtures/       # mock data used as fallbacks when Supabase is not configured
+│   │   ├── alerts/           # api.ts, realtime.ts, live.ts (event bus), LiveAlertBridge, pages/
+│   │   ├── analytics/        # api.ts, lib/aggregate.ts, pages/
+│   │   ├── auth/             # session.ts, guard.ts, LoginPage, SignInPrompt
+│   │   ├── replay/           # "Replay the day": clock.ts, engine.ts, ReplayControls
+│   │   └── admin/            # api.ts (audit log), pages/
+│   ├── mocks/fixtures/       # demo fixtures generated from the simulation (simulated/demo mode only)
 │   ├── types/                # shared TS types
 │   └── test/                 # Vitest setup + Supabase fake
 ├── pipeline/
@@ -42,14 +87,17 @@ Tests are colocated with the code they cover (`*.test.ts(x)`); cross-feature imp
 ## Web dashboard (Vite + React + TS)
 
 ```bash
-cp .env.example .env          # set VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY
+cp .env.example .env          # set VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY (optional)
 npm install
 npm run dev                   # http://localhost:5173
-npm run build                 # tsc -b && vite build
+npm run build                 # tsc -b && vite build  (public/videos-local is never copied to dist/)
+npm run preview               # serves dist/ (+ /videos-local from public/ for local clips)
 npm run lint                  # oxlint
 ```
 
-Without Supabase env vars the dashboard falls back to the mock fixtures in `src/mocks/fixtures`.
+Without Supabase env vars the dashboard runs in simulated mode (never as a silent fallback: when
+Supabase *is* configured and a request fails, the page shows the error and the status pill says
+*Live · degraded*). The Supabase SDK is only downloaded in live mode.
 
 Camera clips stream from `VITE_VIDEO_SOURCE`: `local` (default in `npm run dev`) plays
 `public/videos-local/<slug>.mp4` — create it with `python3 pipeline/tools/link_local_videos.py` —
@@ -102,7 +150,7 @@ python3 -m venv .venv-test && .venv-test/bin/pip install -r requirements-dev.txt
 npm run test:py               # pytest (pipeline/tests)
 ```
 
-Tests marked `it.fails` / `xfail(strict=True)` document known bugs; they flip to failures once the bug is fixed.
+Tests marked `it.fails` / `xfail(strict=True)` would document known bugs; there are none left — the former ones are now regression tests.
 
 ## Detection pipeline (Python)
 
@@ -143,7 +191,7 @@ Schema, row level security, audit trail and retention are defined in `supabase/m
 * how to verify the setup
 * the pgTAP tests (`supabase test db`)
 
-**Access model today:** the dashboard uses the anon key **read-only**. With RLS applied, the Admin page's writes (acknowledging alerts, editing the watchlist) **require a signed-in user whose `app_metadata.role` is `operator` or `admin`**. Production should also remove anon read access, because ANPR data is personal data under the DPDP Act.
+**Access model today:** the dashboard uses the anon key **read-only**. Writes (acknowledging alerts, registering/editing cameras, editing the watchlist) **require a signed-in user whose `app_metadata.role` is `operator` or `admin`** — sign in at `/login`; guests who press a write button are asked to sign in. New alerts are pushed through Supabase Realtime (`alerts` table only). Production should also remove anon read access, because ANPR data is personal data under the DPDP Act.
 
 ### Detection JSON format (`detections_<camera_code>.json`)
 
