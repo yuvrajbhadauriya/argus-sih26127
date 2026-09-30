@@ -21,6 +21,7 @@ const ROUTE_PAGES: Record<string, string> = {
   '/vehicles': 'src/features/vehicles/pages/VehiclesPage.tsx',
   '/alerts': 'src/features/alerts/pages/AlertsPage.tsx',
   '/analytics': 'src/features/analytics/pages/AnalyticsPage.tsx',
+  '/accuracy': 'src/features/golden-set/pages/AccuracyProofPage.tsx',
   '/model': 'src/features/model-performance/pages/ModelPerformancePage.tsx',
   '/detections': 'src/features/detections/pages/DetectionsPage.tsx',
   '/admin': 'src/features/admin/pages/AdminPage.tsx',

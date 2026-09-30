@@ -4,6 +4,7 @@
 
 import { NavLink } from 'react-router-dom';
 import {
+  BadgeCheckIcon,
   CctvIcon,
   ChartColumnIcon,
   MapIcon,
@@ -46,7 +47,14 @@ const NAV_GROUPS: { heading: string; items: NavItem[] }[] = [
       { path: '/detections', label: 'Detections', Icon: ScanLineIcon },
     ],
   },
-  { heading: 'Intelligence', items: [{ path: '/analytics', label: 'Analytics', Icon: ChartColumnIcon }, { path: '/model', label: 'Model Performance', Icon: ScanTextIcon }] },
+  {
+    heading: 'Intelligence',
+    items: [
+      { path: '/accuracy', label: 'Accuracy Proof', Icon: BadgeCheckIcon },
+      { path: '/analytics', label: 'Analytics', Icon: ChartColumnIcon },
+      { path: '/model', label: 'Model Performance', Icon: ScanTextIcon },
+    ],
+  },
   { heading: 'System', items: [{ path: '/admin', label: 'Admin', Icon: SettingsIcon }] },
 ];
 
