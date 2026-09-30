@@ -4,25 +4,26 @@
 // ═══════════════════════════════════════════════════
 
 import { FlaskConicalIcon } from 'lucide-react';
+import { Badge } from '@/shared/ui/Badge';
 import { SHOW_SIMULATION_BADGE } from '../config';
 
 interface SimulationBadgeProps {
   className?: string;
-  /** Compact variant for map overlays */
+  /** Compact variant for map overlays and KPI hints */
   compact?: boolean;
 }
 
-export function SimulationBadge({ className = '', compact = false }: SimulationBadgeProps) {
+export function SimulationBadge({ className, compact = false }: SimulationBadgeProps) {
   if (!SHOW_SIMULATION_BADGE) return null;
   return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full border border-amber-400/30 bg-amber-400/10 font-semibold text-amber-300 ${
-        compact ? 'px-2 py-0.5 text-[10px]' : 'px-2.5 py-0.5 text-[11px]'
-      } ${className}`}
+    <Badge
+      tone="warning"
+      size={compact ? 'sm' : 'md'}
+      icon={<FlaskConicalIcon strokeWidth={1.75} />}
+      className={className}
       title="Camera clips are stock footage pinned to real Delhi junctions; cross-camera journeys are simulated on the real road network."
     >
-      <FlaskConicalIcon size={compact ? 10 : 12} aria-hidden="true" />
       Simulated city network
-    </span>
+    </Badge>
   );
 }
