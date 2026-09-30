@@ -11,6 +11,9 @@
 //   and pauses as soon as it scrolls away
 // - detections are only fetched once the player has been visible
 // - a broken feed shows an explicit "Feed offline" state instead of a black tile
+// Live clock: playback position follows the camera's virtual live clock
+// (../lib/liveClock.ts) — on load, on resume, when the tab comes back, after
+// the loop point and whenever it drifts — so a feed never restarts at 0.
 // `crossOrigin="anonymous"` + `muted playsInline` are required for autoplay
 // and for canvas frame capture — keep them.
 // ═══════════════════════════════════════════════════
@@ -23,6 +26,8 @@ import { useDetectionOverlay } from '@/features/detections/hooks/useDetectionOve
 import { useCameraDetections } from '@/features/detections/hooks/useCameraDetections';
 import { resolveCameraMedia } from '@/features/cameras/api';
 import { useInViewport } from '@/features/cameras/hooks/useInViewport';
+import { fetchCameraEvents } from '@/features/detections/api';
+import { LIVE_DRIFT_TOLERANCE_SEC, syncVideoToLiveClock } from '@/features/cameras/lib/liveClock';
 import { VIDEO_OVERLAY } from '@/shared/theme/tokens';
 import { VideoTile } from '@/shared/ui/VideoTile';
 
@@ -31,7 +36,7 @@ export type FeedStatus = 'connecting' | 'playing' | 'offline';
 interface CameraVideoPlayerProps {
   camera: Camera;
   detections?: Detection[];
-  /** Receives the current <video> element (null when torn down / offline). Used by LiveDetectPanel + snapshot. */
+  /** Receives the current <video> element (null when torn down / offline). Used by the snapshot button and camera health. */
   onVideoElement?: (el: HTMLVideoElement | null) => void;
   /** The pipeline detections loaded for this clip (shared so callers need not refetch). */
   onDetections?: (detections: Detection[]) => void;
@@ -41,6 +46,14 @@ interface CameraVideoPlayerProps {
   mediaRef?: RefObject<HTMLDivElement | null>;
   /** Extra chips in the frame's top-right corner. */
   topRight?: ReactNode;
+  /** 'primary' = the large selected feed; 'tile' = a video-wall tile (plate labels only). */
+  variant?: 'primary' | 'tile';
+  /** Tile only: selection state / handler / caption. */
+  selected?: boolean;
+  onSelect?: () => void;
+  footer?: ReactNode;
+  /** Watchlisted plates (plateKey form) — drawn in red on the overlay. */
+  watchlist?: ReadonlySet<string>;
   className?: string;
 }
 
@@ -59,8 +72,14 @@ function PlayerInner({
   onDetections,
   mediaRef,
   topRight,
+  variant = 'primary',
+  selected,
+  onSelect,
+  footer,
+  watchlist,
   className,
 }: CameraVideoPlayerProps & { onRetry: () => void }) {
+  const tile = variant === 'tile';
   const containerRef = useRef<HTMLDivElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -85,7 +104,47 @@ function PlayerInner({
   const activeDetections = hasPropDetections ? propDetections! : realDetections;
 
   // Sync bounding box canvas overlay with video timeline
-  const { activeDetections: inFrame } = useDetectionOverlay(videoRef, canvasRef, activeDetections);
+  const { activeDetections: inFrame } = useDetectionOverlay(videoRef, canvasRef, activeDetections, {
+    variant: tile ? 'tile' : 'full',
+    watchlist,
+  });
+
+  // Canonical clip length for the live clock (events file) — shared with the
+  // overlay and the live plate-read list so all three loop together.
+  const clockDurRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!hasBeenVisible) return;
+    let active = true;
+    fetchCameraEvents(camera.code).then((doc) => {
+      if (!active || !doc?.duration_sec) return;
+      clockDurRef.current = doc.duration_sec;
+      const v = videoRef.current;
+      if (v) syncVideoToLiveClock(v, camera.code, 0.25, Date.now(), doc.duration_sec);
+    });
+    return () => {
+      active = false;
+    };
+  }, [camera.code, hasBeenVisible]);
+
+  // Keep playback on the live clock: after metadata, after the loop point and
+  // whenever buffering / throttling makes it drift.
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || status === 'offline') return;
+    const snap = () => syncVideoToLiveClock(video, camera.code, 0.25, Date.now(), clockDurRef.current);
+    const drift = () => {
+      if (!video.paused && !video.seeking) syncVideoToLiveClock(video, camera.code, LIVE_DRIFT_TOLERANCE_SEC, Date.now(), clockDurRef.current);
+    };
+    video.addEventListener('loadedmetadata', snap);
+    video.addEventListener('ended', snap);
+    video.addEventListener('timeupdate', drift);
+    snap();
+    return () => {
+      video.removeEventListener('loadedmetadata', snap);
+      video.removeEventListener('ended', snap);
+      video.removeEventListener('timeupdate', drift);
+    };
+  }, [camera.code, status, videoSrc]);
 
   // Report status / element to the caller (AI detection panel, snapshot).
   const statusCb = useRef(onStatusChange);
@@ -118,6 +177,8 @@ function PlayerInner({
       if (shouldPlay) {
         video.muted = true;
         if (video.preload !== 'auto') video.preload = 'auto';
+        // Resume where the "live" camera is now, not where it was paused.
+        syncVideoToLiveClock(video, camera.code, 0.25, Date.now(), clockDurRef.current);
         const p = video.play();
         if (p && typeof p.catch === 'function') {
           p.catch((err: unknown) => {
@@ -133,7 +194,7 @@ function PlayerInner({
     sync();
     document.addEventListener('visibilitychange', sync);
     return () => document.removeEventListener('visibilitychange', sync);
-  }, [inView, videoSrc, status]);
+  }, [inView, videoSrc, status, camera.code]);
 
   const handleError = (e: React.SyntheticEvent<HTMLVideoElement>) => {
     const target = e.currentTarget;
@@ -155,16 +216,19 @@ function PlayerInner({
 
   return (
     <VideoTile
-      size="lg"
+      size={tile ? 'sm' : 'lg'}
       code={camera.code}
       name={camera.name}
       zone={camera.zone}
       status={tileStatus}
       onRetry={onRetry}
-      clock={status === 'playing'}
+      clock={!tile && status === 'playing'}
+      selected={selected}
+      onSelect={onSelect}
+      footer={footer}
       topRight={
         <>
-          {status === 'playing' && inFrame.length > 0 && (
+          {!tile && status === 'playing' && inFrame.length > 0 && (
             <span
               className="inline-flex h-5 items-center gap-1 rounded-sm px-1.5 text-2xs font-semibold tabular-nums"
               style={{ background: 'var(--overlay-bg)', color: 'var(--overlay-fg)' }}

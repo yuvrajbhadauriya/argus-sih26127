@@ -1,8 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { captureVideoFrame, detectCapturedFrame, DetectFrameError } from './detectFrame';
-import { LiveDetectPanel } from '../components/LiveDetectPanel';
 
 function fakeVideo(opts: { width?: number; height?: number; readyState?: number; currentTime?: number } = {}) {
   const video = document.createElement('video');
@@ -89,29 +86,5 @@ describe('detectCapturedFrame', () => {
   it('maps network failures', async () => {
     vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('Failed to fetch'));
     await expect(detectCapturedFrame(frame)).rejects.toMatchObject({ code: 'network' });
-  });
-});
-
-describe('LiveDetectPanel', () => {
-  it('runs detection and lists plates with confidence and latency', async () => {
-    stubCanvas(() => 'data:image/jpeg;base64,AAAA');
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(RESULT));
-    const ref = { current: fakeVideo() };
-    render(<LiveDetectPanel videoRef={ref} cameraCode="JG-01" />);
-    await userEvent.click(screen.getByRole('button', { name: /run ai detection on this frame/i }));
-    expect(await screen.findByText('MH 01 AB 1234')).toBeInTheDocument();
-    expect(screen.getByText(/OCR 98.7%/)).toBeInTheDocument();
-    expect(screen.getByText('87 ms')).toBeInTheDocument();
-    expect(screen.getByTestId('detect-overlay')).toBeInTheDocument();
-  });
-
-  it('shows a readable error', async () => {
-    stubCanvas(() => {
-      throw new DOMException('tainted', 'SecurityError');
-    });
-    const ref = { current: fakeVideo() };
-    render(<LiveDetectPanel videoRef={ref} cameraCode="JG-01" />);
-    await userEvent.click(screen.getByRole('button', { name: /run ai detection/i }));
-    expect(await screen.findByRole('alert')).toHaveTextContent(/another origin/);
   });
 });

@@ -1,8 +1,9 @@
 // ═══════════════════════════════════════════════════
 // CamerasPage — video wall, selected (streaming) feed and AI detection rail.
 // Selection lives in the URL (?cam=CODE); it defaults to the first online
-// camera in the current zone. Only the primary feed streams — wall tiles are
-// posters, so only one clip streams at a time.
+// camera in the current zone. The primary feed streams with full ANPR labels;
+// on desktop the on-screen wall tiles stream too (plate labels only), every
+// clip on its camera's live clock. Phones / data saver get poster tiles.
 // ═══════════════════════════════════════════════════
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
@@ -15,6 +16,8 @@ import type { Detection } from '@/types';
 import { useCameras } from '@/features/cameras/hooks/useCameras';
 import { CameraVideoPlayer, type FeedStatus } from '@/features/cameras/components/CameraVideoPlayer';
 import { WallTile } from '@/features/cameras/components/WallTile';
+import { canStreamWall } from '@/features/cameras/lib/wall';
+import { useWatchlistKeys } from '@/features/detections/hooks/useWatchlistKeys';
 import { CameraAiPanel } from '@/features/cameras/components/CameraAiPanel';
 import { pickCamera } from '@/features/cameras/lib/pickCamera';
 import { composeSnapshot, downloadDataUrl, snapshotFilename } from '@/features/cameras/lib/snapshot';
@@ -51,6 +54,8 @@ export function CamerasPage() {
   const [params, setParams] = useSearchParams();
   const [selectedZone, setSelectedZone] = useState<string>('all');
   const [density, setDensity] = useState<Density>(readDensity);
+  const [liveWall] = useState(canStreamWall);
+  const watchlist = useWatchlistKeys();
 
   const zones = ['all', ...new Set(cameras.map((c) => c.zone))];
   const filtered = selectedZone === 'all' ? cameras : cameras.filter((c) => c.zone === selectedZone);
@@ -58,8 +63,12 @@ export function CamerasPage() {
   const online = cameras.filter((c) => c.status === 'online').length;
   const offline = cameras.length - online;
 
-  const select = (cam: Camera) =>
-    setParams(
+  const select = (cam: Camera) => {
+    // On narrow layouts the primary feed is above the wall: bring it into view
+    // (it only streams while visible).
+    const primary = document.querySelector('[aria-label="Primary feed"]');
+    if (primary && primary.getBoundingClientRect().top < 0) primary.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    return setParams(
       (prev) => {
         const next = new URLSearchParams(prev);
         next.set('cam', cam.code);
@@ -67,6 +76,7 @@ export function CamerasPage() {
       },
       { replace: true },
     );
+  };
 
   const changeDensity = (id: string) => {
     const d = id as Density;
@@ -81,7 +91,7 @@ export function CamerasPage() {
   const header = (
     <PageHeader
       title="Camera Network"
-      description="Live ANPR feeds with on-frame DEIM + PARSeq detections"
+      description="Live ANPR feeds with on-frame vehicle and plate reads by the AI engine"
       icon={CctvIcon}
       meta={
         !loading && !error && cameras.length > 0 ? (
@@ -161,7 +171,14 @@ export function CamerasPage() {
       </h2>
       <div className={`grid gap-3 ${WALL_COLS[density]}`}>
         {filtered.map((camera) => (
-          <WallTile key={camera.id} camera={camera} selected={selected?.id === camera.id} onSelect={() => select(camera)} />
+          <WallTile
+            key={camera.id}
+            camera={camera}
+            selected={selected?.id === camera.id}
+            onSelect={() => select(camera)}
+            live={liveWall}
+            watchlist={watchlist}
+          />
         ))}
       </div>
     </section>
@@ -173,7 +190,7 @@ export function CamerasPage() {
       {selected ? (
         // Keyed by camera: switching tears down the old stream, aborts its
         // detection request and resets the AI rail in one go.
-        <CameraWorkspace key={selected.id} camera={selected} wall={wall} />
+        <CameraWorkspace key={selected.id} camera={selected} wall={wall} watchlist={watchlist} />
       ) : (
         wall
       )}
@@ -181,7 +198,7 @@ export function CamerasPage() {
   );
 }
 
-function CameraWorkspace({ camera, wall }: { camera: Camera; wall: ReactNode }) {
+function CameraWorkspace({ camera, wall, watchlist }: { camera: Camera; wall: ReactNode; watchlist: ReadonlySet<string> }) {
   const navigate = useNavigate();
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const mediaRef = useRef<HTMLDivElement | null>(null);
@@ -272,6 +289,7 @@ function CameraWorkspace({ camera, wall }: { camera: Camera; wall: ReactNode }) 
             onVideoElement={onVideoElement}
             onStatusChange={setFeedStatus}
             onDetections={setDetections}
+            watchlist={watchlist}
           />
         </section>
         {wall}
@@ -279,7 +297,6 @@ function CameraWorkspace({ camera, wall }: { camera: Camera; wall: ReactNode }) 
 
       <CameraAiPanel
         camera={camera}
-        videoRef={videoRef}
         feedStatus={feedStatus}
         detections={detections}
         resolution={resolution}

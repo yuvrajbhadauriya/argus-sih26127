@@ -4,11 +4,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, act, fireEvent } from '@testing-library/react';
 import type { Camera } from '@/types/camera';
 
-const h = vi.hoisted(() => ({ fetchCameraDetections: vi.fn() }));
-vi.mock('@/features/detections/api', () => ({ fetchCameraDetections: h.fetchCameraDetections }));
+const h = vi.hoisted(() => ({ fetchCameraDetections: vi.fn(), fetchCameraEvents: vi.fn() }));
+vi.mock('@/features/detections/api', () => ({ fetchCameraDetections: h.fetchCameraDetections, fetchCameraEvents: h.fetchCameraEvents }));
 vi.mock('@/features/detections/hooks/useDetectionOverlay', () => ({ useDetectionOverlay: () => ({ activeDetections: [] }) }));
 
 import { CameraVideoPlayer } from './CameraVideoPlayer';
+import { livePosition } from '../lib/liveClock';
 
 let ioCallback: IntersectionObserverCallback | null = null;
 class FakeIO {
@@ -34,6 +35,7 @@ beforeEach(() => {
   ioCallback = null;
   vi.stubGlobal('IntersectionObserver', FakeIO);
   h.fetchCameraDetections.mockReset().mockResolvedValue([]);
+  h.fetchCameraEvents.mockReset().mockResolvedValue(null);
   play = vi.fn(() => Promise.resolve());
   pause = vi.fn(() => {});
   vi.spyOn(HTMLMediaElement.prototype, 'play').mockImplementation(play);
@@ -104,5 +106,76 @@ describe('CameraVideoPlayer', () => {
     fireEvent.error(video());
     expect(onStatusChange).toHaveBeenLastCalledWith('offline');
     expect(onVideoElement).toHaveBeenLastCalledWith(null);
+  });
+
+  describe('live clock', () => {
+    /** Give the jsdom <video> real-looking media state. */
+    function media(v: HTMLVideoElement, duration: number, currentTime = 0) {
+      let t = currentTime;
+      Object.defineProperty(v, 'duration', { configurable: true, get: () => duration });
+      Object.defineProperty(v, 'readyState', { configurable: true, get: () => 4 });
+      Object.defineProperty(v, 'currentTime', { configurable: true, get: () => t, set: (x: number) => { t = x; } });
+      return () => t;
+    }
+
+    afterEach(() => vi.useRealTimers());
+
+    it('starts at the camera\'s live position when metadata loads (not at 0)', () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-09-30T10:00:00Z'));
+      render(<CameraVideoPlayer camera={camera} />);
+      const time = media(video(), 57);
+      setVisible(true);
+      fireEvent.loadedMetadata(video());
+      expect(time()).toBeCloseTo(livePosition('JG-01', 57), 3);
+    });
+
+    it('resumes at the live position after being paused off screen', () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-09-30T10:00:00Z'));
+      render(<CameraVideoPlayer camera={camera} />);
+      const time = media(video(), 57);
+      setVisible(true);
+      fireEvent.loadedMetadata(video());
+      const first = time();
+      Object.defineProperty(video(), 'paused', { configurable: true, value: false });
+      setVisible(false); // paused where it was
+      expect(pause).toHaveBeenCalled();
+      vi.setSystemTime(new Date('2026-09-30T10:00:20Z')); // 20 s later
+      Object.defineProperty(video(), 'paused', { configurable: true, value: true });
+      setVisible(true);
+      expect(time()).toBeCloseTo(livePosition('JG-01', 57), 3);
+      expect(time()).toBeCloseTo((first + 20) % 57, 3);
+      expect(play).toHaveBeenCalledTimes(2);
+    });
+
+    it('corrects drift while playing but leaves small jitter alone', () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-09-30T10:00:00Z'));
+      render(<CameraVideoPlayer camera={camera} />);
+      const time = media(video(), 57);
+      setVisible(true);
+      Object.defineProperty(video(), 'paused', { configurable: true, value: false });
+      Object.defineProperty(video(), 'seeking', { configurable: true, value: false });
+      const live = livePosition('JG-01', 57);
+      video().currentTime = (live + 0.5) % 57;
+      fireEvent.timeUpdate(video());
+      expect(time()).toBeCloseTo((live + 0.5) % 57, 3);
+      video().currentTime = (live + 10) % 57; // e.g. stalled / looped early
+      fireEvent.timeUpdate(video());
+      expect(time()).toBeCloseTo(live, 3);
+    });
+
+    it('uses the canonical clip duration from the ANPR events file', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-09-30T10:00:00Z'));
+      h.fetchCameraEvents.mockResolvedValue({ camera_code: 'JG-01', duration_sec: 50, events: [] });
+      render(<CameraVideoPlayer camera={camera} />);
+      const time = media(video(), 57);
+      setVisible(true);
+      await act(async () => {});
+      expect(h.fetchCameraEvents).toHaveBeenCalledWith('JG-01');
+      expect(time()).toBeCloseTo(livePosition('JG-01', 50), 3);
+    });
   });
 });

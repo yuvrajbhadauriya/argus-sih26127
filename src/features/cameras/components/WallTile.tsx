@@ -1,21 +1,39 @@
-// Video-wall tile. Wall tiles never stream — they show the clip's poster frame
-// if the camera has one, otherwise a neutral frame. Selecting a tile moves it
-// into the primary feed.
+// Video-wall tile. On a desktop connection each on-screen tile streams its
+// clip on the camera's live clock with plate labels drawn over it (players
+// only load / play while visible). On phones, data-saver connections, and for
+// the camera already in the primary view, the tile shows the clip's poster
+// frame instead. Selecting a tile moves it into the primary feed.
 import { useState } from 'react';
 import { CctvIcon } from 'lucide-react';
 import type { Camera } from '@/types/camera';
 import { VideoTile } from '@/shared/ui/VideoTile';
+import { CameraVideoPlayer } from './CameraVideoPlayer';
 
 interface WallTileProps {
   camera: Camera;
   selected: boolean;
   onSelect: () => void;
+  /** Stream the clip (see canStreamWall) instead of showing the poster. */
+  live?: boolean;
+  watchlist?: ReadonlySet<string>;
 }
 
-export function WallTile({ camera, selected, onSelect }: WallTileProps) {
+export function WallTile({ camera, selected, onSelect, live = false, watchlist }: WallTileProps) {
   const [posterFailed, setPosterFailed] = useState(false);
   const poster = posterFailed ? undefined : camera.poster_url;
   const offline = camera.status === 'offline';
+
+  const footer = (
+    <span className="flex min-w-0 items-center gap-1.5">
+      <span className="truncate">{camera.zone}</span>
+      <span className="text-fg-subtle" aria-hidden="true">·</span>
+      <span className="shrink-0">{camera.direction}</span>
+    </span>
+  );
+
+  if (live && !selected && !offline) {
+    return <CameraVideoPlayer camera={camera} variant="tile" selected={false} onSelect={onSelect} footer={footer} watchlist={watchlist} />;
+  }
 
   return (
     <VideoTile
@@ -26,13 +44,7 @@ export function WallTile({ camera, selected, onSelect }: WallTileProps) {
       status={offline ? 'offline' : selected ? 'live' : 'paused'}
       selected={selected}
       onSelect={onSelect}
-      footer={
-        <span className="flex min-w-0 items-center gap-1.5">
-          <span className="truncate">{camera.zone}</span>
-          <span className="text-fg-subtle" aria-hidden="true">·</span>
-          <span className="shrink-0">{camera.direction}</span>
-        </span>
-      }
+      footer={footer}
     >
       {poster ? (
         <img src={poster} alt="" loading="lazy" onError={() => setPosterFailed(true)} className="h-full w-full object-cover" />

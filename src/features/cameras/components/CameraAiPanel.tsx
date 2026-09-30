@@ -1,25 +1,29 @@
-// Right rail of the Cameras screen: on-demand AI detection for the current
-// frame, the pipeline detections recorded for this clip, and camera health.
-import { useMemo, type RefObject } from 'react';
+// Right rail of the Cameras screen: AI engine status, the live plate reads of
+// the selected camera (the real model reads on this clip, replayed on the
+// camera's live clock — the same instants the video overlay shows them) and
+// camera health.
+import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BrainCircuitIcon, ListIcon } from 'lucide-react';
+import { ListIcon, ScanLineIcon } from 'lucide-react';
 import type { Camera } from '@/types/camera';
 import type { Detection } from '@/types';
 import { Panel } from '@/shared/ui/Card';
-import { DataTable, type Column } from '@/shared/ui/DataTable';
 import { EmptyState } from '@/shared/ui/EmptyState';
 import { PlateChip } from '@/shared/ui/PlateChip';
+import { SeverityChip } from '@/shared/ui/SeverityChip';
 import { StatusPill } from '@/shared/ui/StatusPill';
-import { vehicleClassToPlateVariant } from '@/shared/lib/plate';
-import { LiveDetectPanel } from '@/features/detections/components/LiveDetectPanel';
-import { VehicleClass } from '@/features/detections/components/VehicleClass';
-import { formatFrameTime, plateKey, recentPlateReads } from '@/features/detections/lib/log';
+import { vehicleClassToPlateVariant, normalizePlate } from '@/shared/lib/plate';
+import { AiEngineStatusPill } from '@/features/ai-engine/components/AiEngineStatus';
+import { VehicleClassIcon } from '@/features/detections/components/VehicleClass';
+import { useLiveReads } from '@/features/detections/hooks/useLiveReads';
+import { useWatchlistIndex } from '@/features/detections/hooks/useWatchlistKeys';
+import { DISPLAY_READ_MIN_CONFIDENCE } from '@/features/detections/api';
+import { plateKey } from '@/features/detections/lib/log';
 import { formatIstTime } from '@/features/live-map/lib/time';
 import type { FeedStatus } from './CameraVideoPlayer';
 
 interface CameraAiPanelProps {
   camera: Camera;
-  videoRef: RefObject<HTMLVideoElement | null>;
   feedStatus: FeedStatus;
   detections: Detection[];
   resolution: string | null;
@@ -35,53 +39,88 @@ function HealthRow({ label, children }: { label: string; children: React.ReactNo
   );
 }
 
-export function CameraAiPanel({ camera, videoRef, feedStatus, detections, resolution, lastFrameAt }: CameraAiPanelProps) {
+const MIN_PCT = Math.round(DISPLAY_READ_MIN_CONFIDENCE * 100);
+
+export function LivePlateReads({ camera }: { camera: Camera }) {
   const navigate = useNavigate();
-  const reads = useMemo(() => recentPlateReads(detections), [detections]);
+  const watch = useWatchlistIndex();
+  const { reads, docs, loading, now } = useLiveReads(camera.code, { limit: 25 });
+  const doc = docs[0];
+  const vehicles = doc?.events.length ?? 0;
+
+  return (
+    <Panel
+      flush
+      title="Live plate reads"
+      icon={<ScanLineIcon />}
+      actions={
+        doc ? (
+          <span className="text-2xs tabular-nums text-fg-muted" title="Vehicles the AI engine tracked on this camera's clip">
+            {vehicles} vehicles
+          </span>
+        ) : undefined
+      }
+    >
+      {reads.length === 0 ? (
+        <EmptyState
+          compact
+          icon={<ListIcon size={20} />}
+          title={loading ? 'Loading reads…' : doc ? 'No readable plates on this camera' : 'No ANPR output for this clip'}
+          description={
+            loading
+              ? undefined
+              : doc
+                ? `Vehicles are tracked on the video, but no plate was read at ≥ ${MIN_PCT} % with a valid format (angle, distance or lighting).`
+                : 'The AI engine has not processed this camera’s clip yet.'
+          }
+        />
+      ) : (
+        <ol aria-label={`Plate reads at ${camera.name}, newest first`} className="max-h-[320px] overflow-y-auto" aria-live="polite">
+          {reads.map((r) => {
+            const plate = r.event.plate_text!;
+            const hit = watch.get(plateKey(plate)) ?? null;
+            const ago = Math.max(0, Math.round((now - r.at) / 1000));
+            return (
+              <li key={r.key}>
+                <button
+                  type="button"
+                  onClick={() => navigate(`/vehicles?plate=${encodeURIComponent(normalizePlate(plate))}`)}
+                  className="relative flex h-12 w-full items-center gap-3 border-b border-line px-3 text-left transition-colors hover:bg-surface-2 focus-visible:bg-surface-2"
+                  aria-label={`Trace ${plate}`}
+                >
+                  {hit && <span className="absolute inset-y-0 left-0 w-0.5 bg-danger" aria-hidden="true" />}
+                  <PlateChip plate={plate} size="sm" variant={vehicleClassToPlateVariant(r.event.vehicle_type)} flag={hit ? 'watchlist' : null} />
+                  {hit && <SeverityChip severity={hit} size="sm" />}
+                  <span className="flex min-w-0 flex-1 items-center gap-1.5 text-xs text-fg-muted" title={r.event.vehicle_class}>
+                    <VehicleClassIcon type={r.event.vehicle_type} />
+                    <span className="truncate">{r.event.vehicle_class}</span>
+                  </span>
+                  <span className="flex shrink-0 flex-col items-end leading-tight">
+                    <span className="font-mono text-2xs tabular-nums text-fg">{Math.round((r.event.plate_confidence ?? 0) * 100)}%</span>
+                    <span className="font-mono text-2xs tabular-nums text-fg-subtle" title={`${ago}s ago`}>{formatIstTime(r.at)}</span>
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ol>
+      )}
+      <p className="border-t border-line px-3 py-2 text-2xs text-fg-subtle">
+        Real reads by the AI ANPR engine on this clip (OCR ≥ {MIN_PCT} %, valid Indian plate format), replayed on the camera&apos;s live clock.
+      </p>
+    </Panel>
+  );
+}
+
+export function CameraAiPanel({ camera, feedStatus, detections, resolution, lastFrameAt }: CameraAiPanelProps) {
   const vehicles = useMemo(() => new Set(detections.map((d) => d.tracked_vehicle_id ?? d.event_id)).size, [detections]);
-
-  const columns: Column<Detection>[] = [
-    { key: 't', header: 'Frame', width: '80px', mono: true, cell: (d) => formatFrameTime(d.frame_timestamp_sec ?? d.timestamp) },
-    { key: 'plate', header: 'Plate', cell: (d) => <PlateChip plate={d.plate_text_raw} size="xs" variant={vehicleClassToPlateVariant(d.vehicle_type)} /> },
-    { key: 'class', header: 'Class', width: '44px', align: 'center', cell: (d) => <VehicleClass type={d.vehicle_type} iconOnly /> },
-    { key: 'conf', header: 'Conf', width: '52px', align: 'right', mono: true, cell: (d) => `${Math.round(d.confidence_score * 100)}%` },
-  ];
-
   const status = feedStatus === 'offline' ? 'offline' : feedStatus === 'playing' ? 'live' : 'connecting';
 
   return (
     <div className="flex min-w-0 flex-col gap-4">
-      <Panel title="AI Detection" subtitle="DEIM + PARSeq ANPR" icon={<BrainCircuitIcon />}>
-        <LiveDetectPanel videoRef={videoRef} cameraCode={camera.code} ready={feedStatus === 'playing'} />
-      </Panel>
+      <AiEngineStatusPill variant="panel" />
 
-      <Panel
-        flush
-        title={`Recent detections at ${camera.code}`}
-        icon={<ListIcon />}
-        actions={<span className="text-xs tabular-nums text-fg-muted">{reads.length}</span>}
-      >
-        <DataTable
-          caption={`Plate reads at ${camera.name}`}
-          columns={columns}
-          rows={reads}
-          rowKey={(d) => d.event_id}
-          maxHeight="280px"
-          onRowClick={(d) => navigate(`/vehicles?plate=${encodeURIComponent(plateKey(d.plate_text_raw))}`)}
-          empty={
-            <EmptyState
-              compact
-              icon={<ListIcon size={20} />}
-              title={feedStatus === 'playing' ? 'No detections yet — run the AI pipeline' : 'Waiting for the feed'}
-              description={
-                feedStatus === 'playing'
-                  ? 'No recorded plate reads for this clip. Run the ANPR pipeline on it, or detect the current frame above.'
-                  : 'Pipeline detections load once the feed is on screen.'
-              }
-            />
-          }
-        />
-      </Panel>
+      <LivePlateReads camera={camera} />
 
       <Panel title="Camera health">
         <dl className="divide-y divide-line">
@@ -90,9 +129,9 @@ export function CameraAiPanel({ camera, videoRef, feedStatus, detections, resolu
           <HealthRow label="Last frame">
             <span className="font-mono tabular-nums">{lastFrameAt ? `${formatIstTime(lastFrameAt)} IST` : '—'}</span>
           </HealthRow>
-          <HealthRow label="Detections in clip">
+          <HealthRow label="Tracked in clip">
             <span className="tabular-nums">
-              {detections.length.toLocaleString('en-IN')} <span className="text-fg-muted">· {vehicles} vehicles</span>
+              {vehicles.toLocaleString('en-IN')} vehicles <span className="text-fg-muted">· {detections.length.toLocaleString('en-IN')} boxes</span>
             </span>
           </HealthRow>
           <HealthRow label="Road">{camera.road ?? '—'}</HealthRow>
