@@ -6,7 +6,7 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { useEffect, type ReactNode } from 'react';
 import type { Camera } from '@/types/camera';
 
-const h = vi.hoisted(() => ({ flyTo: vi.fn(), fitBounds: vi.fn(), getCameras: vi.fn(), fetchAlerts: vi.fn() }));
+const h = vi.hoisted(() => ({ flyTo: vi.fn(), fitBounds: vi.fn(), getCameras: vi.fn(), fetchAlerts: vi.fn(), fetchAllCameraEvents: vi.fn() }));
 
 vi.mock('react-leaflet', () => {
   const Pass = ({ children }: { children?: ReactNode }) => <div data-testid="leaflet">{children}</div>;
@@ -17,7 +17,14 @@ vi.mock('react-leaflet', () => {
   };
 });
 vi.mock('@/features/cameras/api', () => ({ getCameras: h.getCameras }));
-vi.mock('@/features/alerts/api', () => ({ fetchAlerts: h.fetchAlerts }));
+vi.mock('@/features/alerts/api', () => ({
+  fetchAlerts: h.fetchAlerts,
+  fetchBlacklistEntries: () => Promise.resolve([{ plate_text: 'MH 02 GB 4920', priority: 'critical', is_active: true }]),
+}));
+vi.mock('@/features/detections/api', async (orig) => ({
+  ...(await orig<typeof import('@/features/detections/api')>()),
+  fetchAllCameraEvents: h.fetchAllCameraEvents,
+}));
 
 import { LiveMapPage } from './LiveMapPage';
 import { clearCamerasCache } from '@/features/cameras/hooks/useCameras';
@@ -59,6 +66,13 @@ beforeEach(() => {
     { id: 'a3', plate_text: 'GJ01JK6763', camera_id: 'cam-002', camera_name: 'Andheri Flyover', priority: 'low', timestamp: '2026-09-30T11:00:00Z', lat: 19.12, lng: 72.85, acknowledged: true },
   ]);
   vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(JSON.stringify(SUMMARY)))));
+  const ev = (t: number, plate: string | null, conf: number) => ({
+    camera_code: 'JG-01', tracked_vehicle_id: `trk_${t}`, plate_text: plate, plate_read: null, plate_confidence: conf, grammar_valid: !!plate,
+    vehicle_type: 'car', vehicle_class: 'Car', time_sec: t, bbox: { x: 0, y: 0, width: 10, height: 10 },
+  });
+  h.fetchAllCameraEvents.mockResolvedValue([
+    { camera_code: 'JG-01', duration_sec: 30, events: [ev(3, 'MH 02 GB 4920', 0.98), ev(9, 'MH 01 AB 1234', 0.7), ev(15, null, 0.2)] },
+  ]);
 });
 afterEach(() => vi.unstubAllGlobals());
 
@@ -106,6 +120,16 @@ describe('LiveMapPage', () => {
     expect(screen.queryAllByTestId('marker')).toHaveLength(0);
     await userEvent.click(screen.getByRole('button', { name: 'Alert hotspots' }));
     expect(screen.queryAllByTestId('hotspot')).toHaveLength(0);
+  });
+
+  it('streams real model reads (good reads only) in the live feed, flagging watchlist plates', async () => {
+    renderAt('/');
+    await screen.findByText('1/2');
+    const list = await screen.findByRole('list', { name: 'Latest plate reads' });
+    expect(within(list).getAllByText('MH 02 GB 4920').length).toBeGreaterThan(0);
+    expect(within(list).queryByText('MH 01 AB 1234')).toBeNull(); // below 75 %
+    expect(screen.getByText('Real ANPR reads')).toBeInTheDocument();
+    await waitFor(() => expect(within(list).getAllByText('Critical').length).toBeGreaterThan(0));
   });
 
   it('popup links open the feed', async () => {

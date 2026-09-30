@@ -105,7 +105,17 @@ export function OperationsRail({
       className={className}
       title="Operations"
       icon={<RadioIcon />}
-      actions={tab === 'feed' ? (replaying ? <Badge tone="danger" size="sm">Replay · live</Badge> : <SimulationBadge compact />) : undefined}
+      actions={
+        tab === 'feed' ? (
+          replaying ? (
+            <span className="flex items-center gap-1.5"><Badge tone="danger" size="sm">Replay · live</Badge><SimulationBadge compact /></span>
+          ) : (
+            <Badge tone="success" size="sm" title="Plates read by the AI ANPR engine on the camera clips (OCR ≥ 75 %, valid format), streaming on each camera's live clock">
+              Real ANPR reads
+            </Badge>
+          )
+        ) : undefined
+      }
       flush
       bodyClassName="flex min-h-0 flex-col"
     >
@@ -124,9 +134,13 @@ export function OperationsRail({
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         <TabPanel id="feed" active={tab === 'feed'}>
-          <ul aria-label="Latest plate reads">
-            {feed.map((e) => <FeedRow key={e.id} entry={e} />)}
-          </ul>
+          {feed.length === 0 ? (
+            <EmptyState compact icon={<ListIcon size={20} />} title="Waiting for plate reads" description="Reads appear as vehicles pass the cameras." />
+          ) : (
+            <ul aria-label="Latest plate reads">
+              {feed.map((e) => <FeedRow key={e.id} entry={e} />)}
+            </ul>
+          )}
         </TabPanel>
 
         <TabPanel id="alerts" active={tab === 'alerts'}>

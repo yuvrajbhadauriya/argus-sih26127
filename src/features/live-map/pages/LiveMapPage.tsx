@@ -8,8 +8,10 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CarIcon, CctvIcon, GaugeIcon, LocateFixedIcon, ScanLineIcon, SirenIcon, TagIcon, TargetIcon } from 'lucide-react';
 import type { Camera } from '@/types/camera';
 import { useCameras } from '@/features/cameras/hooks/useCameras';
-import { mockDetections } from '@/mocks/fixtures/mockDetections';
-import { mockLiveFeed } from '@/mocks/fixtures/mockLiveFeed';
+import type { LiveFeedEntry } from '@/mocks/fixtures/mockLiveFeed';
+import { useLiveReads } from '@/features/detections/hooks/useLiveReads';
+import { useWatchlistIndex } from '@/features/detections/hooks/useWatchlistKeys';
+import { plateKey } from '@/features/detections/lib/log';
 import { DEFAULT_MAP_CENTER, SECTOR_LABEL } from '@/config/constants';
 import { SimulationBadge } from '@/features/vehicles/components/SimulationBadge';
 import { ReplayControls } from '@/features/replay/ReplayControls';
@@ -48,13 +50,6 @@ function LayerToggle({ label, pressed, onToggle, icon }: { label: string; presse
   );
 }
 
-/** Last plate read per camera id (for marker popups). */
-function lastPlates(): Record<string, string | undefined> {
-  const out: Record<string, string | undefined> = {};
-  for (const [camId, dets] of Object.entries(mockDetections)) out[camId] = dets[dets.length - 1]?.plate_text_raw;
-  return out;
-}
-
 export function LiveMapPage() {
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
@@ -86,21 +81,36 @@ export function LiveMapPage() {
   const ratio = total ? online / total : 0;
   const openAlerts = useMemo(() => topOpenAlerts(alerts.data ?? [], Number.POSITIVE_INFINITY), [alerts.data]);
   const critical = openAlerts.filter((a) => a.priority === 'critical').length;
+  const alertsSimulated = (alerts.data ?? []).some((a) => (a as { simulated?: boolean }).simulated);
   const hotspots = useMemo(() => (showHotspots ? alertHotspots(alerts.data ?? []) : []), [alerts.data, showHotspots]);
   const replay = useReplayView(12);
-  const staticPlates = useMemo(() => lastPlates(), []);
-  // During a replay the popups show each camera's latest read at the replay clock.
+  // Real model reads on the camera clips, streaming on each camera's live clock.
+  const { reads: liveReads, now } = useLiveReads(null, { limit: 40 });
+  const watch = useWatchlistIndex();
+  const realFeed = useMemo<LiveFeedEntry[]>(() => {
+    const names = new Map(cameras.map((c) => [c.code, c.name]));
+    return liveReads.map((r) => ({
+      id: r.key,
+      plate: r.event.plate_text!,
+      cameraCode: r.camera_code,
+      cameraName: names.get(r.camera_code) ?? r.camera_code,
+      vehicleType: r.event.vehicle_type,
+      confidence: Math.round((r.event.plate_confidence ?? 0) * 100),
+      secondsAgo: Math.max(0, Math.round((now - r.at) / 1000)),
+      watchlist: watch.get(plateKey(r.event.plate_text!)) ?? null,
+    }));
+  }, [liveReads, now, cameras, watch]);
+  const feed = replay.feed ?? realFeed;
+  // Marker popups: each camera's latest read (replay clock during a replay).
   const plates = useMemo(() => {
-    if (!replay.feed) return staticPlates;
     const byCode = new Map(cameras.map((c) => [c.code, c.id]));
-    const out: Record<string, string | undefined> = { ...staticPlates };
-    for (const f of [...replay.feed].reverse()) {
+    const out: Record<string, string | undefined> = {};
+    for (const f of [...feed].reverse()) {
       const id = byCode.get(f.cameraCode);
       if (id) out[id] = f.plate;
     }
     return out;
-  }, [replay.feed, staticPlates, cameras]);
-  const feed = replay.feed ?? mockLiveFeed;
+  }, [feed, cameras]);
   const stats = summary.data?.stats;
   const simHint = summary.data?.simulated ? <SimulationBadge compact /> : undefined;
   const simValue = (v: number | undefined, fmt: (n: number) => string = (n) => nf.format(n)) =>
@@ -132,7 +142,14 @@ export function LiveMapPage() {
             value={alerts.error ? '—' : openAlerts.length}
             icon={<SirenIcon size={16} />}
             tone={critical > 0 ? 'danger' : openAlerts.length > 0 ? 'warning' : 'success'}
-            hint={alerts.error ? 'Alerts unavailable' : `${critical} critical`}
+            hint={
+              alerts.error ? 'Alerts unavailable' : alertsSimulated ? (
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <span className="shrink-0">{critical} critical</span>
+                  <SimulationBadge compact />
+                </span>
+              ) : `${critical} critical`
+            }
             loading={alerts.loading}
             onClick={() => navigate('/alerts')}
           />
