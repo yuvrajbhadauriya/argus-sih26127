@@ -1,20 +1,29 @@
 <!doctype html>
-<html lang="en" class="dark">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#000000" />
-    <title>NERO — City Intelligence Dashboard</title>
-    <meta name="description" content="NERO: Centralized AI-driven multi-camera ANPR and traffic intelligence dashboard" />
+    <meta name="theme-color" content="#F4F6F9" />
+    <title>NERO — City ANPR &amp; Traffic Intelligence</title>
+    <meta name="description" content="NERO: city-wide multi-camera ANPR trajectory tracking and traffic analytics (SIH 2026 prototype)" />
     <!-- Warm up third-party origins used right after boot (map tiles, camera videos / Supabase). -->
     <link rel="preconnect" href="https://server.arcgisonline.com" />
     <link rel="preconnect" href="https://ngwrbxiaeressvmhfopb.supabase.co" crossorigin />
+    <script>
+      /* Resolve the theme before first paint (no flash). Mirrors src/shared/theme/theme.ts. */
+      (function(){var p='system';try{p=localStorage.getItem('nero.theme')||'system'}catch(e){}
+      var d=p==='dark'||(p!=='light'&&!!window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches);
+      var r=document.documentElement;r.setAttribute('data-theme',d?'dark':'light');r.style.colorScheme=d?'dark':'light';
+      var m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute('content',d?'#0B0F14':'#F4F6F9');})();
+    </script>
     <style>
-      /* Paint the dark shell immediately, before any CSS/JS arrives (no white flash). */
-      html, body { background: #000; color: #fff; margin: 0; }
+      /* Paint the themed shell immediately, before any CSS/JS arrives. */
+      html, body { background: #F4F6F9; color: #0F1722; margin: 0; }
+      html[data-theme=dark], html[data-theme=dark] body { background: #0B0F14; color: #E6EDF3; }
       #boot { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
-      #boot i { width: 36px; height: 36px; border-radius: 50%; border: 2px solid #1f1f1f; border-top-color: #38bdf8; animation: boot-spin .8s linear infinite; }
+      #boot i { width: 32px; height: 32px; border-radius: 50%; border: 2px solid #D9E0E8; border-top-color: #1F5FD1; animation: boot-spin .8s linear infinite; }
+      html[data-theme=dark] #boot i { border-color: #243140; border-top-color: #58A6FF; }
       @keyframes boot-spin { to { transform: rotate(360deg); } }
     </style>
   </head>

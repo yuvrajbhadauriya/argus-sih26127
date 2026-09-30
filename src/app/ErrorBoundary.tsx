@@ -34,12 +34,26 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   public render() {
     if (this.state.hasError) {
       return (
-        <div style={{ padding: '2rem', color: '#f87171', background: '#0a0a0a', minHeight: '100vh', fontFamily: 'monospace' }}>
-          <h1 style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>Application Error</h1>
-          <p style={{ marginTop: '1rem', color: '#e5e7eb' }}>{this.state.error?.toString()}</p>
-          <pre style={{ marginTop: '1rem', background: '#171717', padding: '1rem', overflow: 'auto', fontSize: '0.875rem' }}>
-            {this.state.errorInfo?.componentStack}
-          </pre>
+        <div role="alert" className="min-h-dvh w-full bg-canvas p-8 text-fg">
+          <div className="mx-auto max-w-3xl rounded-md border border-line bg-surface p-6">
+            <h1 className="text-lg font-semibold text-danger">Application error</h1>
+            <p className="mt-2 text-[13px] text-fg-muted">
+              NERO hit an unexpected error. Reload the page to continue; if it persists, share the details below.
+            </p>
+            <p className="mt-4 font-mono text-xs text-fg">{this.state.error?.toString()}</p>
+            {this.state.errorInfo?.componentStack && (
+              <pre className="mt-3 max-h-80 overflow-auto rounded-sm border border-line bg-surface-2 p-3 font-mono text-2xs text-fg-muted">
+                {this.state.errorInfo.componentStack}
+              </pre>
+            )}
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="mt-4 inline-flex h-8 items-center rounded-sm bg-primary-solid px-3 text-[13px] font-medium text-on-primary hover:bg-primary-solid-hover"
+            >
+              Reload
+            </button>
+          </div>
         </div>
       );
     }

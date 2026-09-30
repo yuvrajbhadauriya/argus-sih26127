@@ -17,8 +17,20 @@ export const DEFAULT_LOCATION = { lat: 28.6129, lng: 77.2295 } as const;
 export const DEFAULT_MAP_CENTER: [number, number] = [28.61, 77.2];
 export const DEFAULT_MAP_ZOOM = 12;
 
-/** Esri Dark Gray base map, shared by every Leaflet map in the app. */
-export const MAP_TILE_URL =
-  'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}';
-export const MAP_TILE_ATTRIBUTION = 'Tiles © Esri — Esri, DeLorme, NAVTEQ';
-export const MAP_TILE_MAX_ZOOM = 20;
+/** Esri Canvas base maps per theme (base + separate reference labels layer). */
+export const MAP_TILES = {
+  light: {
+    base: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+    labels: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
+  },
+  dark: {
+    base: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+    labels: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
+  },
+} as const;
+export const MAP_TILE_ATTRIBUTION = 'Tiles &copy; Esri &mdash; Esri, HERE, Garmin, &copy; OpenStreetMap contributors';
+/** Canvas service detail ends around z16; Leaflet upscales beyond. */
+export const MAP_TILE_MAX_NATIVE_ZOOM = 16;
+export const MAP_TILE_MAX_ZOOM = 19;
+/** @deprecated use MAP_TILES[theme].base (kept until all maps use BaseTileLayer). */
+export const MAP_TILE_URL = MAP_TILES.dark.base;

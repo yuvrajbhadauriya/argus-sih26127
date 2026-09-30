@@ -1,138 +1,264 @@
 @import "tailwindcss";
 
 /* ═══════════════════════════════════════════════════
-   NERO Ultra-Premium Command Center Design System
-   Rich Aesthetics, Dark Mode, Glassmorphism, Neon Glows
+   NERO design tokens — light + dark themes.
+   Theme is selected by html[data-theme] (set before first paint by the inline
+   script in index.html, then kept in sync by src/shared/theme/theme.ts).
+   Every utility (bg-surface, text-fg, border-line, …) resolves to a CSS
+   variable at runtime, so switching theme is a single attribute flip.
    ═══════════════════════════════════════════════════ */
 
-@theme {
-  /* ── Base palette ── */
-  --color-nero-bg: #000000;
-  --color-nero-surface: #0a0a0a;
-  --color-nero-surface-elevated: #121212;
-  --color-nero-surface-hover: #1a1a1a;
-  --color-nero-border: #1f1f1f;
-  --color-nero-border-light: #2c2c2c;
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
 
-  /* ── Text ── */
-  --color-nero-text-primary: #ffffff;
-  --color-nero-text-secondary: #a1a1aa;
-  --color-nero-text-muted: #71717a;
+:root {
+  color-scheme: light;
+  --canvas: #F4F6F9;
+  --surface: #FFFFFF;
+  --surface-2: #F1F4F8;
+  --surface-3: #E7ECF2;
+  --line: #D9E0E8;
+  --line-strong: #C2CCD7;
+  --fg: #0F1722;
+  --fg-muted: #4B5767;
+  --fg-subtle: #667385;
+  --primary: #1F5FD1;
+  --primary-solid: #1F5FD1;
+  --primary-solid-hover: #1A4FB0;
+  --on-primary: #FFFFFF;
+  --focus: #1F5FD1;
+  --success: #1A7F37;
+  --warning: #9A6700;
+  --danger: #CF222E;
+  --danger-solid: #CF222E;
+  --info: #0E6E8C;
+  --sev-critical: #CF222E;
+  --sev-high: #BC4C00;
+  --sev-medium: #9A6700;
+  --sev-low: #57606A;
+  --overlay-bg: rgba(11, 15, 20, 0.72);
+  --overlay-fg: #FFFFFF;
+  --scrim: rgba(15, 23, 34, 0.45);
+  --shadow-pop: 0 8px 24px rgba(15, 23, 34, 0.12), 0 1px 2px rgba(15, 23, 34, 0.08);
 
-  /* ── Accent (Electric Blue & Cyan) ── */
-  --color-nero-accent: #38bdf8;
-  --color-nero-accent-hover: #0284c7;
-  --color-nero-accent-glow: rgba(56, 189, 248, 0.25);
-  --color-nero-cyan: #22d3ee;
+  --map-bg: #E9ECEF;
+  --map-cam-online: #1A7F37;
+  --map-cam-offline: #CF222E;
+  --map-cam-maint: #9A6700;
+  --map-cam-idle: #8A96A3;
+  --map-marker-halo: #FFFFFF;
+  --map-selected: #1F5FD1;
+  --map-label-bg: rgba(255, 255, 255, 0.94);
+  --map-label-fg: #0F1722;
+  --map-label-border: #C2CCD7;
+  --heat-1: #FFF3C4;
+  --heat-2: #FDD37A;
+  --heat-3: #F59E42;
+  --heat-4: #E0592A;
+  --heat-5: #B42318;
 
-  /* ── Semantic status colors ── */
-  --color-nero-online: #10b981;
-  --color-nero-offline: #f43f5e;
-  --color-nero-warning: #f59e0b;
-
-  /* ── Priority badges ── */
-  --color-nero-priority-low: #10b981;
-  --color-nero-priority-medium: #f59e0b;
-  --color-nero-priority-high: #f43f5e;
-  --color-nero-priority-critical: #e11d48;
-
-  /* ── Spacing & sizing ── */
-  --radius-nero-sm: 0.375rem;
-  --radius-nero-md: 0.625rem;
-  --radius-nero-lg: 0.875rem;
-  --radius-nero-xl: 1.25rem;
-
-  /* ── Font ── */
-  --font-sans: 'Inter Variable', 'Inter', system-ui, -apple-system, sans-serif;
-
-  /* ── Sidebar width ── */
-  --sidebar-width: 240px;
-  --sidebar-collapsed-width: 72px;
+  --series-1: #1F6FEB;
+  --series-2: #0F8A7E;
+  --series-3: #C4610F;
+  --series-4: #8250DF;
+  --series-5: #BF3989;
+  --series-6: #6E7D00;
 }
 
-/* ── Global resets & Custom scrollbar ── */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --canvas: #0B0F14;
+  --surface: #111821;
+  --surface-2: #17202B;
+  --surface-3: #1E2935;
+  --line: #243140;
+  --line-strong: #334456;
+  --fg: #E6EDF3;
+  --fg-muted: #9AA8B6;
+  --fg-subtle: #7A8899;
+  --primary: #58A6FF;
+  --primary-solid: #1F6FEB;
+  --primary-solid-hover: #388BFD;
+  --on-primary: #FFFFFF;
+  --focus: #58A6FF;
+  --success: #3FB950;
+  --warning: #D29922;
+  --danger: #F85149;
+  --danger-solid: #DA3633;
+  --info: #39C5CF;
+  --sev-critical: #F85149;
+  --sev-high: #F0883E;
+  --sev-medium: #D29922;
+  --sev-low: #8FA3B8;
+  --overlay-bg: rgba(11, 15, 20, 0.72);
+  --overlay-fg: #FFFFFF;
+  --scrim: rgba(0, 0, 0, 0.6);
+  --shadow-pop: 0 8px 24px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.04);
+
+  --map-bg: #1B1F24;
+  --map-cam-online: #3FB950;
+  --map-cam-offline: #F85149;
+  --map-cam-maint: #D29922;
+  --map-cam-idle: #5B6B7C;
+  --map-marker-halo: #0B0F14;
+  --map-selected: #58A6FF;
+  --map-label-bg: rgba(17, 24, 33, 0.92);
+  --map-label-fg: #E6EDF3;
+  --map-label-border: #334456;
+  --heat-1: #3A3320;
+  --heat-2: #7A5A12;
+  --heat-3: #C2701B;
+  --heat-4: #E5532D;
+  --heat-5: #FF3B3B;
+
+  --series-1: #58A6FF;
+  --series-2: #3FC1B0;
+  --series-3: #F0A04B;
+  --series-4: #B392F0;
+  --series-5: #F778BA;
+  --series-6: #C9D05C;
+}
+
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-subtle: var(--fg-subtle);
+  --color-primary: var(--primary);
+  --color-primary-solid: var(--primary-solid);
+  --color-primary-solid-hover: var(--primary-solid-hover);
+  --color-on-primary: var(--on-primary);
+  --color-focus: var(--focus);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-danger-solid: var(--danger-solid);
+  --color-info: var(--info);
+  --color-sev-critical: var(--sev-critical);
+  --color-sev-high: var(--sev-high);
+  --color-sev-medium: var(--sev-medium);
+  --color-sev-low: var(--sev-low);
+  --color-series-1: var(--series-1);
+  --color-series-2: var(--series-2);
+  --color-series-3: var(--series-3);
+  --color-series-4: var(--series-4);
+  --color-series-5: var(--series-5);
+  --color-series-6: var(--series-6);
+  --color-overlay-bg: var(--overlay-bg);
+  --color-overlay-fg: var(--overlay-fg);
+  --color-scrim: var(--scrim);
+  --shadow-pop: var(--shadow-pop);
+
+  /* LEGACY ALIASES — keep until WP-B/WP-C finish migrating; WP-A removes them in final cleanup */
+  --color-nero-bg: var(--canvas);
+  --color-nero-surface: var(--surface);
+  --color-nero-surface-elevated: var(--surface-2);
+  --color-nero-surface-hover: var(--surface-3);
+  --color-nero-border: var(--line);
+  --color-nero-border-light: var(--line-strong);
+  --color-nero-text-primary: var(--fg);
+  --color-nero-text-secondary: var(--fg-muted);
+  --color-nero-text-muted: var(--fg-subtle);
+  --color-nero-accent: var(--primary);
+  --color-nero-accent-hover: var(--primary-solid-hover);
+  --color-nero-cyan: var(--info);
+  --color-nero-online: var(--success);
+  --color-nero-offline: var(--danger);
+  --color-nero-warning: var(--warning);
+  --color-nero-priority-low: var(--sev-low);
+  --color-nero-priority-medium: var(--sev-medium);
+  --color-nero-priority-high: var(--sev-high);
+  --color-nero-priority-critical: var(--sev-critical);
+}
+
+@theme {
+  --font-sans: 'Inter Variable', Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', 'Roboto Mono', Menlo, Consolas, monospace;
+  --radius-xs: 3px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 1rem;
+
+  /* legacy radius names (WP-B/C) */
+  --radius-nero-sm: 4px;
+  --radius-nero-md: 6px;
+  --radius-nero-lg: 6px;
+  --radius-nero-xl: 8px;
+
+  --animate-live-pulse: live-pulse 1.6s ease-in-out infinite;
+  --animate-fade-in: fade-in 150ms ease-out;
+}
+
+/* ── Base ── */
 * {
   scrollbar-width: thin;
-  scrollbar-color: var(--color-nero-border-light) transparent;
+  scrollbar-color: var(--line-strong) transparent;
 }
-
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  background: var(--color-nero-border-light);
+  background: var(--line-strong);
   border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
-::-webkit-scrollbar-thumb:hover {
-  background: var(--color-nero-accent);
-}
+::-webkit-scrollbar-thumb:hover { background: var(--fg-subtle); background-clip: padding-box; }
+
+html, body { background: var(--canvas); }
 
 body {
   margin: 0;
   padding: 0;
   font-family: var(--font-sans);
-  background-color: var(--color-nero-bg);
-  color: var(--color-nero-text-primary);
+  font-size: 13px;
+  line-height: 1.385;
+  background: var(--canvas);
+  color: var(--fg);
+  font-feature-settings: "cv11", "ss01";
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
 #root {
-  min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
 }
 
-/* ── Glassmorphic card styling ── */
-.nero-card {
-  background: rgba(10, 10, 10, 0.9);
-  backdrop-filter: blur(12px);
-  border: 1px solid var(--color-nero-border);
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.6);
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
 }
 
-.nero-card:hover {
-  border-color: var(--color-nero-accent);
-  box-shadow: 0 12px 40px 0 rgba(56, 189, 248, 0.15);
-  transform: translateY(-2px);
-}
+::selection { background: color-mix(in srgb, var(--primary) 25%, transparent); }
 
-/* ── Glow animations ── */
-@keyframes pulse-ring {
-  0% { transform: scale(0.95); opacity: 0.8; }
-  50% { transform: scale(1.15); opacity: 0.4; }
-  100% { transform: scale(0.95); opacity: 0.8; }
-}
+.tabular { font-variant-numeric: tabular-nums; }
 
-@keyframes scanline {
-  0% { transform: translateY(-100%); }
-  100% { transform: translateY(1000%); }
-}
+/* Legacy card class — neutralized (no glass, no hover lift). Remove usages over time. */
+.nero-card {}
+/* Legacy status dots (LiveMapPage) — tokenized, no glow. Remove with final cleanup. */
+.status-dot-online { background-color: var(--success); }
+.status-dot-offline { background-color: var(--danger); }
 
 @keyframes fade-in {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
-.animate-fade-in {
-  animation: fade-in 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
 }
 
-.animate-pulse-ring {
-  animation: pulse-ring 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-
-/* ── Live status dots ── */
-.status-dot-online {
-  background-color: #10b981;
-  box-shadow: 0 0 10px #10b981;
-}
-
-.status-dot-offline {
-  background-color: #f43f5e;
-  box-shadow: 0 0 8px #f43f5e;
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
 }

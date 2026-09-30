@@ -1,124 +1,183 @@
 // ═══════════════════════════════════════════════════
-// Sidebar — Enhanced Command Center Navigation
-// Cyberpunk Flock aesthetic with glowing logo & active indicators
+// Sidebar — grouped primary navigation (232px / 56px collapsed)
 // ═══════════════════════════════════════════════════
 
 import { NavLink } from 'react-router-dom';
 import {
+  CctvIcon,
+  ChartColumnIcon,
   MapIcon,
-  CameraIcon,
-  CarIcon,
-  BellIcon,
-  BarChart3Icon,
-  ListIcon,
+  PanelLeftCloseIcon,
+  PanelLeftOpenIcon,
+  RouteIcon,
+  ScanLineIcon,
   SettingsIcon,
-  ScanEyeIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  RadioIcon,
+  SirenIcon,
+  type LucideIcon,
 } from 'lucide-react';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState } from 'react';
+import { cn } from '@/shared/lib/cn';
+import { Badge } from '@/shared/ui/Badge';
+import { IconButton } from '@/shared/ui/Button';
+import { NeroMark } from './NeroMark';
+import { useNavBadges } from './useNavBadges';
 
 interface NavItem {
   path: string;
   label: string;
-  icon: ReactNode;
-  adminOnly?: boolean;
+  Icon: LucideIcon;
+  badge?: 'alerts';
 }
 
-const navItems: NavItem[] = [
-  { path: '/',           label: 'Live Map',       icon: <MapIcon size={18} /> },
-  { path: '/cameras',    label: 'Cameras Grid',   icon: <CameraIcon size={18} /> },
-  { path: '/vehicles',   label: 'Vehicles Track', icon: <CarIcon size={18} /> },
-  { path: '/alerts',     label: 'Alerts Feed',    icon: <BellIcon size={18} /> },
-  { path: '/analytics',  label: 'Analytics',      icon: <BarChart3Icon size={18} /> },
-  { path: '/detections', label: 'Detections Log', icon: <ListIcon size={18} /> },
-  { path: '/admin',      label: 'Admin Control',  icon: <SettingsIcon size={18} />, adminOnly: true },
+const NAV_GROUPS: { heading: string; items: NavItem[] }[] = [
+  {
+    heading: 'Operations',
+    items: [
+      { path: '/', label: 'Live Map', Icon: MapIcon },
+      { path: '/cameras', label: 'Cameras', Icon: CctvIcon },
+      { path: '/alerts', label: 'Alerts', Icon: SirenIcon, badge: 'alerts' },
+    ],
+  },
+  {
+    heading: 'Investigation',
+    items: [
+      { path: '/vehicles', label: 'Vehicle Trace', Icon: RouteIcon },
+      { path: '/detections', label: 'Detections', Icon: ScanLineIcon },
+    ],
+  },
+  { heading: 'Intelligence', items: [{ path: '/analytics', label: 'Analytics', Icon: ChartColumnIcon }] },
+  { heading: 'System', items: [{ path: '/admin', label: 'Admin', Icon: SettingsIcon }] },
 ];
 
+const STORAGE_KEY = 'nero.sidebar';
+const LG_QUERY = '(min-width: 1024px)';
+
+function readCollapsed(): boolean {
+  try {
+    const v = localStorage.getItem(STORAGE_KEY);
+    if (v === 'collapsed') return true;
+    if (v === 'expanded') return false;
+  } catch {
+    /* ignore */
+  }
+  try {
+    return typeof window.matchMedia === 'function' ? !window.matchMedia(LG_QUERY).matches : false;
+  } catch {
+    return false;
+  }
+}
+
 export function Sidebar() {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(readCollapsed);
+  const { alerts } = useNavBadges();
+
+  // Auto-collapse when the viewport drops below lg.
+  useEffect(() => {
+    let mq: MediaQueryList | null = null;
+    try {
+      mq = typeof window.matchMedia === 'function' ? window.matchMedia(LG_QUERY) : null;
+    } catch {
+      mq = null;
+    }
+    if (!mq) return;
+    const onChange = (e: MediaQueryListEvent) => {
+      if (!e.matches) setCollapsed(true);
+    };
+    mq.addEventListener?.('change', onChange);
+    return () => mq?.removeEventListener?.('change', onChange);
+  }, []);
+
+  const toggle = () => {
+    setCollapsed((c) => {
+      try {
+        localStorage.setItem(STORAGE_KEY, c ? 'expanded' : 'collapsed');
+      } catch {
+        /* ignore */
+      }
+      return !c;
+    });
+  };
 
   return (
     <aside
-      className={`
-        flex flex-col border-r border-nero-border bg-nero-surface/95 backdrop-blur-md
-        transition-all duration-300 ease-in-out z-30 relative
-        ${collapsed ? 'w-[72px]' : 'w-[240px]'}
-      `}
+      data-collapsed={collapsed || undefined}
+      className={cn(
+        'relative z-30 flex shrink-0 flex-col border-r border-line bg-surface transition-[width] duration-150',
+        collapsed ? 'w-14' : 'w-[232px]',
+      )}
     >
-      {/* Brand Header */}
-      <div className="flex h-16 items-center gap-3 border-b border-nero-border px-4">
-        <div className="relative flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-nero-accent/30 to-nero-cyan/10 border border-nero-accent/40 shadow-lg shadow-nero-accent/20">
-          <ScanEyeIcon size={22} className="text-nero-accent" />
-          <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-400 ring-2 ring-nero-surface animate-pulse" />
-        </div>
+      {/* Brand */}
+      <div className={cn('flex h-[52px] shrink-0 items-center gap-2.5 border-b border-line', collapsed ? 'justify-center px-0' : 'px-4')}>
+        <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-sm bg-primary/12 text-primary">
+          <NeroMark size={16} />
+        </span>
         {!collapsed && (
-          <div className="animate-fade-in overflow-hidden">
-            <h1 className="text-lg font-black tracking-wider text-nero-text-primary flex items-center gap-1.5">
-              NERO
-              <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-nero-accent/20 text-nero-accent font-bold">
-                PROT
-              </span>
-            </h1>
-            <p className="text-[10px] font-semibold tracking-widest text-nero-text-muted uppercase flex items-center gap-1">
-              <RadioIcon size={9} className="text-emerald-400" />
-              City Intelligence
-            </p>
+          <div className="min-w-0 leading-tight">
+            <div className="text-sm font-bold tracking-[0.08em] text-fg">NERO</div>
+            <div className="truncate text-2xs text-fg-subtle">City ANPR Intelligence</div>
           </div>
         )}
       </div>
 
-      {/* Navigation Links */}
-      <nav className="flex-1 space-y-1.5 px-3 py-4">
-        {navItems.map((item) => (
-          <NavLink
-            key={item.path}
-            to={item.path}
-            end={item.path === '/'}
-            className={({ isActive }) =>
-              `relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-xs font-semibold transition-all duration-200 group
-              ${
-                isActive
-                  ? 'bg-gradient-to-r from-nero-accent/20 to-nero-accent/5 text-nero-accent border border-nero-accent/30 shadow-md shadow-nero-accent/10'
-                  : 'text-nero-text-secondary hover:bg-nero-surface-hover hover:text-nero-text-primary hover:border hover:border-nero-border'
-              }`
-            }
-          >
-            {({ isActive }) => (
-              <>
-                {/* Active left indicator glow bar */}
-                {isActive && (
-                  <span className="absolute left-0 top-1/2 -translate-y-1/2 h-6 w-1 rounded-r-full bg-nero-accent shadow-lg shadow-nero-accent" />
-                )}
-                <span className={`flex-shrink-0 transition-transform group-hover:scale-110 ${isActive ? 'text-nero-accent' : ''}`}>
-                  {item.icon}
-                </span>
-                {!collapsed && (
-                  <span className="animate-fade-in truncate">{item.label}</span>
-                )}
-                {/* Alert badge counter for Alerts nav */}
-                {item.path === '/alerts' && !collapsed && (
-                  <span className="ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500/20 px-1.5 text-[10px] font-bold text-red-400 ring-1 ring-red-500/30">
-                    2
-                  </span>
-                )}
-              </>
+      {/* Navigation */}
+      <nav aria-label="Primary" className="flex-1 overflow-y-auto overflow-x-hidden px-2 py-3">
+        {NAV_GROUPS.map((group, gi) => (
+          <div key={group.heading} className={cn(gi > 0 && 'mt-4')}>
+            {collapsed ? (
+              gi > 0 && <div aria-hidden className="mx-2 mb-3 h-px bg-line" />
+            ) : (
+              <div className="mb-1 px-2 text-2xs font-semibold uppercase tracking-[0.06em] text-fg-subtle">{group.heading}</div>
             )}
-          </NavLink>
+            <ul className="space-y-0.5">
+              {group.items.map(({ path, label, Icon, badge }) => {
+                const count = badge === 'alerts' ? alerts : 0;
+                return (
+                  <li key={path}>
+                    <NavLink
+                      to={path}
+                      end={path === '/'}
+                      title={collapsed ? label : undefined}
+                      aria-label={collapsed ? (count > 0 ? `${label} (${count} unacknowledged)` : label) : undefined}
+                      className={({ isActive }) =>
+                        cn(
+                          'group relative flex h-8 items-center gap-2.5 rounded-sm text-[13px] font-medium transition-colors',
+                          collapsed ? 'justify-center px-0' : 'px-2.5',
+                          isActive ? 'bg-surface-3 text-fg' : 'text-fg-muted hover:bg-surface-2 hover:text-fg',
+                        )
+                      }
+                    >
+                      {({ isActive }) => (
+                        <>
+                          {isActive && <span aria-hidden className="absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-primary" />}
+                          <Icon size={16} strokeWidth={1.75} className={cn('shrink-0', isActive && 'text-primary')} aria-hidden />
+                          {!collapsed && <span className="truncate">{label}</span>}
+                          {count > 0 &&
+                            (collapsed ? (
+                              <span aria-hidden className="absolute right-2.5 top-1.5 h-1.5 w-1.5 rounded-full bg-danger ring-2 ring-surface" />
+                            ) : (
+                              <Badge tone="danger" variant="solid" size="sm" className="ml-auto" title={`${count} unacknowledged alerts`}>
+                                {count}
+                              </Badge>
+                            ))}
+                        </>
+                      )}
+                    </NavLink>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
         ))}
       </nav>
 
-      {/* Collapse Toggle */}
-      <div className="border-t border-nero-border p-3">
-        <button
-          onClick={() => setCollapsed(!collapsed)}
-          className="flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs font-medium text-nero-text-muted transition-all hover:bg-nero-surface-hover hover:text-nero-text-primary hover:border hover:border-nero-border"
-          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-        >
-          {collapsed ? <ChevronRightIcon size={16} /> : <ChevronLeftIcon size={16} />}
-          {!collapsed && <span>Collapse Sidebar</span>}
-        </button>
+      {/* Footer */}
+      <div className={cn('flex shrink-0 items-center gap-2 border-t border-line p-2', collapsed ? 'flex-col' : 'justify-between')}>
+        {!collapsed && <span className="truncate pl-1.5 text-2xs text-fg-subtle">SIH 2026 · SIH26127 · Prototype</span>}
+        <IconButton
+          label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          icon={collapsed ? <PanelLeftOpenIcon size={16} strokeWidth={1.75} /> : <PanelLeftCloseIcon size={16} strokeWidth={1.75} />}
+          onClick={toggle}
+        />
       </div>
     </aside>
   );

@@ -1,33 +1,35 @@
 // ═══════════════════════════════════════════════════
-// DashboardLayout — Main shell wrapping all pages
-// Sidebar + TopBar + scrollable content area
+// DashboardLayout — app shell: Sidebar + TopBar + scrollable content
+// Pages render inside <main> and bring their own <Page> padding.
 // ═══════════════════════════════════════════════════
 
 import { Suspense } from 'react';
 import { Outlet } from 'react-router-dom';
 import { LoadingState } from '@/shared/ui/LoadingState';
+import { Toaster } from '@/shared/ui/Toaster';
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
 
 export function DashboardLayout() {
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-nero-bg">
-      {/* Persistent sidebar */}
+    <div className="flex h-dvh w-full overflow-hidden bg-canvas text-fg">
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-3 focus:top-3 focus:z-[3000] focus:rounded-sm focus:bg-surface focus:px-3 focus:py-2 focus:text-[13px] focus:shadow-pop"
+      >
+        Skip to content
+      </a>
       <Sidebar />
-
-      {/* Main content area */}
-      <div className="flex flex-1 flex-col overflow-hidden">
-        {/* Top bar */}
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <TopBar />
-
-        {/* Page content */}
-        <main className="flex-1 overflow-y-auto p-6">
+        <main id="main" tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto focus:outline-none">
           {/* Pages are lazy chunks: shell stays interactive while one loads */}
           <Suspense fallback={<LoadingState message="Loading module..." />}>
             <Outlet />
           </Suspense>
         </main>
       </div>
+      <Toaster />
     </div>
   );
 }

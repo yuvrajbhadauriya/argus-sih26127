@@ -9,20 +9,28 @@ import { Card } from './Card';
 
 describe('StatusBadge', () => {
   it.each([
-    ['online', 'Online', 'text-emerald-400'],
-    ['offline', 'Offline', 'text-red-400'],
-    ['maintenance', 'Maintenance', 'text-amber-400'],
-    ['critical', 'Critical', 'text-red-300'],
-    ['info', 'Info', 'text-blue-400'],
-  ] as const)('renders %s with default label and colour', (variant, label, cls) => {
-    render(<StatusBadge variant={variant} />);
-    expect(screen.getByText(label)).toHaveClass(cls);
+    ['online', 'Online', 'data-status'],
+    ['offline', 'Offline', 'data-status'],
+    ['maintenance', 'Maintenance', 'data-status'],
+    ['critical', 'Critical', 'data-severity'],
+    ['high', 'High', 'data-severity'],
+  ] as const)('renders %s with default label and semantic attribute', (variant, label, attr) => {
+    const { container } = render(<StatusBadge variant={variant} />);
+    expect(screen.getByText(label)).toBeInTheDocument();
+    expect(container.querySelector(`[data-variant="${variant}"]`)).not.toBeNull();
+    expect(container.querySelector(`[${attr}="${variant}"]`)).not.toBeNull();
   });
 
-  it('uses custom label, size and pulse', () => {
-    const { container } = render(<StatusBadge variant="high" label="Hot" size="md" pulse />);
-    expect(screen.getByText('Hot')).toHaveClass('text-sm');
-    expect(container.querySelector('.animate-pulse')).not.toBeNull();
+  it('renders info as an info-toned badge', () => {
+    const { container } = render(<StatusBadge variant="info" />);
+    expect(screen.getByText('Info')).toBeInTheDocument();
+    expect(container.querySelector('[data-tone="info"]')).not.toBeNull();
+  });
+
+  it('uses custom label and pulse', () => {
+    const { container } = render(<StatusBadge variant="online" label="Streaming" size="md" pulse />);
+    expect(screen.getByText('Streaming')).toBeInTheDocument();
+    expect(container.querySelector('.animate-live-pulse')).not.toBeNull();
   });
 });
 

@@ -1,34 +1,29 @@
 // ═══════════════════════════════════════════════════
 // EmptyState — Consistent empty/no-data display
-// Every data view must handle empty explicitly
 // ═══════════════════════════════════════════════════
 
 import { InboxIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { cn } from '@/shared/lib/cn';
 
 interface EmptyStateProps {
   icon?: ReactNode;
   title: string;
-  description?: string;
+  description?: ReactNode;
   action?: ReactNode;
+  compact?: boolean;
+  className?: string;
 }
 
-export function EmptyState({
-  icon,
-  title,
-  description,
-  action,
-}: EmptyStateProps) {
+export function EmptyState({ icon, title, description, action, compact = false, className }: EmptyStateProps) {
   return (
-    <div className="flex flex-col items-center justify-center py-16 text-center">
-      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-nero-surface-elevated text-nero-text-muted">
-        {icon ?? <InboxIcon size={28} />}
+    <div className={cn('flex flex-col items-center justify-center px-4 text-center', compact ? 'py-8' : 'py-16', className)}>
+      <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-md bg-surface-2 text-fg-subtle [&>svg]:h-5 [&>svg]:w-5" aria-hidden>
+        {icon ?? <InboxIcon size={20} strokeWidth={1.75} />}
       </div>
-      <h3 className="text-base font-semibold text-nero-text-primary">{title}</h3>
-      {description && (
-        <p className="mt-1 max-w-sm text-sm text-nero-text-muted">{description}</p>
-      )}
-      {action && <div className="mt-4">{action}</div>}
+      <h3 className="text-[13px] font-semibold text-fg">{title}</h3>
+      {description && <p className="mt-1 max-w-sm text-xs text-fg-muted">{description}</p>}
+      {action && <div className="mt-4 flex flex-wrap items-center justify-center gap-2">{action}</div>}
     </div>
   );
 }

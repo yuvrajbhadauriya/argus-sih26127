@@ -1,34 +1,31 @@
 // ═══════════════════════════════════════════════════
-// ErrorState — Consistent error display
-// Every data view must handle errors explicitly
+// ErrorState — Consistent error display with optional retry
 // ═══════════════════════════════════════════════════
 
-import { AlertTriangleIcon, RefreshCwIcon } from 'lucide-react';
+import { RefreshCwIcon, TriangleAlertIcon } from 'lucide-react';
+import { cn } from '@/shared/lib/cn';
+import { Button } from './Button';
 
 interface ErrorStateProps {
   message?: string;
   onRetry?: () => void;
+  title?: string;
+  compact?: boolean;
+  className?: string;
 }
 
-export function ErrorState({
-  message = 'Something went wrong',
-  onRetry,
-}: ErrorStateProps) {
+export function ErrorState({ message = 'Something went wrong', onRetry, title = 'Error', compact = false, className }: ErrorStateProps) {
   return (
-    <div className="flex flex-col items-center justify-center py-16 text-center">
-      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-red-500/10 text-red-400">
-        <AlertTriangleIcon size={28} />
+    <div className={cn('flex flex-col items-center justify-center px-4 text-center', compact ? 'py-8' : 'py-16', className)}>
+      <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-md bg-danger/12 text-danger" aria-hidden>
+        <TriangleAlertIcon size={20} strokeWidth={1.75} />
       </div>
-      <h3 className="text-base font-semibold text-nero-text-primary">Error</h3>
-      <p className="mt-1 max-w-sm text-sm text-nero-text-muted">{message}</p>
+      <h3 className="text-[13px] font-semibold text-fg">{title}</h3>
+      <p className="mt-1 max-w-sm text-xs text-fg-muted">{message}</p>
       {onRetry && (
-        <button
-          onClick={onRetry}
-          className="mt-4 inline-flex items-center gap-2 rounded-lg bg-nero-surface-elevated px-4 py-2 text-sm font-medium text-nero-text-primary transition-colors hover:bg-nero-surface-hover"
-        >
-          <RefreshCwIcon size={14} />
+        <Button className="mt-4" size="sm" icon={<RefreshCwIcon size={14} />} onClick={onRetry}>
           Try again
-        </button>
+        </Button>
       )}
     </div>
   );
