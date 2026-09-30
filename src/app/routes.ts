@@ -26,6 +26,12 @@ export const routes = [
   { path: '/admin', page: pages.admin },
 ] as const;
 
+/** Normalised pathname → route (matches the build-time preload map in vite.config.ts). */
+export function findRoute(pathname: string) {
+  const p = pathname.replace(/\/+$/, '') || '/';
+  return routes.find((r) => r.path === p);
+}
+
 /**
  * After the first page is interactive, quietly fetch the other route chunks
  * (small) so later navigation never waits on the network.
