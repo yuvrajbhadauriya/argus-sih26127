@@ -1,16 +1,17 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { createFakeSupabase } from '@/test/supabaseMock';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { createFakeDataApi, fail, row, rows } from '@/test/dataApiMock';
 
-const h = vi.hoisted(() => ({ configured: false, fake: null as unknown as ReturnType<typeof createFakeSupabase> }));
+const h = vi.hoisted(() => ({ configured: false }));
 
-vi.mock('@/lib/supabase/client', async () => {
-  const { createFakeSupabase } = await import('@/test/supabaseMock');
-  h.fake = createFakeSupabase();
-  return {
-    getSupabase: async () => h.fake.client,
-    isSupabaseConfigured: () => h.configured,
-  };
-});
+vi.mock('@/lib/supabase/client', () => ({
+  getSupabase: async () => {
+    throw new Error('the browser must not query tables directly');
+  },
+  isSupabaseConfigured: () => h.configured,
+  getAccessToken: async () => 'op-token',
+}));
+
+const api = createFakeDataApi();
 
 import {
   resolveCameraMedia,
@@ -21,14 +22,19 @@ import {
   getCameras,
   getCameraById,
   getCamerasByZone,
+  createCamera,
+  updateCamera,
 } from './api';
 import { CODE_ALIAS_MAP } from '@/features/detections/api';
 import { mockCameras } from '@/mocks/fixtures/mockCameras';
 
 beforeEach(() => {
   h.configured = false;
-  h.fake.reset();
+  api.reset();
+  vi.stubGlobal('fetch', api.fetch);
 });
+
+afterEach(() => vi.unstubAllGlobals());
 
 const LOCAL = '/videos-local/';
 const BUCKET = `${SUPABASE_STORAGE_BASE}mumbai/720p/`;
@@ -101,7 +107,7 @@ describe('getCameras (mock fallback, Supabase not configured)', () => {
       expect(c.video_url).toMatch(/\/(videos-local|mumbai\/720p)\/[a-z0-9_-]+\.mp4$/);
       expect(c.poster_url).toMatch(/\.jpg$/);
     }
-    expect(h.fake.from).not.toHaveBeenCalled();
+    expect(api.fetch).not.toHaveBeenCalled();
   });
 
   it('maps maintenance status to offline', async () => {
@@ -123,54 +129,64 @@ describe('getCameras (mock fallback, Supabase not configured)', () => {
   });
 });
 
-describe('getCameras (Supabase configured, mocked client)', () => {
+describe('getCameras (live, via /api/data)', () => {
   beforeEach(() => {
     h.configured = true;
   });
 
-  it('queries cameras ordered by code and normalises lat/lng', async () => {
-    h.fake.enqueue('cameras', {
-      data: [
-        { id: 'cam-001', name: 'A', code: 'JG-01', lat: 1.5, lng: 2.5, zone: 'Z', direction: 'N', status: 'online', video_url: '/videos/cam_001.mp4', created_at: 't' },
-      ],
-    });
+  it('reads /api/data/cameras and normalises lat/lng', async () => {
+    api.enqueue(
+      'cameras',
+      rows([{ id: 'cam-001', name: 'A', code: 'JG-01', lat: 1.5, lng: 2.5, zone: 'Z', direction: 'N', status: 'online', video_url: '/videos/cam_001.mp4', created_at: 't' }]),
+    );
     const cams = await getCameras();
     expect(cams[0]).toMatchObject({ id: 'cam-001', latitude: 1.5, longitude: 2.5 });
     expect(cams[0].video_url).toBe(resolveVideoUrl(undefined, 'JG-01'));
     expect(cams[0].video_url).toContain(CAMERA_VIDEOS[0].slug);
-    const call = h.fake.calls[0];
-    expect(call.table).toBe('cameras');
-    expect(h.fake.opsFor(call, 'order')[0]).toEqual(['code']);
+    expect(api.calls[0]).toMatchObject({ route: 'cameras', method: 'GET' });
   });
 
   it('keeps lat=0 (uses ?? not ||)', async () => {
-    h.fake.enqueue('cameras', { data: [{ id: 'x', code: 'Q', lat: 0, lng: 0, latitude: 9, longitude: 9 }] });
+    api.enqueue('cameras', rows([{ id: 'x', code: 'Q', lat: 0, lng: 0, latitude: 9, longitude: 9 }]));
     const [c] = await getCameras();
     expect(c.latitude).toBe(0);
     expect(c.longitude).toBe(0);
   });
 
-  it('throws a descriptive error when the query fails', async () => {
-    h.fake.enqueue('cameras', { error: { message: 'boom' } });
+  it('throws a descriptive error when the request fails', async () => {
+    api.enqueue('cameras', fail(502, 'boom'));
     await expect(getCameras()).rejects.toThrow('Failed to fetch cameras: boom');
   });
 
-  it('returns [] on null data', async () => {
-    h.fake.enqueue('cameras', { data: null });
+  it('returns [] on a body without rows', async () => {
+    api.enqueue('cameras', { body: {} });
     expect(await getCameras()).toEqual([]);
   });
 
-  it('getCameraById uses eq(id).single()', async () => {
-    h.fake.enqueue('cameras', { data: { id: 'cam-002', code: 'AN-01', lat: 1, lng: 2 } });
+  it('getCameraById asks for one id', async () => {
+    api.enqueue('cameras', row({ id: 'cam-002', code: 'AN-01', lat: 1, lng: 2 }));
     const cam = await getCameraById('cam-002');
     expect(cam?.id).toBe('cam-002');
-    const call = h.fake.calls[0];
-    expect(h.fake.opsFor(call, 'eq')[0]).toEqual(['id', 'cam-002']);
-    expect(h.fake.opsFor(call, 'single')).toHaveLength(1);
+    expect(api.calls[0].params.get('id')).toBe('cam-002');
   });
 
-  it('getCamerasByZone throws on error', async () => {
-    h.fake.enqueue('cameras', { error: { message: 'nope' } });
+  it('getCamerasByZone filters and throws on error', async () => {
+    api.enqueue('cameras', rows([{ id: 'a', code: 'A', zone: 'Z' }, { id: 'b', code: 'B', zone: 'Y' }]));
+    expect((await getCamerasByZone('Z')).map((c) => c.id)).toEqual(['a']);
+    api.enqueue('cameras', fail(502, 'nope'));
     await expect(getCamerasByZone('Z')).rejects.toThrow('Failed to fetch cameras by zone: nope');
+  });
+
+  it('createCamera / updateCamera go through the API with the operator token', async () => {
+    api.enqueue('cameras', { status: 201, body: { row: { id: 'cam-tt-01', code: 'TT-01', lat: 19, lng: 72 } } });
+    const cam = await createCamera({ name: 'T', code: 'TT-01', zone: 'Z', direction: 'N', latitude: 19, longitude: 72 });
+    expect(cam).toMatchObject({ id: 'cam-tt-01', latitude: 19 });
+    expect(api.calls[0]).toMatchObject({ method: 'POST', body: { code: 'TT-01', latitude: 19, longitude: 72 } });
+    expect(api.calls[0].headers.get('authorization')).toBe('Bearer op-token');
+
+    api.enqueue('cameras', row({ id: 'cam-tt-01' }));
+    await updateCamera('cam-tt-01', { name: 'New' });
+    expect(api.calls[1]).toMatchObject({ method: 'PATCH', body: { name: 'New' } });
+    expect(api.calls[1].params.get('id')).toBe('cam-tt-01');
   });
 });

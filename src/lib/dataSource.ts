@@ -25,7 +25,7 @@ export const DATA_SOURCE_LABEL: Record<DataSource, string> = {
 };
 
 export const DATA_SOURCE_DESCRIPTION: Record<DataSource, string> = {
-  live: 'Cameras, alerts, watchlist and detections are read from the Supabase database.',
+  live: 'Cameras, alerts, watchlist and detections are read from the (private) Supabase database through the dashboard server API.',
   simulated: 'No database configured: a simulated day of traffic on the real Mumbai road network (public/sim) with real camera clips.',
   demo: 'No database configured and the simulation files are unavailable: bundled demo fixtures only.',
 };

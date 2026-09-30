@@ -1,24 +1,18 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
-import { createFakeSupabase } from '@/test/supabaseMock';
+import { createFakeDataApi, rows } from '@/test/dataApiMock';
 
-const h = vi.hoisted(() => ({ configured: false, fake: null as unknown as ReturnType<typeof createFakeSupabase> }));
+const h = vi.hoisted(() => ({ configured: false }));
 
-vi.mock('@/lib/supabase/client', async () => {
-  const { createFakeSupabase } = await import('@/test/supabaseMock');
-  h.fake = createFakeSupabase();
-  // The shared fake builder has no .abortSignal(); add a pass-through so the
-  // signal-aware api.ts query chain works here.
-  const client = {
-    ...h.fake.client,
-    from: (table: string) => {
-      const b = h.fake.client.from(table);
-      if (!b.abortSignal) b.abortSignal = () => b;
-      return b;
-    },
-  };
-  return { getSupabase: async () => client, isSupabaseConfigured: () => h.configured };
-});
+vi.mock('@/lib/supabase/client', () => ({
+  getSupabase: async () => {
+    throw new Error('the browser must not query tables directly');
+  },
+  isSupabaseConfigured: () => h.configured,
+  getAccessToken: async () => null,
+}));
+
+const api = createFakeDataApi();
 
 import { useCameraDetections } from './useCameraDetections';
 import { resetDetectionsManifest, DETECTIONS_MANIFEST_URL } from '../api';
@@ -43,17 +37,21 @@ const pipelineRow = {
 let manifest: string[] = [];
 /** fetch stub: serves the manifest, delegates detection files to `files`. */
 const files = vi.fn();
-const detectionCalls = () => fetchMock.mock.calls.filter((c) => c[0] !== DETECTIONS_MANIFEST_URL);
+const detectionCalls = () => fetchMock.mock.calls.filter((c) => c[0] !== DETECTIONS_MANIFEST_URL && !String(c[0]).startsWith('/api/data/'));
 
 beforeEach(() => {
   h.configured = false;
-  h.fake.reset();
+  api.reset();
   fetchMock.mockReset();
   files.mockReset();
   manifest = ['VP-01', 'SC-01', 'AN-01', 'XX-01'];
   resetDetectionsManifest();
   fetchMock.mockImplementation((url: string, init?: RequestInit) =>
-    url === DETECTIONS_MANIFEST_URL ? jsonResponse({ cameras: manifest }) : files(url, init),
+    String(url).startsWith('/api/data/')
+      ? api.fetch(url, init)
+      : url === DETECTIONS_MANIFEST_URL
+        ? jsonResponse({ cameras: manifest })
+        : files(url, init),
   );
   vi.stubGlobal('fetch', fetchMock);
   vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -130,30 +128,29 @@ describe('useCameraDetections', () => {
     expect(result.current.loading).toBe(false);
   });
 
-  it('prefers Supabase rows when configured and parses string bbox', async () => {
+  it('prefers database rows (via /api/data) when configured and parses string bbox', async () => {
     h.configured = true;
-    h.fake.enqueue('detections', {
-      data: [{ event_id: 'ev1', camera_id: 'cam-001', plate_text_raw: 'A', confidence_score: 0, frame_timestamp_sec: 2, bbox: '{"x":1,"y":1,"width":2,"height":2}' }],
-    });
+    api.enqueue('detections', rows([{ event_id: 'ev1', camera_id: 'cam-001', plate_text_raw: 'A', confidence_score: 0, frame_timestamp_sec: 2, bbox: '{"x":1,"y":1,"width":2,"height":2}' }]));
     const { result } = renderHook(() => useCameraDetections('VP-01', 'cam-003'));
     await waitFor(() => expect(result.current.detections).toHaveLength(1));
     expect(result.current.detections[0]).toMatchObject({ event_id: 'ev1', confidence_score: 0, bbox: { x: 1, y: 1, width: 2, height: 2 } });
     expect(files).not.toHaveBeenCalled();
-    expect(h.fake.opsFor(h.fake.calls[0], 'eq')[0]).toEqual(['camera_id', 'cam-003']);
+    expect(api.calls[0].route).toBe('detections');
+    expect(api.calls[0].params.get('camera_id')).toBe('cam-003');
   });
 
-  it('falls back to local JSON when Supabase returns no rows', async () => {
+  it('falls back to local JSON when the database has no rows', async () => {
     h.configured = true;
-    h.fake.enqueue('detections', { data: [] });
+    api.enqueue('detections', rows([]));
     files.mockReturnValue(jsonResponse([pipelineRow]));
     const { result } = renderHook(() => useCameraDetections('VP-01', 'cam-003'));
     await waitFor(() => expect(result.current.detections).toHaveLength(1));
     expect(files).toHaveBeenCalled();
   });
 
-  it('falls back to local JSON when Supabase throws (e.g. malformed bbox JSON)', async () => {
+  it('falls back to local JSON when a row cannot be mapped (e.g. malformed bbox JSON)', async () => {
     h.configured = true;
-    h.fake.enqueue('detections', { data: [{ bbox: '{not json' }] });
+    api.enqueue('detections', rows([{ bbox: '{not json' }]));
     files.mockReturnValue(jsonResponse([pipelineRow]));
     const { result } = renderHook(() => useCameraDetections('VP-01', 'cam-003'));
     await waitFor(() => expect(result.current.detections).toHaveLength(1));
@@ -199,16 +196,14 @@ describe('useCameraDetections', () => {
     expect(detectionCalls().at(-1)![0]).toBe('/detections/detections_SC-01.json');
   });
 
-  // Regression: PostgREST caps a response at 1000 rows; the query used to have no
-  // ordering/paging and silently truncated to an arbitrary 1000-row subset.
-  it('orders by frame_timestamp_sec and pages through more than 1000 rows', async () => {
+  // PostgREST caps a response at 1000 rows: /api/data/detections pages on the
+  // server (api/_lib/dataRoutes.ts) and returns every row in frame order.
+  it('keeps every row of a > 1000-row clip from one API answer', async () => {
     h.configured = true;
-    const page = (n: number, from: number) => Array.from({ length: n }, (_, i) => ({ event_id: `e${from + i}`, bbox: {}, frame_timestamp_sec: from + i }));
-    h.fake.enqueue('detections', { data: page(1000, 0) }, { data: page(250, 1000) });
+    const all = Array.from({ length: 1250 }, (_, i) => ({ event_id: `e${i}`, bbox: {}, frame_timestamp_sec: i }));
+    api.enqueue('detections', rows(all));
     const { result } = renderHook(() => useCameraDetections('VP-01', 'cam-003'));
     await waitFor(() => expect(result.current.detections).toHaveLength(1250));
-    expect(h.fake.opsFor(h.fake.calls[0], 'order')[0]).toEqual(['frame_timestamp_sec', { ascending: true }]);
-    expect(h.fake.opsFor(h.fake.calls[0], 'range')[0]).toEqual([0, 999]);
-    expect(h.fake.opsFor(h.fake.calls[1], 'range')[0]).toEqual([1000, 1999]);
+    expect(api.calls).toHaveLength(1);
   });
 });

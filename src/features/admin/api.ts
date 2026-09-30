@@ -2,15 +2,17 @@
 // Data Access Layer — Admin (audit trail)
 //
 // Live: `audit_logs` is written only by the server-side audit trigger
-// (supabase/migrations/20261001000100_rls.sql) and readable by signed-in
-// operators and admins only. Guests are never sent to the table (anon has no
-// grant → 401); they, and signed-in users while the table is still empty, see
-// the simulated day's trail, flagged `simulated` so the page shows the badge.
+// (supabase/migrations/20261001000100_rls.sql, actor via 20261001000600) and
+// served by GET /api/data/audit-log to signed-in operators and admins only
+// (the route verifies the session). Guests are never sent to it; they, and
+// signed-in users while the table is still empty, see the simulated day's
+// trail, flagged `simulated` so the page shows the badge.
 // Simulated / demo: the fixture audit trail of the simulated day.
 // ═══════════════════════════════════════════════════
 
 import type { AuditLogEntry } from '@/types';
-import { getSupabase, isSupabaseConfigured } from '@/lib/supabase/client';
+import { isSupabaseConfigured } from '@/lib/supabase/client';
+import { apiRows, DataApiError } from '@/lib/dataApi';
 import { getAuthState } from '@/features/auth/session';
 import { mockAuditLogs } from '@/mocks/fixtures/mockAdmin';
 
@@ -25,10 +27,15 @@ export interface AuditTrail {
 export async function fetchAuditLog(limit = 500): Promise<AuditTrail> {
   if (!isSupabaseConfigured()) return { entries: mockAuditLogs, simulated: true };
   if (!getAuthState().user) return { entries: mockAuditLogs, simulated: true, reason: 'guest' };
-  const supabase = await getSupabase();
-  const { data, error } = await supabase.from('audit_logs').select('*').order('timestamp', { ascending: false }).limit(limit);
-  if (error) throw new Error(`Failed to load the audit trail: ${error.message}`);
-  if (!data || data.length === 0) return { entries: mockAuditLogs, simulated: true, reason: 'empty' };
+  let data: unknown[];
+  try {
+    data = await apiRows('audit-log', { limit }, { auth: true });
+  } catch (err) {
+    // Signed in without an operator/admin role: same view as a guest.
+    if (err instanceof DataApiError && err.status === 403) return { entries: mockAuditLogs, simulated: true, reason: 'guest' };
+    throw new Error(`Failed to load the audit trail: ${err instanceof Error ? err.message : String(err)}`);
+  }
+  if (data.length === 0) return { entries: mockAuditLogs, simulated: true, reason: 'empty' };
   return {
     simulated: false,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

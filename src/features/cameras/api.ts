@@ -1,12 +1,14 @@
 // ═══════════════════════════════════════════════════
-// Supabase Data Access Layer — Cameras
-// All camera queries go through here, never direct
-// from components
+// Data Access Layer — Cameras
+// All camera queries go through here, never direct from components.
+// Live: GET/POST/PATCH /api/data/cameras (the database is private; the
+// server route uses the service key and checks the operator's session).
 // ═══════════════════════════════════════════════════
 
 import type { Camera } from '@/types/camera';
 import type { CameraFeed } from '@/types';
-import { getSupabase, isSupabaseConfigured } from '@/lib/supabase/client';
+import { isSupabaseConfigured } from '@/lib/supabase/client';
+import { apiRow, apiRows, apiSend } from '@/lib/dataApi';
 import { reportLiveError, reportLiveOk } from '@/lib/dataSource';
 import { mockCameras } from '@/mocks/fixtures/mockCameras';
 import { LOCAL_VIDEO_BASE, SUPABASE_STORAGE_BASE, SUPABASE_VIDEO_PREFIX } from '@/config/constants';
@@ -143,19 +145,17 @@ export async function getCameras(): Promise<Camera[]> {
     return withDemoEdits(mockCameras.map(cameraFeedToCamera));
   }
 
-  const supabase = await getSupabase();
-  const { data, error } = await supabase
-    .from('cameras')
-    .select('*')
-    .order('code');
-
-  if (error) {
-    reportLiveError(error.message);
-    throw new Error(`Failed to fetch cameras: ${error.message}`);
+  let data: unknown[];
+  try {
+    data = await apiRows('cameras');
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    reportLiveError(message);
+    throw new Error(`Failed to fetch cameras: ${message}`);
   }
   reportLiveOk();
 
-  return (data ?? []).map(rowToCamera);
+  return data.map(rowToCamera);
 }
 
 /** Fetch a single camera by ID */
@@ -165,15 +165,11 @@ export async function getCameraById(id: string): Promise<Camera | null> {
     return found ? cameraFeedToCamera(found) : null;
   }
 
-  const supabase = await getSupabase();
-  const { data, error } = await supabase
-    .from('cameras')
-    .select('*')
-    .eq('id', id)
-    .single();
-
-  if (error) {
-    throw new Error(`Failed to fetch camera: ${error.message}`);
+  let data: unknown;
+  try {
+    data = await apiRow('cameras', { id });
+  } catch (err) {
+    throw new Error(`Failed to fetch camera: ${err instanceof Error ? err.message : String(err)}`);
   }
 
   return data ? rowToCamera(data) : null;
@@ -187,21 +183,18 @@ export async function getCamerasByZone(zone: string): Promise<Camera[]> {
       .map(cameraFeedToCamera);
   }
 
-  const supabase = await getSupabase();
-  const { data, error } = await supabase
-    .from('cameras')
-    .select('*')
-    .eq('zone', zone)
-    .order('code');
-
-  if (error) {
-    throw new Error(`Failed to fetch cameras by zone: ${error.message}`);
+  let data: unknown[];
+  try {
+    data = await apiRows('cameras');
+  } catch (err) {
+    throw new Error(`Failed to fetch cameras by zone: ${err instanceof Error ? err.message : String(err)}`);
   }
 
-  return (data ?? []).map(rowToCamera);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return data.filter((r: any) => r.zone === zone).map(rowToCamera);
 }
 
-// ── Writes (live: operator/admin session required by RLS) ──
+// ── Writes (live: operator/admin session, verified by /api/data) ──
 
 export interface CameraInput {
   name: string;
@@ -225,27 +218,21 @@ export async function createCamera(input: CameraInput): Promise<Camera> {
     demoCameras.push(cam);
     return cam;
   }
-  const supabase = await getSupabase();
-  const { data, error } = await supabase
-    .from('cameras')
-    .insert({
-      id: `cam-${input.code.toLowerCase()}`,
+  try {
+    const { row } = await apiSend<{ row: unknown }>('cameras', 'POST', {
       name: input.name,
       code: input.code,
-      lat: input.latitude,
-      lng: input.longitude,
       latitude: input.latitude,
       longitude: input.longitude,
       zone: input.zone,
       direction: input.direction,
       road: input.road ?? null,
       status: input.status ?? 'offline',
-      video_url: '',
-    })
-    .select('*')
-    .single();
-  if (error) throw new Error(`Failed to register camera: ${error.message}`);
-  return rowToCamera(data);
+    });
+    return rowToCamera(row);
+  } catch (err) {
+    throw new Error(`Failed to register camera: ${err instanceof Error ? err.message : String(err)}`);
+  }
 }
 
 /** Edit a camera's registry fields. */
@@ -256,12 +243,11 @@ export async function updateCamera(id: string, patch: Partial<Omit<CameraInput, 
     else demoEdits.set(id, { ...demoEdits.get(id), ...patch });
     return;
   }
-  const row: Record<string, unknown> = { ...patch, updated_at: new Date().toISOString() };
-  if (patch.latitude !== undefined) row.lat = patch.latitude;
-  if (patch.longitude !== undefined) row.lng = patch.longitude;
-  const supabase = await getSupabase();
-  const { error } = await supabase.from('cameras').update(row).eq('id', id);
-  if (error) throw new Error(`Failed to update camera: ${error.message}`);
+  try {
+    await apiSend('cameras', 'PATCH', patch, { id });
+  } catch (err) {
+    throw new Error(`Failed to update camera: ${err instanceof Error ? err.message : String(err)}`);
+  }
 }
 
 /** Edits to registry (fixture) cameras in simulated/demo mode. */

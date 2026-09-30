@@ -1,16 +1,18 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { createFakeSupabase } from '@/test/supabaseMock';
+import { createFakeDataApi, fail, rows, type FakeApiReply } from '@/test/dataApiMock';
 import { allMigrationsSql, migrationFiles } from '@/test/migrations';
 
-const h = vi.hoisted(() => ({ configured: false, fake: null as unknown as ReturnType<typeof createFakeSupabase> }));
+const h = vi.hoisted(() => ({ configured: false }));
 
-vi.mock('@/lib/supabase/client', async () => {
-  const { createFakeSupabase } = await import('@/test/supabaseMock');
-  h.fake = createFakeSupabase();
-  return { getSupabase: async () => h.fake.client, isSupabaseConfigured: () => h.configured };
-});
+vi.mock('@/lib/supabase/client', () => ({
+  getSupabase: async () => {
+    throw new Error('the browser must not query tables directly');
+  },
+  isSupabaseConfigured: () => h.configured,
+  getAccessToken: async () => null,
+}));
 
 import { searchVehicles, fetchTrajectoryByPlate } from './api';
 import { resetSimCache } from './sim';
@@ -22,20 +24,24 @@ const WATCH = SUMMARY.demo.watchlist[0].plate_text as string; // e.g. "MH 01 CS 
 const CLONE = SUMMARY.demo.anomalies.find((a: { kind: string }) => a.kind === 'cloned_plate').plate_text as string;
 const CIRCLE = SUMMARY.demo.anomalies.find((a: { kind: string }) => a.kind === 'circling').plate_text as string;
 
-/** Serve /sim/*.json from public/ like the dev server would. */
+let api = createFakeDataApi();
+
+/** Serve /sim/*.json from public/ like the dev server would; /api/data/* goes to the fake API. */
 function serveSimFiles() {
-  const fetchMock = vi.fn(async (url: string) => {
+  const fetchMock = vi.fn(async (url: RequestInfo | URL) => {
     const file = resolve(process.cwd(), 'public', String(url).replace(/^\//, ''));
-    if (!existsSync(file)) return { ok: false, status: 404, json: async () => ({}) };
-    return { ok: true, status: 200, json: async () => JSON.parse(readFileSync(file, 'utf8')) };
+    if (!existsSync(file)) return new Response('{}', { status: 404 });
+    return new Response(readFileSync(file, 'utf8'), { status: 200 });
   });
-  vi.stubGlobal('fetch', fetchMock);
+  api = createFakeDataApi(fetchMock);
+  vi.stubGlobal('fetch', api.fetch);
   return fetchMock;
 }
 
+const trajectory = (t: unknown, detections: unknown[] = []): FakeApiReply => ({ body: { trajectory: t, detections } });
+
 beforeEach(() => {
   h.configured = false;
-  h.fake.reset();
   resetSimCache();
   vi.spyOn(console, 'warn').mockImplementation(() => {});
   serveSimFiles();
@@ -78,45 +84,41 @@ describe('searchVehicles — simulated network (Supabase not configured)', () =>
   });
 });
 
-describe('searchVehicles — Supabase configured', () => {
+describe('searchVehicles — live (via /api/data)', () => {
   beforeEach(() => {
     h.configured = true;
   });
 
-  it('uses ilike for a query and uppercases it', async () => {
-    h.fake.enqueue('vehicles', { data: [{ plate_text: 'MH 1', detection_count: 0 }] });
+  it('sends the normalised query and keeps a 0 detection count', async () => {
+    api.enqueue('vehicles', rows([{ plate_text: 'MH 1', detection_count: 0 }]));
     const [v] = await searchVehicles(' dl ');
     expect(v.plate_text).toBe('MH 1');
     expect(v.detection_count).toBe(0); // ?? keeps 0
-    expect(h.fake.opsFor(h.fake.calls[0], 'ilike')[0]).toEqual(['plate_text', '%DL%']);
+    expect(api.calls[0].params.get('q')).toBe('DL');
   });
 
-  it('lists recent vehicles (ordered, limited) for empty query', async () => {
-    h.fake.enqueue('vehicles', { data: [{ plate_text: 'X' }] });
+  it('ignores separators and case (the server matches plate_text_normalized)', async () => {
+    api.enqueue('vehicles', rows([]));
+    await searchVehicles('mh-01 ab-1234');
+    expect(api.calls[0].params.get('q')).toBe('MH01AB1234');
+  });
+
+  it('lists recent vehicles for an empty query (no q)', async () => {
+    api.enqueue('vehicles', rows([{ plate_text: 'X' }]));
     await searchVehicles();
-    const c = h.fake.calls[0];
-    expect(h.fake.opsFor(c, 'order')[0]).toEqual(['last_seen', { ascending: false }]);
-    expect(h.fake.opsFor(c, 'limit')[0]).toEqual([100]);
+    expect(api.calls[0].params.has('q')).toBe(false);
   });
 
-  it('surfaces database errors (ErrorState) instead of silently switching to the simulation', async () => {
-    h.fake.enqueue('vehicles', { error: { message: 'x' } });
+  it('surfaces API errors (ErrorState) instead of silently switching to the simulation', async () => {
+    api.enqueue('vehicles', fail(502, 'x'));
     await expect(searchVehicles(WATCH)).rejects.toThrow('Failed to search vehicles: x');
-    h.fake.enqueue('vehicles', new Error('net'));
-    await expect(searchVehicles(WATCH)).rejects.toThrow('net');
+    api.enqueue('vehicles', new TypeError('net'));
+    await expect(searchVehicles(WATCH)).rejects.toThrow('Data API is unreachable');
   });
 
   it('uses the (labelled) simulated network when the database has no match', async () => {
-    h.fake.enqueue('vehicles', { data: [] });
+    api.enqueue('vehicles', rows([]));
     expect((await searchVehicles(WATCH)).map((v) => v.plate_text)).toContain(WATCH);
-  });
-
-  // DB plates are stored as "MH 01 AB 1234" (spaces); ilike on the raw column
-  // does not normalise separators (the simulated fallback does).
-  it('documents that the DB search does not normalise separators', async () => {
-    h.fake.enqueue('vehicles', { data: [] });
-    await searchVehicles('MH-01-AB-1234');
-    expect(h.fake.opsFor(h.fake.calls[0], 'ilike')[0]).toEqual(['plate_text', '%MH-01-AB-1234%']);
   });
 });
 
@@ -161,7 +163,7 @@ describe('fetchTrajectoryByPlate — simulated network', () => {
   });
 });
 
-describe('fetchTrajectoryByPlate — Supabase configured', () => {
+describe('fetchTrajectoryByPlate — live (via /api/data)', () => {
   beforeEach(() => {
     h.configured = true;
   });
@@ -174,7 +176,7 @@ describe('fetchTrajectoryByPlate — Supabase configured', () => {
         { camera_id: 'cam-005', camera_name: 'DD', lat: 0, lng: 0, timestamp: '2026-09-29T08:30:00+05:30', time_since_previous_seconds: 1800 },
       ],
     };
-    h.fake.enqueue('trajectories', { data: row });
+    api.enqueue('trajectory', trajectory(row));
     const t = (await fetchTrajectoryByPlate('x'))!;
     expect(t.source).toBe('supabase');
     expect(t.waypoints[1].camera_code).toBe('DD-01');
@@ -183,15 +185,15 @@ describe('fetchTrajectoryByPlate — Supabase configured', () => {
     expect(t.waypoints[0].lat).toBeGreaterThan(19); // coordinates come from the camera registry
   });
 
-  it('reconstructs from detections, collapsing repeated reads at one camera', async () => {
-    h.fake.enqueue('trajectories', { data: null });
-    h.fake.enqueue('detections', {
-      data: [
+  it('reconstructs from the plate reads, collapsing repeated reads at one camera', async () => {
+    api.enqueue(
+      'trajectory',
+      trajectory(null, [
         { camera_id: 'c1', detected_at: '2026-01-01T00:00:00Z', lat: 1, lng: 2, plate_text_raw: 'MH 01', vehicle_type: 'bus', cameras: { name: 'Cam1' } },
         { camera_id: 'c2', detected_at: '2026-01-01T00:01:30Z', lat: 3, lng: 4, cameras: {} },
         { camera_id: 'c2', detected_at: '2026-01-01T00:02:00Z', lat: 3, lng: 4, cameras: {} },
-      ],
-    });
+      ]),
+    );
     const t = (await fetchTrajectoryByPlate('mh-01'))!;
     expect(t).toMatchObject({
       plate_text: 'MH 01',
@@ -205,31 +207,27 @@ describe('fetchTrajectoryByPlate — Supabase configured', () => {
     expect(t.waypoints.map((w) => w.time_since_previous_seconds)).toEqual([null, 90]);
     expect(t.waypoints[0].camera_name).toBe('Cam1');
     expect(t.waypoints[1].camera_name).toBe('CCTV Node');
-    const detCall = h.fake.calls.find((c) => c.table === 'detections')!;
-    expect(h.fake.opsFor(detCall, 'eq')[0]).toEqual(['plate_text_normalized', 'MH01']);
+    expect(api.calls[0].params.get('plate')).toBe('MH01');
   });
 
   it('prefers the simulated journey when the DB only saw the plate at one camera', async () => {
-    h.fake.enqueue('trajectories', { data: null });
-    h.fake.enqueue('detections', {
-      data: [{ camera_id: 'cam-008', detected_at: '2026-09-27T12:00:00Z', lat: 1, lng: 2, plate_text_raw: WATCH, cameras: { name: 'BH', code: 'BH-01' } }],
-    });
+    api.enqueue(
+      'trajectory',
+      trajectory(null, [{ camera_id: 'cam-008', detected_at: '2026-09-27T12:00:00Z', lat: 1, lng: 2, plate_text_raw: WATCH, cameras: { name: 'BH', code: 'BH-01' } }]),
+    );
     const t = (await fetchTrajectoryByPlate(WATCH))!;
     expect(t.source).toBe('simulation');
     expect(t.camera_count).toBeGreaterThanOrEqual(4);
   });
 
   it('uses the simulated network when the database has no journey, but surfaces errors', async () => {
-    h.fake.enqueue('trajectories', { error: { message: 'relation does not exist' } });
-    h.fake.enqueue('detections', { data: [] });
+    api.enqueue('trajectory', trajectory(null, []));
     expect((await fetchTrajectoryByPlate(WATCH))!.source).toBe('simulation');
-    h.fake.enqueue('trajectories', new Error('net'));
-    await expect(fetchTrajectoryByPlate(WATCH)).rejects.toThrow('net');
-    h.fake.enqueue('trajectories', { data: null });
-    h.fake.enqueue('detections', { error: { message: 'boom' } });
+    api.enqueue('trajectory', new TypeError('net'));
+    await expect(fetchTrajectoryByPlate(WATCH)).rejects.toThrow('Data API is unreachable');
+    api.enqueue('trajectory', fail(502, 'boom'));
     await expect(fetchTrajectoryByPlate(WATCH)).rejects.toThrow('Failed to load trajectory: boom');
-    h.fake.enqueue('trajectories', { data: null });
-    h.fake.enqueue('detections', { data: [] });
+    api.enqueue('trajectory', trajectory(null, []));
     expect(await fetchTrajectoryByPlate('x')).toBeNull();
   });
 

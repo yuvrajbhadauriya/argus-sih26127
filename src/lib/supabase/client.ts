@@ -1,5 +1,7 @@
 // ═══════════════════════════════════════════════════
-// Supabase Client — single, lazily created instance for the entire app.
+// Supabase Client — Auth only. Data goes through /api/data (src/lib/dataApi.ts):
+// the database is private and the anon key can read no table.
+// Single, lazily created instance for the entire app.
 // Reads VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY (via config/env).
 //
 // @supabase/supabase-js (~55 kB gz) is loaded with a dynamic import on the
@@ -48,4 +50,19 @@ export function getSupabase(): Promise<SupabaseClient> {
       });
   }
   return clientPromise;
+}
+
+/**
+ * The signed-in user's access token (for /api/data writes), or null when
+ * signed out / not configured. Loads the SDK only when a session may exist.
+ */
+export async function getAccessToken(): Promise<string | null> {
+  if (!isSupabaseConfigured()) return null;
+  try {
+    const supabase = await getSupabase();
+    const { data } = await supabase.auth.getSession();
+    return data.session?.access_token ?? null;
+  } catch {
+    return null;
+  }
 }

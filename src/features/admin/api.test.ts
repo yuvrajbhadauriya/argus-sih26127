@@ -1,50 +1,64 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { createFakeSupabase } from '@/test/supabaseMock';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { createFakeDataApi, fail, rows } from '@/test/dataApiMock';
 
-const h = vi.hoisted(() => ({ configured: true, fake: null as unknown as ReturnType<typeof createFakeSupabase> }));
+const h = vi.hoisted(() => ({ configured: true }));
 
-vi.mock('@/lib/supabase/client', async () => {
-  const { createFakeSupabase } = await import('@/test/supabaseMock');
-  h.fake = createFakeSupabase();
-  return { getSupabase: async () => h.fake.client, isSupabaseConfigured: () => h.configured };
-});
+vi.mock('@/lib/supabase/client', () => ({
+  getSupabase: async () => {
+    throw new Error('the browser must not query tables directly');
+  },
+  isSupabaseConfigured: () => h.configured,
+  getAccessToken: async () => 'op-token',
+}));
 
 import { fetchAuditLog } from './api';
 import { resetAuth } from '@/features/auth/session';
 import { mockAuditLogs } from '@/mocks/fixtures/mockAdmin';
 
 const OPERATOR = { id: 'u1', email: 'op@example.com', name: 'Op', role: 'operator' as const, demo: false };
+const api = createFakeDataApi();
 
 beforeEach(() => {
   h.configured = true;
-  h.fake.reset();
+  api.reset();
+  vi.stubGlobal('fetch', api.fetch);
   resetAuth(null);
 });
 
+afterEach(() => vi.unstubAllGlobals());
+
 describe('fetchAuditLog', () => {
-  it('never queries audit_logs for a guest (anon has no grant) and shows the simulated trail', async () => {
+  it('never calls the API for a guest and shows the simulated trail', async () => {
     const t = await fetchAuditLog();
-    expect(h.fake.from).not.toHaveBeenCalledWith('audit_logs');
+    expect(api.fetch).not.toHaveBeenCalled();
     expect(t).toEqual({ entries: mockAuditLogs, simulated: true, reason: 'guest' });
   });
 
   it('signed in + empty table → simulated trail flagged "empty"', async () => {
     resetAuth(OPERATOR);
-    h.fake.enqueue('audit_logs', { data: [] });
+    api.enqueue('audit-log', rows([]));
     expect(await fetchAuditLog()).toMatchObject({ simulated: true, reason: 'empty' });
   });
 
-  it('signed in + rows → live entries', async () => {
+  it('signed in + rows → live entries, requested with the operator token', async () => {
     resetAuth(OPERATOR);
-    h.fake.enqueue('audit_logs', { data: [{ id: 7, action: 'ALERT_ACK', entity_type: 'alert', entity_id: 'a1', user_id: 'u1', details: { x: 1 }, created_at: 't' }] });
-    const t = await fetchAuditLog();
+    api.enqueue('audit-log', rows([{ id: 7, action: 'ALERT_ACK', entity_type: 'alert', entity_id: 'a1', user_id: 'u1', details: { x: 1 }, created_at: 't' }]));
+    const t = await fetchAuditLog(50);
     expect(t.simulated).toBe(false);
     expect(t.entries[0]).toMatchObject({ id: '7', user_email: 'u1', details: '{"x":1}', timestamp: 't' });
+    expect(api.calls[0].headers.get('authorization')).toBe('Bearer op-token');
+    expect(api.calls[0].params.get('limit')).toBe('50');
   });
 
-  it('signed in + query error → rejects (page shows ErrorState)', async () => {
+  it('signed in without an operator role (403) → the guest view', async () => {
     resetAuth(OPERATOR);
-    h.fake.enqueue('audit_logs', { error: { message: 'boom' } });
+    api.enqueue('audit-log', fail(403, 'Operator or admin role required'));
+    expect(await fetchAuditLog()).toEqual({ entries: mockAuditLogs, simulated: true, reason: 'guest' });
+  });
+
+  it('signed in + API error → rejects (page shows ErrorState)', async () => {
+    resetAuth(OPERATOR);
+    api.enqueue('audit-log', fail(502, 'boom'));
     await expect(fetchAuditLog()).rejects.toThrow('boom');
   });
 

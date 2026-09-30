@@ -2,9 +2,10 @@
 // Data Access Layer — Alerts & Watchlist
 //
 // Live (Supabase configured): reads/writes the `alerts` and
-// `blacklist_entries` tables. Errors are thrown (pages show ErrorState) —
-// never silently replaced by fixtures. Writes need a signed-in operator
-// (RLS, see supabase/migrations/20261001000100_rls.sql).
+// `blacklist_entries` tables through /api/data (alerts, alerts/acknowledge,
+// watchlist) — the database itself is private. Errors are thrown (pages show
+// ErrorState) — never silently replaced by fixtures. Writes need a signed-in
+// operator; the server route verifies the session and stamps the actor.
 //
 // Simulated / demo: the alert feed generated from the simulated Mumbai network
 // (src/mocks/fixtures/mockAlerts.ts). While "replay the day" is running
@@ -13,7 +14,8 @@
 // ═══════════════════════════════════════════════════
 
 import type { AlertRecord, BlacklistEntry, AlertPriority, WatchlistCategory } from '@/types';
-import { getSupabase, isSupabaseConfigured } from '@/lib/supabase/client';
+import { isSupabaseConfigured } from '@/lib/supabase/client';
+import { apiRow, apiRows, apiSend } from '@/lib/dataApi';
 import { reportLiveError, reportLiveOk } from '@/lib/dataSource';
 import { DEFAULT_LOCATION } from '@/config/constants';
 import { mockAlertFeed as mockAlerts, mockBlacklistEntries } from '@/mocks/fixtures/mockAlerts';
@@ -90,9 +92,6 @@ export function rowToAlert(a: any): TriageAlert {
   };
 }
 
-/** Embedded select used by the list and by realtime refetches. */
-export const ALERT_SELECT = '*, detections(*, cameras(*)), blacklist_entries(*)';
-
 /** Fetch all alerts, newest first (see module comment for sources). */
 export async function fetchAlerts(): Promise<AlertRecord[]> {
   if (!isSupabaseConfigured()) {
@@ -100,22 +99,18 @@ export async function fetchAlerts(): Promise<AlertRecord[]> {
   }
 
   try {
-    const supabase = await getSupabase();
-    const { data, error } = await supabase.from('alerts').select(ALERT_SELECT).order('created_at', { ascending: false });
-
-    if (!error && data && data.length > 0) {
-      reportLiveOk();
-      liveFallbackActive = false;
-      return data.map(rowToAlert);
+    // The server embeds detection → camera and watchlist entry (and retries
+    // without joins on a partially migrated schema).
+    let rows: unknown[];
+    try {
+      rows = await apiRows('alerts');
+    } catch (err) {
+      throw new Error(`Failed to load alerts: ${err instanceof Error ? err.message : String(err)}`);
     }
-
-    // Embedding can fail on a partially migrated schema: retry without joins.
-    const { data: rawAlerts, error: rawErr } = await supabase.from('alerts').select('*').order('created_at', { ascending: false });
-    if (rawErr) throw new Error(`Failed to load alerts: ${rawErr.message}`);
     reportLiveOk();
-    if (rawAlerts && rawAlerts.length > 0) {
+    if (rows.length > 0) {
       liveFallbackActive = false;
-      return rawAlerts.map(rowToAlert);
+      return rows.map(rowToAlert);
     }
     // Connected but nothing recorded yet: show the simulated network's feed
     // (labelled) rather than an empty control room.
@@ -127,18 +122,21 @@ export async function fetchAlerts(): Promise<AlertRecord[]> {
   }
 }
 
-/** Fetch one alert (with joins) by id — used by the realtime subscription. */
+/** Fetch one alert (with joins) by id. */
 export async function fetchAlertById(id: string): Promise<TriageAlert | null> {
   if (!isSupabaseConfigured() || (liveFallbackActive && mockAlerts.some((a) => a.id === id))) return (mockAlerts.find((a) => a.id === id) as TriageAlert | undefined) ?? null;
-  const supabase = await getSupabase();
-  const { data, error } = await supabase.from('alerts').select(ALERT_SELECT).eq('id', id).maybeSingle();
-  if (error) throw new Error(`Failed to load alert: ${error.message}`);
+  let data: unknown;
+  try {
+    data = await apiRow('alerts', { id });
+  } catch (err) {
+    throw new Error(`Failed to load alert: ${err instanceof Error ? err.message : String(err)}`);
+  }
   return data ? rowToAlert(data) : null;
 }
 
 /**
- * Acknowledge an alert. Live: needs an operator session (RLS); the server
- * stamps acknowledged_by/at from the JWT, the name sent here is informative.
+ * Acknowledge an alert. Live: needs an operator session; /api/data verifies
+ * it and stamps acknowledged_by/at itself (operatorName is only used offline).
  */
 export async function acknowledgeAlert(alertId: string, operatorName: string = 'Admin'): Promise<void> {
   const simulatedAlert = liveFallbackActive && mockAlerts.some((a) => a.id === alertId);
@@ -153,18 +151,11 @@ export async function acknowledgeAlert(alertId: string, operatorName: string = '
     return;
   }
 
-  const supabase = await getSupabase();
-  const { error } = await supabase
-    .from('alerts')
-    .update({
-      status: 'acknowledged',
-      acknowledged: true,
-      acknowledged_by: operatorName,
-      acknowledged_at: new Date().toISOString(),
-    })
-    .eq('id', alertId);
-
-  if (error) throw new Error(`Failed to acknowledge alert: ${error.message}`);
+  try {
+    await apiSend('alerts/acknowledge', 'POST', { id: alertId });
+  } catch (err) {
+    throw new Error(`Failed to acknowledge alert: ${err instanceof Error ? err.message : String(err)}`);
+  }
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -189,17 +180,15 @@ export async function fetchBlacklistEntries(): Promise<BlacklistEntry[]> {
     return mockBlacklistEntries;
   }
 
-  const supabase = await getSupabase();
-  const { data, error } = await supabase
-    .from('blacklist_entries')
-    .select('*')
-    .order('created_at', { ascending: false });
-
-  if (error) {
-    reportLiveError(error.message);
-    throw new Error(`Failed to fetch blacklist entries: ${error.message}`);
+  let data: unknown[];
+  try {
+    data = await apiRows('watchlist');
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    reportLiveError(message);
+    throw new Error(`Failed to fetch blacklist entries: ${message}`);
   }
-  if (!data || data.length === 0) {
+  if (data.length === 0) {
     // Empty table: the simulated network's watchlist (pages show the badge).
     watchlistFallbackActive = true;
     return mockBlacklistEntries;
@@ -224,25 +213,18 @@ export async function createWatchlistEntry(input: NewWatchlistEntry): Promise<Bl
     mockBlacklistEntries.unshift(entry);
     return entry;
   }
-  const supabase = await getSupabase();
-  const { data, error } = await supabase
-    .from('blacklist_entries')
-    .insert({
-      id: `bl-${crypto.randomUUID()}`,
+  try {
+    const { row } = await apiSend<{ row: unknown }>('watchlist', 'POST', {
       plate_text: input.plate_text,
       category: input.category,
       priority: input.priority,
       reason: input.reason,
-      notes: input.reason,
-      valid_from: ts,
       valid_to: input.valid_to,
-      is_active: true,
-      source: 'dashboard',
-    })
-    .select('*')
-    .single();
-  if (error) throw new Error(`Failed to add watchlist entry: ${error.message}`);
-  return rowToEntry(data);
+    });
+    return rowToEntry(row);
+  } catch (err) {
+    throw new Error(`Failed to add watchlist entry: ${err instanceof Error ? err.message : String(err)}`);
+  }
 }
 
 /** Edit a watchlist entry (active flag, priority, reason, validity). */
@@ -256,14 +238,14 @@ export async function updateWatchlistEntry(
     if (e) Object.assign(e, patch, { updated_at: ts });
     return;
   }
-  const supabase = await getSupabase();
-  const row: Record<string, unknown> = { ...patch, updated_at: ts };
-  if (patch.reason !== undefined) row.notes = patch.reason;
   if (watchlistFallbackActive && mockBlacklistEntries.some((w) => w.id === id)) {
     const e = mockBlacklistEntries.find((w) => w.id === id)!;
     Object.assign(e, patch, { updated_at: ts });
     return;
   }
-  const { error } = await supabase.from('blacklist_entries').update(row).eq('id', id);
-  if (error) throw new Error(`Failed to update watchlist entry: ${error.message}`);
+  try {
+    await apiSend('watchlist', 'PATCH', patch, { id });
+  } catch (err) {
+    throw new Error(`Failed to update watchlist entry: ${err instanceof Error ? err.message : String(err)}`);
+  }
 }

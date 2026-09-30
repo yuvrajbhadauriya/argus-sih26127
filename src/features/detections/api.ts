@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════
 // Detections Data Access
 // Loads pipeline detection data (bboxes + plates) for a camera.
-// Priority: 1. Supabase `detections` table  2. Static JSON in /public/detections
+// Priority: 1. `detections` table via /api/data/detections  2. Static JSON in /public/detections
 //
 // Static JSON only exists for clips the ANPR pipeline has actually been run
 // on: /detections/manifest.json lists those camera codes. Every other camera
@@ -10,7 +10,8 @@
 // ═══════════════════════════════════════════════════
 
 import type { Detection } from '@/types';
-import { getSupabase, isSupabaseConfigured } from '@/lib/supabase/client';
+import { isSupabaseConfigured } from '@/lib/supabase/client';
+import { apiRows } from '@/lib/dataApi';
 import { reportLiveError } from '@/lib/dataSource';
 import { mockCameras } from '@/mocks/fixtures/mockCameras';
 
@@ -25,10 +26,6 @@ export const CODE_ALIAS_MAP: Record<string, string> = Object.fromEntries(
 );
 
 export const DETECTIONS_MANIFEST_URL = '/detections/manifest.json';
-
-/** Rows per Supabase request (PostgREST max_rows) and the per-camera ceiling. */
-export const DETECTIONS_PAGE_SIZE = 1000;
-export const DETECTIONS_MAX_ROWS = 20_000;
 
 /** Shape of /detections/manifest.json (written when pipeline output is published). */
 export interface DetectionsManifest {
@@ -59,40 +56,27 @@ export function resetDetectionsManifest() {
 
 /** Options shared by the detection fetchers. */
 export interface FetchDetectionsOptions {
-  /** Aborts the underlying fetch / Supabase request (e.g. on unmount or camera switch). */
+  /** Aborts the underlying fetch (e.g. on unmount or camera switch). */
   signal?: AbortSignal;
 }
 
 /**
- * Detections for a camera from the Supabase `detections` table.
- * Returns null when the query errors or yields no rows (caller should fall back).
+ * Detections for a camera from the `detections` table (GET /api/data/detections;
+ * the server pages through PostgREST's 1000-row cap in frame order).
+ * Returns null when the request fails or yields no rows (caller should fall back).
  * Throws if a row cannot be mapped (e.g. malformed bbox JSON).
  */
-export async function fetchDetectionsFromSupabase(
+export async function fetchDetectionsFromApi(
   cameraId: string,
   options: FetchDetectionsOptions = {},
 ): Promise<Detection[] | null> {
-  const supabase = await getSupabase();
-  // PostgREST caps a response at 1000 rows (supabase/config.toml max_rows), and
-  // one clip holds thousands of reads: page through in frame order.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const data: any[] = [];
-  for (let from = 0; from < DETECTIONS_MAX_ROWS; from += DETECTIONS_PAGE_SIZE) {
-    let query = supabase
-      .from('detections')
-      .select('*')
-      .eq('camera_id', cameraId)
-      .order('frame_timestamp_sec', { ascending: true })
-      .order('event_id', { ascending: true })
-      .range(from, from + DETECTIONS_PAGE_SIZE - 1);
-    if (options.signal) query = query.abortSignal(options.signal);
-    const { data: page, error } = await query;
-    if (error) {
-      if (from === 0) return null;
-      break;
-    }
-    data.push(...(page ?? []));
-    if (!page || page.length < DETECTIONS_PAGE_SIZE) break;
+  let data: any[];
+  try {
+    data = await apiRows('detections', { camera_id: cameraId }, { signal: options.signal });
+  } catch (err) {
+    if (options.signal?.aborted) throw err;
+    return null;
   }
 
   if (data.length === 0) return null;
@@ -155,8 +139,8 @@ export async function fetchDetectionsFromStaticJson(
 }
 
 /**
- * Detections for a camera: Supabase first (when configured and a camera id is
- * known), falling back to the static JSON file. Throws if the fallback fails.
+ * Detections for a camera: the database first (live mode with a camera id),
+ * falling back to the static JSON file. Throws if the fallback fails.
  */
 export async function fetchCameraDetections(
   cameraCode?: string,
@@ -165,14 +149,14 @@ export async function fetchCameraDetections(
 ): Promise<Detection[]> {
   if (isSupabaseConfigured() && cameraId) {
     try {
-      const rows = await fetchDetectionsFromSupabase(cameraId, options);
+      const rows = await fetchDetectionsFromApi(cameraId, options);
       if (rows) return rows;
     } catch (err) {
       // Pipeline output shipped as static JSON is real model output (not a
       // fixture), so it is an acceptable fallback — but the failure is
       // reported to the data-source indicator instead of being swallowed.
       reportLiveError(err);
-      console.warn('Supabase detection fetch failed, falling back to published pipeline output:', err);
+      console.warn('Detection fetch failed, falling back to published pipeline output:', err);
     }
   }
   options?.signal?.throwIfAborted();

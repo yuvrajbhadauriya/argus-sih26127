@@ -1,7 +1,8 @@
 // ═══════════════════════════════════════════════════
-// Supabase Data Access Layer — Vehicles & Trajectories
+// Data Access Layer — Vehicles & Trajectories
 //
-// Live (Supabase configured): the `vehicles` / `trajectories` views. A query
+// Live (Supabase configured): the `vehicles` / `trajectories` views via
+// /api/data/vehicles and /api/data/trajectory (the database is private). A query
 // ERROR is thrown (the page shows ErrorState). When the database simply has no
 // multi-camera journey for a plate (e.g. only the 8 demo clips were processed),
 // the simulated city network is used instead and the result is tagged
@@ -10,7 +11,8 @@
 // ═══════════════════════════════════════════════════
 
 import type { Vehicle, Trajectory } from '@/types';
-import { getSupabase, isSupabaseConfigured } from '@/lib/supabase/client';
+import { isSupabaseConfigured } from '@/lib/supabase/client';
+import { apiGet, apiRows } from '@/lib/dataApi';
 import { reportLiveError, reportLiveOk } from '@/lib/dataSource';
 import { DEFAULT_LOCATION } from '@/config/constants';
 import { normalizePlate } from './lib/geo';
@@ -45,23 +47,20 @@ export async function searchVehicles(query: string = ''): Promise<Vehicle[]> {
     return simVehiclesOrEmpty(normalized);
   }
 
-  const supabase = await getSupabase();
-  let dbQuery = supabase.from('vehicles').select('*');
-  if (normalized) {
-    dbQuery = dbQuery.ilike('plate_text', `%${normalized}%`);
-  } else {
-    dbQuery = dbQuery.order('last_seen', { ascending: false }).limit(100);
-  }
-
-  const { data, error } = await dbQuery;
-  if (error) {
-    reportLiveError(error.message);
-    throw new Error(`Failed to search vehicles: ${error.message}`);
+  // The server matches the normalised plate (spaces/hyphens ignored) or lists
+  // the 100 most recently seen vehicles.
+  let data: unknown[];
+  try {
+    data = await apiRows('vehicles', { q: normalizePlate(normalized) });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    reportLiveError(message);
+    throw new Error(`Failed to search vehicles: ${message}`);
   }
   reportLiveOk();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const rows = (data ?? []).map((row: any) => ({
+  const rows = data.map((row: any) => ({
     plate_text: row.plate_text || row.plate || 'UNKNOWN',
     vehicle_type: row.vehicle_type || 'car',
     first_seen: row.first_seen || new Date().toISOString(),
@@ -72,25 +71,19 @@ export async function searchVehicles(query: string = ''): Promise<Vehicle[]> {
   return rows.length > 0 ? rows : simVehiclesOrEmpty(normalized);
 }
 
-/** Trajectory from Supabase (trajectories relation, else reconstructed from detections). */
+/** Trajectory from the database (trajectories view, else reconstructed from the plate's reads). */
 async function fetchDbTrajectory(normalized: string): Promise<Trajectory | null> {
-  const supabase = await getSupabase();
-  const { data, error } = await supabase
-    .from('trajectories')
-    .select('*')
-    .eq('plate_text', normalized)
-    .maybeSingle();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let body: { trajectory?: any; detections?: any[] };
+  try {
+    body = await apiGet('trajectory', { plate: normalizePlate(normalized) });
+  } catch (err) {
+    throw new Error(`Failed to load trajectory: ${err instanceof Error ? err.message : String(err)}`);
+  }
+  if (body.trajectory) return { ...(body.trajectory as Trajectory), source: 'supabase' };
 
-  if (!error && data) return { ...(data as Trajectory), source: 'supabase' };
-
-  const { data: dets, error: detErr } = await supabase
-    .from('detections')
-    .select('*, cameras(name, code, latitude, longitude)')
-    .eq('plate_text_normalized', normalizePlate(normalized))
-    .order('detected_at', { ascending: true });
-
-  if (detErr) throw new Error(`Failed to load trajectory: ${detErr.message}`);
-  if (!dets || dets.length === 0) return null;
+  const dets = Array.isArray(body.detections) ? body.detections : [];
+  if (dets.length === 0) return null;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const ts = (d: any): string => d.detected_at ?? d.timestamp;
