@@ -2,9 +2,12 @@
 // CameraVideoPlayer Component
 // Pure CCTV Video Feed with robust CORS & Supabase Storage video playback
 //
-// Clips are the 720p Mumbai renditions (local dev copy or Supabase Storage,
-// see VITE_VIDEO_SOURCE); if the configured source fails, the other source is
-// tried once before the tile goes "Feed offline".
+// Clips are the 720p Mumbai renditions (local dev copy or the private Supabase
+// Storage bucket, see VITE_VIDEO_SOURCE). Storage clips play from 1-hour signed
+// URLs (../lib/signedMedia.ts) that are refreshed before they expire; the swap
+// re-syncs to the live clock, so the feed never restarts. A failing signed URL
+// is re-signed once; then the other source is tried once before the tile goes
+// "Feed offline".
 // Bandwidth rules:
 // - nothing but metadata is requested until the player is on screen
 // - it only plays while visible (IntersectionObserver) and the tab is shown,
@@ -25,6 +28,7 @@ import type { Detection } from '@/types';
 import { useDetectionOverlay } from '@/features/detections/hooks/useDetectionOverlay';
 import { useCameraDetections } from '@/features/detections/hooks/useCameraDetections';
 import { resolveCameraMedia } from '@/features/cameras/api';
+import { invalidateSignedMedia, useSignedMediaUrl } from '@/features/cameras/lib/signedMedia';
 import { useInViewport } from '@/features/cameras/hooks/useInViewport';
 import { fetchCameraEvents } from '@/features/detections/api';
 import { LIVE_DRIFT_TOLERANCE_SEC, syncVideoToLiveClock } from '@/features/cameras/lib/liveClock';
@@ -88,13 +92,16 @@ function PlayerInner({
   const [hasBeenVisible, setHasBeenVisible] = useState(false);
   const [status, setStatus] = useState<FeedStatus>('connecting');
   const usedFallbackRef = useRef(false);
+  const resignedRef = useRef(false);
 
   if (inView && !hasBeenVisible) setHasBeenVisible(true);
 
   const media = resolveCameraMedia(camera.video_url, camera.code, camera.id);
-  const videoSrc = media.video;
   const fallbackSrc = media.fallback;
-  const poster = camera.poster_url || media.poster || undefined;
+  // Private bucket → signed URL (undefined while signing, null if it failed).
+  const signedVideo = useSignedMediaUrl(media.video);
+  const videoSrc = signedVideo === null ? fallbackSrc || undefined : signedVideo;
+  const poster = useSignedMediaUrl(camera.poster_url || media.poster || undefined) || undefined;
 
   // Fetch real pipeline detections only once the feed is actually on screen.
   const hasPropDetections = !!propDetections && propDetections.length > 0;
@@ -198,6 +205,11 @@ function PlayerInner({
 
   const handleError = (e: React.SyntheticEvent<HTMLVideoElement>) => {
     const target = e.currentTarget;
+    // An expired / revoked signed URL: sign it again once (new src re-renders).
+    if (!resignedRef.current && target.src === signedVideo && invalidateSignedMedia(media.video)) {
+      resignedRef.current = true;
+      return;
+    }
     if (!usedFallbackRef.current && fallbackSrc && target.currentSrc !== fallbackSrc && target.src !== fallbackSrc) {
       usedFallbackRef.current = true;
       console.warn(`Video load error for camera ${camera.code}; trying the other video source.`);

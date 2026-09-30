@@ -3,11 +3,16 @@
 // ═══════════════════════════════════════════════════
 
 // ── Supabase Storage ──────────────────────────────
-// The camera videos live in the public `videos` bucket of the project in
-// VITE_SUPABASE_URL. VITE_VIDEO_BASE_URL overrides it (e.g. a CDN in front).
+// The camera videos live in the PRIVATE `videos` bucket of the project in
+// VITE_SUPABASE_URL. Clip URLs are built in the public-object form below and
+// swapped for 1-hour signed URLs from /api/media/sign before they reach a
+// <video>/<img> (src/features/cameras/lib/signedMedia.ts).
+// VITE_VIDEO_BASE_URL overrides the base (e.g. a CDN in front; not signed).
 const FALLBACK_SUPABASE_URL = 'https://zkmtjqsljwwyjpgvgyyp.supabase.co';
 const SUPABASE_URL = String(import.meta.env.VITE_SUPABASE_URL || FALLBACK_SUPABASE_URL).replace(/\/+$/, '');
 export const SUPABASE_PROJECT_REF = new URL(SUPABASE_URL).hostname.split('.')[0];
+/** Public-object URL prefix of the project's Storage (bucket follows). */
+export const SUPABASE_PUBLIC_OBJECT_BASE = `${SUPABASE_URL}/storage/v1/object/public/`;
 export const SUPABASE_STORAGE_BASE = String(
   import.meta.env.VITE_VIDEO_BASE_URL || `${SUPABASE_URL}/storage/v1/object/public/videos/`,
 ).replace(/\/?$/, '/');

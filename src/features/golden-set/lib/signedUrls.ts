@@ -30,7 +30,7 @@ export class SignedUrlCache {
   constructor(bucket: string, opts: { fetch?: typeof fetch; now?: () => number; endpoint?: string } = {}) {
     this.bucket = bucket;
     this.fetchImpl = opts.fetch ?? ((...args) => fetch(...args));
-    this.now = opts.now ?? Date.now;
+    this.now = opts.now ?? (() => Date.now());
     this.endpoint = opts.endpoint ?? SIGN_ENDPOINT;
   }
 
@@ -41,6 +41,22 @@ export class SignedUrlCache {
     const now = this.now();
     if ('url' in e) return e.expiresAt - REFRESH_MARGIN_MS > now ? e.url : undefined;
     return now - e.failedAt < FAILURE_RETRY_MS ? null : undefined;
+  }
+
+  /**
+   * The last signed URL for `path` while it is still valid, even inside the
+   * refresh margin — lets an element keep its src until the re-signed URL lands.
+   */
+  latest(path: string): string | undefined {
+    const e = this.entries.get(path);
+    return e && 'url' in e && e.expiresAt > this.now() ? e.url : undefined;
+  }
+
+  /** Drop a URL that failed on its element (e.g. expired) so the next request re-signs it. */
+  invalidate(path: string): void {
+    if (!this.entries.delete(path)) return;
+    this.version++;
+    for (const l of this.listeners) l();
   }
 
   /** Queue paths that need a (new) URL; resolved in batches on the next microtask. */

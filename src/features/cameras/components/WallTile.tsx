@@ -8,6 +8,7 @@ import { CctvIcon } from 'lucide-react';
 import type { Camera } from '@/types/camera';
 import { VideoTile } from '@/shared/ui/VideoTile';
 import { CameraVideoPlayer } from './CameraVideoPlayer';
+import { useSignedMediaUrl } from '../lib/signedMedia';
 
 interface WallTileProps {
   camera: Camera;
@@ -20,7 +21,8 @@ interface WallTileProps {
 
 export function WallTile({ camera, selected, onSelect, live = false, watchlist }: WallTileProps) {
   const [posterFailed, setPosterFailed] = useState(false);
-  const poster = posterFailed ? undefined : camera.poster_url;
+  const signedPoster = useSignedMediaUrl(camera.poster_url) || undefined;
+  const poster = posterFailed ? undefined : signedPoster;
   const offline = camera.status === 'offline';
 
   const footer = (
