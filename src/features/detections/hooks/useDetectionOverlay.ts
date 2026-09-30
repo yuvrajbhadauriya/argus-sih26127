@@ -134,6 +134,9 @@ function sameSet(a: Detection[], b: Detection[]): boolean {
   return true;
 }
 
+/** Below this rendered width the text labels would bury the frame, so only boxes are drawn. */
+const MIN_LABEL_WIDTH = 480;
+
 function drawDetections(ctx: CanvasRenderingContext2D, dets: Detection[], cssW: number, cssH: number) {
   // Scale coordinates from 640x360 base video resolution to canvas rendered dimensions
   const scaleX = cssW / BASE_WIDTH;
@@ -171,6 +174,8 @@ function drawDetections(ctx: CanvasRenderingContext2D, dets: Detection[], cssW: 
     ctx.lineTo(scaledX + scaledW, scaledY + scaledH);
     ctx.lineTo(scaledX + scaledW, scaledY + scaledH - cornerLen);
     ctx.stroke();
+
+    if (cssW < MIN_LABEL_WIDTH) continue;
 
     // Label: plate · class · confidence on a dark chip above the box
     const trackedIdStr = det.tracked_vehicle_id ? `#${det.tracked_vehicle_id} ` : '';

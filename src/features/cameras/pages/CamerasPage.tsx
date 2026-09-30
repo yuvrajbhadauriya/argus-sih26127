@@ -31,9 +31,9 @@ import { toast } from '@/shared/ui/toast';
 type Density = '2' | '3' | '4';
 const DENSITY_KEY = 'nero.cameras.wall';
 const WALL_COLS: Record<Density, string> = {
-  '2': 'grid-cols-2',
-  '3': 'grid-cols-2 md:grid-cols-3',
-  '4': 'grid-cols-2 md:grid-cols-3 2xl:grid-cols-4',
+  '2': 'grid-cols-1 min-[480px]:grid-cols-2',
+  '3': 'grid-cols-1 min-[480px]:grid-cols-2 md:grid-cols-3',
+  '4': 'grid-cols-1 min-[480px]:grid-cols-2 md:grid-cols-3 2xl:grid-cols-4',
 };
 
 function readDensity(): Density {

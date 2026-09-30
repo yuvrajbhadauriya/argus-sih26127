@@ -72,7 +72,7 @@ export function CameraMarker({ camera, selected = false, lastPlate, onSelect }: 
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <h4 className="truncate text-[13px] font-semibold text-fg">{camera.name}</h4>
-              <p className="font-mono text-xs font-medium text-fg-muted">{camera.code}</p>
+              <div className="font-mono text-xs font-medium text-fg-muted">{camera.code}</div>
             </div>
             <StatusPill status={camera.status} size="sm" />
           </div>

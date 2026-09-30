@@ -33,11 +33,13 @@ function LayerToggle({ label, pressed, onToggle, icon }: { label: string; presse
       size="sm"
       variant={pressed ? 'secondary' : 'ghost'}
       aria-pressed={pressed}
+      aria-label={label}
+      title={label}
       icon={icon}
       onClick={onToggle}
       className={pressed ? 'text-fg' : 'text-fg-subtle'}
     >
-      {label}
+      <span className="hidden md:inline">{label}</span>
     </Button>
   );
 }
@@ -155,7 +157,7 @@ export function LiveMapPage() {
                 focusNonce={focusNonce}
               />
 
-              <MapPanel position="top-left" className="px-3 py-2">
+              <MapPanel position="top-left" className="hidden px-3 py-2 xl:block">
                 <p className="text-[13px] font-semibold text-fg">New Delhi · Central Command Sector</p>
                 <p className="font-mono text-2xs tabular-nums text-fg-muted">28.6129° N, 77.2295° E</p>
               </MapPanel>

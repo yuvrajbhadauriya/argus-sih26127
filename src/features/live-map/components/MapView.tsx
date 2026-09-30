@@ -53,6 +53,11 @@ function MapController({
     camsRef.current = cameras;
   }, [cameras]);
 
+  // Zoom buttons bottom-right: the top corners hold the sector card and layer toggles.
+  useEffect(() => {
+    map.zoomControl?.setPosition?.('bottomright');
+  }, [map]);
+
   // Code labels from LABEL_ZOOM up: toggle a class on the container instead of rebuilding icons.
   useEffect(() => {
     if (typeof map.on !== 'function' || typeof map.getContainer !== 'function') return;

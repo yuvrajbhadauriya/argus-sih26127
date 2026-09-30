@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  DownloadIcon, FilterXIcon, GaugeIcon, ListIcon, RefreshCwIcon, RouteIcon, ScanLineIcon,
+  CctvIcon, DownloadIcon, FilterXIcon, GaugeIcon, ListIcon, RefreshCwIcon, RouteIcon, ScanLineIcon,
   SearchIcon, TagIcon, TriangleAlertIcon,
 } from 'lucide-react';
 import type { Detection } from '@/types';
@@ -16,7 +16,7 @@ import { Page, PageHeader } from '@/shared/layout/Page';
 import { Panel } from '@/shared/ui/Card';
 import { Badge } from '@/shared/ui/Badge';
 import { Button, IconButton } from '@/shared/ui/Button';
-import { KpiStrip, KpiTile } from '@/shared/ui/KpiTile';
+import { KpiTile } from '@/shared/ui/KpiTile';
 import { Input, Select, Toolbar } from '@/shared/ui/Input';
 import { DataTable, type Column } from '@/shared/ui/DataTable';
 import { EmptyState } from '@/shared/ui/EmptyState';
@@ -140,12 +140,13 @@ export function DetectionsPage() {
         }
       />
 
-      <KpiStrip className="xl:grid-cols-4">
+      {/* 4 tiles: own grid (KpiStrip is fixed at 5 columns on xl) */}
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <KpiTile label="Events" value={stats.events.toLocaleString('en-IN')} icon={<ListIcon size={16} />} loading={loading} hint={active ? `of ${rows.length} total` : 'all cameras'} />
         <KpiTile label="Unique plates" value={stats.uniquePlates.toLocaleString('en-IN')} icon={<TagIcon size={16} />} loading={loading} />
         <KpiTile label="Mean confidence" value={pct(stats.meanConfidence)} unit={stats.meanConfidence == null ? undefined : '%'} icon={<GaugeIcon size={16} />} tone="success" loading={loading} />
         <KpiTile label="Low confidence" value={stats.lowConfidence} icon={<TriangleAlertIcon size={16} />} tone="warning" hint={`below ${LOW_CONFIDENCE * 100}%`} loading={loading} />
-      </KpiStrip>
+      </div>
 
       <Panel flush>
         <div className="border-b border-line px-4 py-3">
@@ -162,14 +163,14 @@ export function DetectionsPage() {
             <Select aria-label="Vehicle class" label="Class" value={filters.vclass} onChange={(e) => update({ vclass: e.target.value })}>
               {CLASS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </Select>
-            <Select aria-label="Camera" label="Camera" value={filters.camera} onChange={(e) => update({ camera: e.target.value })}>
+            <Select aria-label="Camera" icon={<CctvIcon size={14} strokeWidth={1.75} />} value={filters.camera} onChange={(e) => update({ camera: e.target.value })}>
               <option value="">All cameras</option>
               {cameras.map((c) => <option key={c.id} value={c.id}>{c.code} · {c.name}</option>)}
             </Select>
-            <Select aria-label="Minimum confidence" label="Confidence" value={filters.conf} onChange={(e) => update({ conf: e.target.value as DetectionFilters['conf'] })}>
-              <option value="">All</option>
-              <option value="90">≥ 90%</option>
-              <option value="75">≥ 75%</option>
+            <Select aria-label="Minimum confidence" icon={<GaugeIcon size={14} strokeWidth={1.75} />} value={filters.conf} onChange={(e) => update({ conf: e.target.value as DetectionFilters['conf'] })}>
+              <option value="">Any confidence</option>
+              <option value="90">Confidence ≥ 90%</option>
+              <option value="75">Confidence ≥ 75%</option>
             </Select>
             {active && (
               <Button variant="ghost" icon={<FilterXIcon size={14} strokeWidth={1.75} />} onClick={clearFilters}>
