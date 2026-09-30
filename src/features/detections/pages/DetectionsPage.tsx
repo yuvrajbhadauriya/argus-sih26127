@@ -153,7 +153,7 @@ export function DetectionsPage() {
           <Toolbar>
             <Input
               aria-label="Filter by plate"
-              placeholder="Plate — e.g. DL 01 AB 1234"
+              placeholder="Plate — e.g. MH 02 EG 9588"
               mono
               icon={<SearchIcon size={16} strokeWidth={1.75} />}
               value={plateInput}

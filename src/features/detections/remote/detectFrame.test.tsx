@@ -27,7 +27,7 @@ const RESULT = {
   engine: 'yolov7-tiny-anpr',
   model_version: '1.0',
   latency_ms: 87,
-  detections: [{ plate_text: 'DL 01 AB 1234', plate_confidence: 0.987, vehicle_type: 'car', confidence: 0.9, bbox: { x: 1, y: 2, width: 3, height: 4 } }],
+  detections: [{ plate_text: 'MH 01 AB 1234', plate_confidence: 0.987, vehicle_type: 'car', confidence: 0.9, bbox: { x: 1, y: 2, width: 3, height: 4 } }],
 };
 
 function jsonResponse(body: unknown, status = 200) {
@@ -67,11 +67,11 @@ describe('detectCapturedFrame', () => {
 
   it('POSTs base64 JSON to the relative /api/detect endpoint', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(RESULT));
-    const out = await detectCapturedFrame(frame, { cameraCode: 'IG-01' });
-    expect(out.detections[0].plate_text).toBe('DL 01 AB 1234');
+    const out = await detectCapturedFrame(frame, { cameraCode: 'JG-01' });
+    expect(out.detections[0].plate_text).toBe('MH 01 AB 1234');
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe('/api/detect');
-    expect(JSON.parse(init!.body as string)).toEqual({ image_base64: 'QUJD', camera_code: 'IG-01', frame_timestamp_sec: 1 });
+    expect(JSON.parse(init!.body as string)).toEqual({ image_base64: 'QUJD', camera_code: 'JG-01', frame_timestamp_sec: 1 });
   });
 
   it('surfaces server error messages', async () => {
@@ -97,9 +97,9 @@ describe('LiveDetectPanel', () => {
     stubCanvas(() => 'data:image/jpeg;base64,AAAA');
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(RESULT));
     const ref = { current: fakeVideo() };
-    render(<LiveDetectPanel videoRef={ref} cameraCode="IG-01" />);
+    render(<LiveDetectPanel videoRef={ref} cameraCode="JG-01" />);
     await userEvent.click(screen.getByRole('button', { name: /run ai detection on this frame/i }));
-    expect(await screen.findByText('DL 01 AB 1234')).toBeInTheDocument();
+    expect(await screen.findByText('MH 01 AB 1234')).toBeInTheDocument();
     expect(screen.getByText(/OCR 98.7%/)).toBeInTheDocument();
     expect(screen.getByText('87 ms')).toBeInTheDocument();
     expect(screen.getByTestId('detect-overlay')).toBeInTheDocument();
@@ -110,7 +110,7 @@ describe('LiveDetectPanel', () => {
       throw new DOMException('tainted', 'SecurityError');
     });
     const ref = { current: fakeVideo() };
-    render(<LiveDetectPanel videoRef={ref} cameraCode="IG-01" />);
+    render(<LiveDetectPanel videoRef={ref} cameraCode="JG-01" />);
     await userEvent.click(screen.getByRole('button', { name: /run ai detection/i }));
     expect(await screen.findByRole('alert')).toHaveTextContent(/another origin/);
   });

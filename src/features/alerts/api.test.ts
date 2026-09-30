@@ -67,7 +67,7 @@ describe('alerts — Supabase configured (mocked client)', () => {
           blacklist_entry_id: 'b1',
           status: 'acknowledged',
           created_at: '2026-01-01T00:00:00Z',
-          detections: { event_id: 'd1', camera_id: 'cam-002', plate_text_raw: 'DL 01 AB 1234', lat: 10, lng: 20, cameras: { name: 'CP' } },
+          detections: { event_id: 'd1', camera_id: 'cam-002', plate_text_raw: 'MH 01 AB 1234', lat: 10, lng: 20, cameras: { name: 'CP' } },
           blacklist_entries: { id: 'b1', priority: 'critical', category: 'wanted', notes: 'n' },
         },
       ],
@@ -76,7 +76,7 @@ describe('alerts — Supabase configured (mocked client)', () => {
     expect(a).toMatchObject({
       id: 'a1',
       detection_event_id: 'd1',
-      plate_text: 'DL 01 AB 1234',
+      plate_text: 'MH 01 AB 1234',
       camera_id: 'cam-002',
       camera_name: 'CP',
       priority: 'critical',
@@ -107,8 +107,8 @@ describe('alerts — Supabase configured (mocked client)', () => {
     expect(await fetchAlerts()).toBe(mockAlerts);
   });
 
-  // BUG: a genuine coordinate of 0 is replaced with India Gate defaults because of `||`.
-  // (src/features/alerts/api.ts:62-63). Low impact for Delhi, but it's a silent data rewrite.
+  // BUG: a genuine coordinate of 0 is replaced with default-location because of `||`.
+  // (src/features/alerts/api.ts:62-63). Low impact in Mumbai, but it's a silent data rewrite.
   it.fails('BUG: preserves lat/lng of 0 instead of substituting defaults', async () => {
     h.fake.enqueue('alerts', { data: [{ id: 'a', detections: { lat: 0, lng: 0 } }] });
     const [a] = await fetchAlerts();
@@ -131,10 +131,10 @@ describe('alerts — Supabase configured (mocked client)', () => {
 
   it('fetchBlacklistEntries maps rows and throws on error', async () => {
     h.fake.enqueue('blacklist_entries', {
-      data: [{ id: 'b', plate_text: 'DL1', created_at: 'c', is_active: false }],
+      data: [{ id: 'b', plate_text: 'MH1', created_at: 'c', is_active: false }],
     });
     const [b] = await fetchBlacklistEntries();
-    expect(b).toMatchObject({ id: 'b', plate_text: 'DL1', category: 'stolen', priority: 'high', is_active: false, valid_to: null, updated_at: 'c' });
+    expect(b).toMatchObject({ id: 'b', plate_text: 'MH1', category: 'stolen', priority: 'high', is_active: false, valid_to: null, updated_at: 'c' });
 
     h.fake.enqueue('blacklist_entries', { error: { message: 'rls' } });
     await expect(fetchBlacklistEntries()).rejects.toThrow('Failed to fetch blacklist entries: rls');

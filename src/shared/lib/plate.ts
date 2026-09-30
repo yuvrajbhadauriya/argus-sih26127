@@ -2,7 +2,7 @@
 // Indian number-plate helpers (display formatting / normalisation)
 // ═══════════════════════════════════════════════════
 
-/** Uppercase alphanumerics only: 'dl-04 rs 9598' -> 'DL04RS9598'. */
+/** Uppercase alphanumerics only: 'mh-01 cs 0126' -> 'MH01CS0126'. */
 export function normalizePlate(raw: string): string {
   return (raw ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 }
@@ -12,7 +12,7 @@ const BHARAT = /^(\d{2})(BH)(\d{4})([A-Z]{1,2})$/;
 
 /**
  * Display format with HSRP spacing.
- * 'dl04rs9598' -> 'DL 04 RS 9598'; '22BH1234AA' -> '22 BH 1234 AA'; anything else -> trimmed uppercase.
+ * 'mh01cs0126' -> 'MH 01 CS 0126'; '22BH1234AA' -> '22 BH 1234 AA'; anything else -> trimmed uppercase.
  */
 export function formatPlate(raw: string): string {
   const n = normalizePlate(raw);
@@ -24,6 +24,11 @@ export function formatPlate(raw: string): string {
 }
 
 export type PlateVariant = 'private' | 'commercial' | 'ev';
+
+/** Plate colour of a vehicle: its known colour, else derived from the class. */
+export function plateVariantOf(v: { vehicle_type: string; plate_variant?: PlateVariant }): PlateVariant {
+  return v.plate_variant ?? vehicleClassToPlateVariant(v.vehicle_type);
+}
 
 /** Vehicle class -> plate colour: trucks and buses carry commercial (yellow) plates. */
 export function vehicleClassToPlateVariant(t: string): 'private' | 'commercial' {

@@ -32,15 +32,15 @@ const alert = (over: Partial<AlertRecord>): AlertRecord => ({
   id: 'a',
   detection_event_id: 'd',
   blacklist_entry_id: 'b',
-  plate_text: 'DL-01-AB-1234',
+  plate_text: 'MH-01-AB-1234',
   camera_id: 'cam-001',
-  camera_name: 'India Gate',
+  camera_name: 'Jogeshwari',
   priority: 'high',
   category: 'stolen',
   reason: 'r',
   timestamp: '2026-09-25T07:30:00Z',
-  lat: 28.6,
-  lng: 77.2,
+  lat: 19.14,
+  lng: 72.85,
   acknowledged: false,
   ...over,
 });
@@ -123,10 +123,10 @@ describe('AlertsPage', () => {
   it('lists route anomalies with evidence and filters them by type', async () => {
     const anomaly: TriageAlert = alert({ id: 'x', plate_text: 'CLONE-1', priority: 'critical', reason: 'Possible cloned plate' });
     anomaly.kind = 'cloned_plate';
-    anomaly.camera_code = 'DW-01';
+    anomaly.camera_code = 'BH-01';
     anomaly.evidence = [
-      { camera_code: 'CP-01', timestamp: '2026-09-29T09:03:48+05:30' },
-      { camera_code: 'DW-01', timestamp: '2026-09-29T09:06:52+05:30' },
+      { camera_code: 'AN-01', timestamp: '2026-09-29T09:03:48+05:30' },
+      { camera_code: 'BH-01', timestamp: '2026-09-29T09:06:52+05:30' },
     ];
     api.fetchAlerts.mockResolvedValue([anomaly, alert({ id: 'w', plate_text: 'WATCH-1' })]);
     renderPage();

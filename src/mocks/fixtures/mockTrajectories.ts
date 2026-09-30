@@ -15,7 +15,7 @@ const cam = (id: string) => {
 
 export const mockVehicles: Vehicle[] = [
   {
-    plate_text: 'DL-01-AB-1234',
+    plate_text: 'MH 03 AH 3145',
     vehicle_type: 'car',
     first_seen: '2026-09-25T08:12:00Z',
     last_seen: '2026-09-25T08:45:00Z',
@@ -23,7 +23,7 @@ export const mockVehicles: Vehicle[] = [
     camera_count: 3,
   },
   {
-    plate_text: 'HR-26-CD-5678',
+    plate_text: 'MH 43 BM 3816',
     vehicle_type: 'truck',
     first_seen: '2026-09-25T07:30:00Z',
     last_seen: '2026-09-25T09:15:00Z',
@@ -31,7 +31,7 @@ export const mockVehicles: Vehicle[] = [
     camera_count: 2,
   },
   {
-    plate_text: 'DL-02-EF-9012',
+    plate_text: 'MH 47 VX 3951',
     vehicle_type: 'car',
     first_seen: '2026-09-25T09:00:00Z',
     last_seen: '2026-09-25T09:20:00Z',
@@ -39,7 +39,7 @@ export const mockVehicles: Vehicle[] = [
     camera_count: 2,
   },
   {
-    plate_text: 'UP-16-GH-3456',
+    plate_text: 'GJ 01 JK 6763',
     vehicle_type: 'bus',
     first_seen: '2026-09-25T06:45:00Z',
     last_seen: '2026-09-25T08:30:00Z',
@@ -47,7 +47,7 @@ export const mockVehicles: Vehicle[] = [
     camera_count: 4,
   },
   {
-    plate_text: 'DL-03-IJ-7890',
+    plate_text: 'MH 02 XZ 2532',
     vehicle_type: 'motorcycle',
     first_seen: '2026-09-25T10:00:00Z',
     last_seen: '2026-09-25T10:15:00Z',
@@ -57,9 +57,9 @@ export const mockVehicles: Vehicle[] = [
 ];
 
 export const mockTrajectories: Record<string, Trajectory> = {
-  'DL-01-AB-1234': {
+  'MH 03 AH 3145': {
     id: 'traj-001',
-    plate_text: 'DL-01-AB-1234',
+    plate_text: 'MH 03 AH 3145',
     vehicle_type: 'car',
     waypoints: [
       {
@@ -83,9 +83,9 @@ export const mockTrajectories: Record<string, Trajectory> = {
     first_seen: '2026-09-25T08:12:00Z',
     last_seen: '2026-09-25T08:45:00Z',
   },
-  'HR-26-CD-5678': {
+  'MH 43 BM 3816': {
     id: 'traj-002',
-    plate_text: 'HR-26-CD-5678',
+    plate_text: 'MH 43 BM 3816',
     vehicle_type: 'truck',
     waypoints: [
       {
@@ -104,9 +104,9 @@ export const mockTrajectories: Record<string, Trajectory> = {
     first_seen: '2026-09-25T07:30:00Z',
     last_seen: '2026-09-25T09:15:00Z',
   },
-  'DL-02-EF-9012': {
+  'MH 47 VX 3951': {
     id: 'traj-003',
-    plate_text: 'DL-02-EF-9012',
+    plate_text: 'MH 47 VX 3951',
     vehicle_type: 'car',
     waypoints: [
       {

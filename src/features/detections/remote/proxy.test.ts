@@ -12,7 +12,7 @@ const ENV = { DETECTION_API_URL: UPSTREAM, DETECTION_API_KEY: KEY };
 const UPSTREAM_BODY = {
   model: 'yolov7-tiny-anpr',
   version: '2026.09',
-  predictions: [{ class: 'car', confidence: 0.94, xyxy: [100, 50, 300, 200], plate: { text: 'DL 01 AB 1234', confidence: 0.99 } }],
+  predictions: [{ class: 'car', confidence: 0.94, xyxy: [100, 50, 300, 200], plate: { text: 'MH 01 AB 1234', confidence: 0.99 } }],
 };
 
 function upstreamOk(body: unknown = UPSTREAM_BODY) {
@@ -43,7 +43,7 @@ describe('POST /api/detect', () => {
   it('forwards a JSON frame with the bearer key and returns the normalised contract', async () => {
     const fetchMock = upstreamOk();
     const res = await handleDetect(
-      jsonRequest({ image_base64: toB64(fakeJpeg(640, 360)), camera_code: 'IG-01', frame_timestamp_sec: 3.2 }),
+      jsonRequest({ image_base64: toB64(fakeJpeg(640, 360)), camera_code: 'JG-01', frame_timestamp_sec: 3.2 }),
       { env: ENV, fetch: fetchMock },
     );
     expect(res.status).toBe(200);
@@ -54,7 +54,7 @@ describe('POST /api/detect', () => {
       model_version: '2026.09',
       image: { width: 640, height: 360 },
       detections: [
-        { plate_text: 'DL 01 AB 1234', plate_confidence: 0.99, vehicle_type: 'car', confidence: 0.94, bbox: { x: 100, y: 50, width: 200, height: 150 } },
+        { plate_text: 'MH 01 AB 1234', plate_confidence: 0.99, vehicle_type: 'car', confidence: 0.94, bbox: { x: 100, y: 50, width: 200, height: 150 } },
       ],
     });
     expect(typeof body.latency_ms).toBe('number');
@@ -63,7 +63,7 @@ describe('POST /api/detect', () => {
     expect(url).toBe(UPSTREAM);
     expect((init!.headers as Record<string, string>).Authorization).toBe(`Bearer ${KEY}`);
     const form = init!.body as FormData;
-    expect(form.get('camera_code')).toBe('IG-01');
+    expect(form.get('camera_code')).toBe('JG-01');
     expect(form.get('frame_timestamp_sec')).toBe('3.2');
     expect(init!.signal).toBeInstanceOf(AbortSignal);
   });
@@ -72,7 +72,7 @@ describe('POST /api/detect', () => {
     const fetchMock = upstreamOk({ results: [] });
     const form = new FormData();
     form.append('image', new Blob([fakePng() as BlobPart], { type: 'image/png' }), 'f.png');
-    form.append('camera_code', 'CP-01');
+    form.append('camera_code', 'AN-01');
     const res = await handleDetect(new Request('http://localhost/api/detect', { method: 'POST', body: form }), {
       env: { ...ENV, DETECTION_API_AUTH_HEADER: 'x-api-key' },
       fetch: fetchMock,
@@ -99,7 +99,7 @@ describe('POST /api/detect', () => {
   });
 
   it.each([
-    ['missing image', { camera_code: 'IG-01' }],
+    ['missing image', { camera_code: 'JG-01' }],
     ['not an image', { image_base64: toB64(new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8])) }],
     ['invalid base64', { image_base64: '***' }],
   ])('400 for %s', async (_name, payload) => {

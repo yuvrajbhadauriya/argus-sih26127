@@ -52,7 +52,7 @@ function FeedRow({ entry }: { entry: LiveFeedEntry }) {
         {hit && <span className="absolute inset-y-0 left-0 w-0.5 bg-danger" aria-hidden="true" />}
         <div className="min-w-0 flex-1 space-y-1">
           <div className="flex items-center gap-2">
-            <PlateChip plate={entry.plate} size="sm" variant={vehicleClassToPlateVariant(entry.vehicleType)} flag={hit ? 'watchlist' : null} />
+            <PlateChip plate={entry.plate} size="sm" variant={entry.plateVariant ?? vehicleClassToPlateVariant(entry.vehicleType)} flag={hit ? 'watchlist' : null} />
             {hit && <SeverityChip severity={entry.watchlist!} size="sm" />}
           </div>
           <div className="flex min-w-0 items-center gap-1.5 text-xs text-fg-muted">

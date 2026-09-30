@@ -23,7 +23,7 @@ export function SimulationBadge({ className, compact = false }: SimulationBadgeP
       icon={<FlaskConicalIcon strokeWidth={1.75} />}
       // Truncates instead of overflowing narrow containers (e.g. KPI tile hints).
       className={cn('min-w-0 max-w-full shrink!', className)}
-      title="Camera clips are stock footage pinned to real Delhi junctions; cross-camera journeys are simulated on the real road network."
+      title="Camera clips are real Mumbai traffic footage pinned to real junctions; cross-camera journeys and plates are simulated on the real road network."
     >
       <span className="min-w-0 truncate">Simulated city network</span>
     </Badge>

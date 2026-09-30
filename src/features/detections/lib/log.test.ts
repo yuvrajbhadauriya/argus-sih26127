@@ -6,23 +6,23 @@ import {
 } from './log';
 
 const det = (over: Partial<Detection>): Detection => ({
-  event_id: 'e1', camera_id: 'cam-001', plate_text_raw: 'DL-01-AB-1234', plate_text_normalized: 'DL01AB1234',
+  event_id: 'e1', camera_id: 'cam-001', plate_text_raw: 'MH-01-AB-1234', plate_text_normalized: 'MH01AB1234',
   confidence_score: 0.95, vehicle_type: 'car', timestamp: '00:02.500', bbox: { x: 1, y: 2, width: 3, height: 4 }, ...over,
 });
 
 const rows = [
   det({}),
-  det({ event_id: 'e2', camera_id: 'cam-002', plate_text_raw: 'HR-26-CD-5678', plate_text_normalized: '', vehicle_type: 'truck', confidence_score: 0.8 }),
-  det({ event_id: 'e3', plate_text_raw: 'DL-01-AB-1234', confidence_score: 0.7 }),
+  det({ event_id: 'e2', camera_id: 'cam-002', plate_text_raw: 'MH-43-BM-3816', plate_text_normalized: '', vehicle_type: 'truck', confidence_score: 0.8 }),
+  det({ event_id: 'e3', plate_text_raw: 'MH-01-AB-1234', confidence_score: 0.7 }),
 ];
 
 describe('detections log helpers', () => {
   it('normalises plates', () => {
-    expect(plateKey('dl 01-ab 1234')).toBe('DL01AB1234');
+    expect(plateKey('mh 01-ab 1234')).toBe('MH01AB1234');
   });
 
   it('round-trips filters through URL params and keeps other params', () => {
-    const f = { plate: 'DL01', camera: 'cam-001', vclass: 'car', conf: '90' as const };
+    const f = { plate: 'MH01', camera: 'cam-001', vclass: 'car', conf: '90' as const };
     const p = filtersToParams(f, new URLSearchParams('x=1'));
     expect(p.get('x')).toBe('1');
     expect(p.get('class')).toBe('car');
@@ -34,7 +34,7 @@ describe('detections log helpers', () => {
   });
 
   it('filters by plate (format-insensitive), camera, class and min confidence', () => {
-    expect(filterDetections(rows, { ...EMPTY_FILTERS, plate: 'hr 26' }).map((d) => d.event_id)).toEqual(['e2']);
+    expect(filterDetections(rows, { ...EMPTY_FILTERS, plate: 'mh 43' }).map((d) => d.event_id)).toEqual(['e2']);
     expect(filterDetections(rows, { ...EMPTY_FILTERS, camera: 'cam-001' })).toHaveLength(2);
     expect(filterDetections(rows, { ...EMPTY_FILTERS, vclass: 'truck' })).toHaveLength(1);
     expect(filterDetections(rows, { ...EMPTY_FILTERS, conf: '90' }).map((d) => d.event_id)).toEqual(['e1']);
@@ -69,7 +69,7 @@ describe('recentPlateReads', () => {
       det({ event_id: 'a', tracked_vehicle_id: 1, confidence_score: 0.8, frame_timestamp_sec: 1 }),
       det({ event_id: 'b', tracked_vehicle_id: 1, confidence_score: 0.9, frame_timestamp_sec: 2 }),
       det({ event_id: 'c', tracked_vehicle_id: 2, plate_text_raw: 'UNKNOWN', frame_timestamp_sec: 5 }),
-      det({ event_id: 'd', tracked_vehicle_id: 3, plate_text_raw: 'HR26CD5678', frame_timestamp_sec: 9 }),
+      det({ event_id: 'd', tracked_vehicle_id: 3, plate_text_raw: 'MH43BM3816', frame_timestamp_sec: 9 }),
     ]);
     expect(out.map((d) => d.event_id)).toEqual(['d', 'b']);
   });

@@ -10,6 +10,7 @@ import type { Camera } from '@/types/camera';
 import { useCameras } from '@/features/cameras/hooks/useCameras';
 import { mockDetections } from '@/mocks/fixtures/mockDetections';
 import { mockLiveFeed } from '@/mocks/fixtures/mockLiveFeed';
+import { DEFAULT_MAP_CENTER, SECTOR_LABEL } from '@/config/constants';
 import { SimulationBadge } from '@/features/vehicles/components/SimulationBadge';
 import { Page } from '@/shared/layout/Page';
 import { Panel } from '@/shared/ui/Card';
@@ -158,8 +159,10 @@ export function LiveMapPage() {
               />
 
               <MapPanel position="top-left" className="hidden px-3 py-2 xl:block">
-                <p className="text-[13px] font-semibold text-fg">New Delhi · Central Command Sector</p>
-                <p className="font-mono text-2xs tabular-nums text-fg-muted">28.6129° N, 77.2295° E</p>
+                <p className="text-[13px] font-semibold text-fg">{SECTOR_LABEL}</p>
+                <p className="font-mono text-2xs tabular-nums text-fg-muted">
+                  {DEFAULT_MAP_CENTER[0].toFixed(4)}° N, {DEFAULT_MAP_CENTER[1].toFixed(4)}° E
+                </p>
               </MapPanel>
 
               <MapPanel position="top-right" className="flex items-center gap-1 p-1">

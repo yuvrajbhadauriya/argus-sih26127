@@ -24,8 +24,8 @@ import { clearCamerasCache } from '@/features/cameras/hooks/useCameras';
 import { clearSimSummaryCache } from '../api';
 
 const cam = (over: Partial<Camera>): Camera => ({
-  id: 'cam-001', name: 'India Gate Junction', code: 'IG-01', latitude: 28.6, longitude: 77.2,
-  zone: 'Central Delhi', direction: 'Northbound', status: 'online', video_url: 'x', created_at: 't', ...over,
+  id: 'cam-001', name: 'Jogeshwari JVLR Junction', code: 'JG-01', latitude: 19.14, longitude: 72.85,
+  zone: 'Western Suburbs', direction: 'Northbound', status: 'online', video_url: 'x', created_at: 't', ...over,
 });
 
 const SUMMARY = { simulated: true, stats: { vehicles: 2577, journeys: 1, sightings: 1, hop_speed_kmph: { mean: 22.3 }, sightings_per_hour: new Array(24).fill(321) } };
@@ -52,11 +52,11 @@ beforeEach(() => {
   clearCamerasCache();
   clearSimSummaryCache();
   h.flyTo.mockReset();
-  h.getCameras.mockResolvedValue([cam({}), cam({ id: 'cam-002', code: 'CP-01', name: 'Connaught Place', status: 'offline', latitude: 28.63 })]);
+  h.getCameras.mockResolvedValue([cam({}), cam({ id: 'cam-002', code: 'AN-01', name: 'Andheri Flyover', status: 'offline', latitude: 19.12 })]);
   h.fetchAlerts.mockResolvedValue([
-    { id: 'a1', plate_text: 'DL03IJ7890', camera_id: 'cam-001', camera_name: 'India Gate Junction', priority: 'critical', timestamp: '2026-09-30T10:00:00Z', lat: 28.6, lng: 77.2, acknowledged: false },
-    { id: 'a2', plate_text: 'HR26CD5678', camera_id: 'cam-002', camera_name: 'Connaught Place', priority: 'high', timestamp: '2026-09-30T11:00:00Z', lat: 28.63, lng: 77.2, acknowledged: false },
-    { id: 'a3', plate_text: 'UP16GH3456', camera_id: 'cam-002', camera_name: 'Connaught Place', priority: 'low', timestamp: '2026-09-30T11:00:00Z', lat: 28.63, lng: 77.2, acknowledged: true },
+    { id: 'a1', plate_text: 'MH03IJ7890', camera_id: 'cam-001', camera_name: 'Jogeshwari JVLR Junction', priority: 'critical', timestamp: '2026-09-30T10:00:00Z', lat: 19.14, lng: 72.85, acknowledged: false },
+    { id: 'a2', plate_text: 'MH43BM3816', camera_id: 'cam-002', camera_name: 'Andheri Flyover', priority: 'high', timestamp: '2026-09-30T11:00:00Z', lat: 19.12, lng: 72.85, acknowledged: false },
+    { id: 'a3', plate_text: 'GJ01JK6763', camera_id: 'cam-002', camera_name: 'Andheri Flyover', priority: 'low', timestamp: '2026-09-30T11:00:00Z', lat: 19.12, lng: 72.85, acknowledged: true },
   ]);
   vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(JSON.stringify(SUMMARY)))));
 });
@@ -72,7 +72,7 @@ describe('LiveMapPage', () => {
     expect(await screen.findByText('1 critical')).toBeInTheDocument();
     expect(screen.getAllByTestId('marker')).toHaveLength(2);
     expect(screen.getAllByTestId('hotspot')).toHaveLength(2);
-    expect(screen.getByText('New Delhi · Central Command Sector')).toBeInTheDocument();
+    expect(screen.getByText('Mumbai · Central Command Sector')).toBeInTheDocument();
   });
 
   it('keeps the page up when the summary fails', async () => {
@@ -93,15 +93,15 @@ describe('LiveMapPage', () => {
     expect(screen.getByRole('link', { name: /view all alerts/i })).toHaveAttribute('href', '/alerts');
 
     await userEvent.click(screen.getByRole('tab', { name: /cameras/i }));
-    await userEvent.click(screen.getByRole('button', { name: /CP-01/ }));
-    expect(location).toBe('/?cam=CP-01');
+    await userEvent.click(screen.getByRole('button', { name: /AN-01/ }));
+    expect(location).toBe('/?cam=AN-01');
     await waitFor(() => expect(h.flyTo).toHaveBeenCalled());
   });
 
   it('flies to a deep-linked camera and hides layers on toggle', async () => {
-    renderAt('/?cam=IG-01');
+    renderAt('/?cam=JG-01');
     await screen.findByText('1/2');
-    await waitFor(() => expect(h.flyTo).toHaveBeenCalledWith([28.6, 77.2], 15, expect.anything()));
+    await waitFor(() => expect(h.flyTo).toHaveBeenCalledWith([19.14, 72.85], 15, expect.anything()));
     await userEvent.click(screen.getByRole('button', { name: 'Cameras' }));
     expect(screen.queryAllByTestId('marker')).toHaveLength(0);
     await userEvent.click(screen.getByRole('button', { name: 'Alert hotspots' }));
@@ -112,6 +112,6 @@ describe('LiveMapPage', () => {
     renderAt('/');
     await screen.findByText('1/2');
     await userEvent.click(screen.getAllByRole('button', { name: /open feed/i })[0]);
-    expect(location).toBe('/cameras?cam=IG-01');
+    expect(location).toBe('/cameras?cam=JG-01');
   });
 });

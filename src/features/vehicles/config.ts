@@ -4,8 +4,9 @@
 
 /**
  * Show the "Simulated city network" badge wherever simulated journeys are
- * displayed. The camera clips are stock footage pinned to real Delhi
- * junctions, so cross-camera journeys are simulated; flip this to `false`
+ * displayed. The camera clips are real Mumbai traffic footage
+ * pinned to the junctions they were plausibly shot at, so cross-camera
+ * journeys are simulated; flip this to `false`
  * to hide the badge everywhere at once.
  */
 export const SHOW_SIMULATION_BADGE = true;

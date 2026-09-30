@@ -4,6 +4,8 @@
 // ═══════════════════════════════════════════════════
 
 import type { AuditLogEntry } from '@/types';
+import { mockCameras } from './mockCameras';
+import { SIM_ANOMALIES, SIM_DATE, SIM_WATCH_HITS, SIM_WATCHLIST } from './simDemo.generated';
 
 export type UserRole = 'admin' | 'operator' | 'analyst';
 
@@ -37,14 +39,27 @@ const audit = (
 
 const [admin, alpha, beta, analyst] = mockUsers;
 
+const [stolen, wanted, flagged, missing] = SIM_WATCHLIST;
+const clone = SIM_ANOMALIES.find((x) => x.kind === 'cloned_plate')!;
+const circling = SIM_ANOMALIES.find((x) => x.kind === 'circling')!;
+const hit = (plate: number, n: number) => SIM_WATCH_HITS.filter((h) => h[0] === plate)[n];
+const camName = (code: string) => mockCameras.find((c) => c.code === code)?.name ?? code;
+const at = (hms: string, addS = 0) => {
+  const t = new Date(`${SIM_DATE}T${hms}+05:30`).getTime() + addS * 1000;
+  const d = new Date(t + 5.5 * 3600 * 1000).toISOString().slice(0, 19);
+  return `${d}+05:30`;
+};
+const wantedLate = hit(1, 5);
+const missingMid = hit(3, 6);
+
 export const mockAuditLogs: AuditLogEntry[] = [
-  audit('aud-009', 'VEHICLE_SEARCH', 'vehicle', 'HR 98 CQ 5768', alpha, 'Traced circling route for plate HR 98 CQ 5768 (Connaught Place and India Gate)', '2026-09-29T21:55:10+05:30'),
-  audit('aud-008', 'ALERT_ACKNOWLEDGE', 'alert', 'alt-J03271-1', beta, 'Acknowledged watchlist alert for DL 08 MN 8636 at India Gate Junction', '2026-09-29T20:43:02+05:30'),
-  audit('aud-007', 'VEHICLE_SEARCH', 'vehicle', 'DL 04 RS 9598', admin, 'Reconstructed multi-camera journey for stolen vehicle DL 04 RS 9598', '2026-09-29T19:40:31+05:30'),
-  audit('aud-006', 'REPORT_EXPORT', 'analytics', 'od-matrix', analyst, 'Exported evening-peak origin–destination matrix', '2026-09-29T18:05:44+05:30'),
-  audit('aud-005', 'ALERT_ACKNOWLEDGE', 'alert', 'alt-J01729-3', alpha, 'Acknowledged watchlist alert for DL 55 UJ 4753 at Connaught Place Circle', '2026-09-29T12:20:12+05:30'),
-  audit('aud-004', 'VEHICLE_SEARCH', 'vehicle', 'DL 33 DV 8622', admin, 'Investigated possible cloned plate DL 33 DV 8622 (CP-01 and DW-01)', '2026-09-29T09:15:03+05:30'),
-  audit('aud-003', 'WATCHLIST_ADD', 'blacklist_entry', 'bl-004', admin, 'Added high priority watchlist entry for DL 55 UJ 4753 (missing person)', '2026-09-28T18:40:00+05:30'),
-  audit('aud-002', 'WATCHLIST_ADD', 'blacklist_entry', 'bl-001', admin, 'Added critical priority watchlist entry for DL 04 RS 9598 (stolen)', '2026-09-27T10:00:00+05:30'),
-  audit('aud-001', 'CAMERA_UPDATE', 'camera', 'NP-01', admin, 'Updated road metadata for Nehru Place Underpass (Outer Ring Road)', '2026-09-26T16:20:00+05:30'),
+  audit('aud-009', 'VEHICLE_SEARCH', 'vehicle', circling.plate_text, alpha, `Traced circling route for plate ${circling.plate_text} (${camName(circling.evidence[0][0])} and ${camName(circling.evidence[1][0])})`, at(circling.time, 310)),
+  audit('aud-008', 'ALERT_ACKNOWLEDGE', 'alert', `alt-${wantedLate[1]}-${wantedLate[2]}`, beta, `Acknowledged watchlist alert for ${wanted.plate_text} at ${camName(wantedLate[3])}`, at(wantedLate[4], 230)),
+  audit('aud-007', 'VEHICLE_SEARCH', 'vehicle', stolen.plate_text, admin, `Reconstructed multi-camera journey for stolen vehicle ${stolen.plate_text}`, at('19:40:31')),
+  audit('aud-006', 'REPORT_EXPORT', 'analytics', 'od-matrix', analyst, 'Exported evening-peak origin–destination matrix', at('18:05:44')),
+  audit('aud-005', 'ALERT_ACKNOWLEDGE', 'alert', `alt-${missingMid[1]}-${missingMid[2]}`, alpha, `Acknowledged watchlist alert for ${missing.plate_text} at ${camName(missingMid[3])}`, at(missingMid[4], 340)),
+  audit('aud-004', 'VEHICLE_SEARCH', 'vehicle', clone.plate_text, admin, `Investigated possible cloned plate ${clone.plate_text} (${clone.evidence[0][0]} and ${clone.evidence[1][0]})`, at(clone.time, 480)),
+  audit('aud-003', 'WATCHLIST_ADD', 'blacklist_entry', 'bl-004', admin, `Added high priority watchlist entry for ${missing.plate_text} (missing person)`, '2026-09-28T18:40:00+05:30'),
+  audit('aud-002', 'WATCHLIST_ADD', 'blacklist_entry', 'bl-001', admin, `Added critical priority watchlist entry for ${stolen.plate_text} (stolen)`, '2026-09-27T10:00:00+05:30'),
+  audit('aud-001', 'CAMERA_UPDATE', 'camera', 'SN-01', admin, `Updated road metadata for Sion Circle (Sion–Panvel Highway); signal-jumping watch on ${flagged.plate_text}`, '2026-09-26T16:20:00+05:30'),
 ];

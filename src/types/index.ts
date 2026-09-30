@@ -9,6 +9,9 @@ export type CameraStatus = 'online' | 'offline' | 'maintenance';
 /** Vehicle type as detected by YOLOv7 */
 export type VehicleType = 'car' | 'truck' | 'bus' | 'motorcycle' | 'unknown';
 
+/** Indian plate colours: white private, yellow commercial (taxi / bus / goods), green EV. */
+export type PlateColour = 'private' | 'commercial' | 'ev';
+
 /** Alert priority levels */
 export type AlertPriority = 'low' | 'medium' | 'high' | 'critical';
 
@@ -26,9 +29,11 @@ export interface CameraFeed {
   lng: number;
   zone: string;
   direction: string;
-  /** Road / junction the camera watches (e.g. "Ring Road (AIIMS Flyover)"). */
+  /** Road / junction the camera watches (e.g. "Western Express Highway at Vile Parle Flyover"). */
   road?: string;
   status: CameraStatus;
+  /** Clip name (file stem) of the camera's video, e.g. "mumbai_overhead-dense-jam-plates_pexels31048534". */
+  video_slug?: string;
   video_url: string;
   thumbnail_url?: string;
   created_at: string;
@@ -64,6 +69,8 @@ export interface BoundingBox {
 export interface Vehicle {
   plate_text: string;
   vehicle_type: VehicleType;
+  /** Plate colour when known (taxis are cars with yellow plates, EVs are green). */
+  plate_variant?: PlateColour;
   first_seen: string;
   last_seen: string;
   detection_count: number;
@@ -75,6 +82,8 @@ export interface Trajectory {
   id: string;
   plate_text: string;
   vehicle_type: VehicleType;
+  /** Plate colour when known (see Vehicle.plate_variant). */
+  plate_variant?: PlateColour;
   waypoints: TrajectoryWaypoint[];
   total_travel_time_seconds: number;
   camera_count: number;
@@ -114,7 +123,7 @@ export interface TrajectoryWaypoint {
   lng: number;
   timestamp: string;
   time_since_previous_seconds: number | null;
-  /** Camera code (e.g. "AI-01"), when known */
+  /** Camera code (e.g. "VP-01"), when known */
   camera_code?: string;
   /** Direction of travel when seen at this camera */
   heading?: CompassHeading | string;

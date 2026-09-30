@@ -36,8 +36,8 @@ describe('DashboardLayout shell', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     renderShell('/cameras');
     const input = screen.getByRole('searchbox', { name: 'Search vehicle plate' });
-    await userEvent.type(input, 'dl 04-rs 9598{Enter}');
-    expect(screen.getByTestId('where')).toHaveTextContent('/vehicles?plate=DL04RS9598');
+    await userEvent.type(input, 'mh 01-cs 0126{Enter}');
+    expect(screen.getByTestId('where')).toHaveTextContent('/vehicles?plate=MH01CS0126');
   });
 
   it('Ctrl+K focuses the search and Esc clears it', async () => {

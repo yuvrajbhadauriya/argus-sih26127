@@ -5,7 +5,7 @@
 //  • flag anomalies (cloned plates, circling)
 // ═══════════════════════════════════════════════════
 
-import type { Trajectory, TrajectoryAnomaly, TrajectoryWaypoint, Vehicle, VehicleType } from '@/types';
+import type { PlateColour, Trajectory, TrajectoryAnomaly, TrajectoryWaypoint, Vehicle, VehicleType } from '@/types';
 import { IMPOSSIBLE_SPEED_KMPH, TRIP_GAP_SECONDS } from '../config';
 import { bearingDeg, compass8, formatDistance, formatDuration, haversineM, normalizePlate } from './geo';
 import type { LatLngTuple } from './geo';
@@ -24,6 +24,8 @@ export interface SimJourney {
   id: string;
   plate_text: string;
   vehicle_type: string;
+  /** Plate colour (absent in older simulation outputs). */
+  plate_variant?: string;
   trip: number;
   tags?: string[];
   sightings: SimSighting[];
@@ -72,6 +74,9 @@ export const routeKey = (from: string, to: string) => `${from}>${to}`;
 
 const VEHICLE_TYPES: VehicleType[] = ['car', 'truck', 'bus', 'motorcycle', 'unknown'];
 const asVehicleType = (t: string): VehicleType => (VEHICLE_TYPES.includes(t as VehicleType) ? (t as VehicleType) : 'unknown');
+const PLATE_COLOURS: PlateColour[] = ['private', 'commercial', 'ev'];
+const asPlateColour = (v?: string): { plate_variant?: PlateColour } =>
+  v && PLATE_COLOURS.includes(v as PlateColour) ? { plate_variant: v as PlateColour } : {};
 
 /** Index journeys by normalised plate. */
 export function indexJourneys(doc: SimJourneysDoc): Map<string, SimJourney[]> {
@@ -92,7 +97,8 @@ export function vehiclesFromJourneys(doc: SimJourneysDoc): Vehicle[] {
     let v = acc.get(j.plate_text);
     if (!v) {
       v = {
-        plate_text: j.plate_text, vehicle_type: asVehicleType(j.vehicle_type), first_seen: j.sightings[0][1],
+        plate_text: j.plate_text, vehicle_type: asVehicleType(j.vehicle_type), ...asPlateColour(j.plate_variant),
+        first_seen: j.sightings[0][1],
         last_seen: j.sightings[0][1], detection_count: 0, camera_count: 0, cams: new Set(),
       };
       acc.set(j.plate_text, v);
@@ -152,6 +158,7 @@ export function trajectoryFromJourneys(
       id: `sim-${normalizePlate(ordered[0].plate_text)}`,
       plate_text: ordered[0].plate_text,
       vehicle_type: asVehicleType(ordered[0].vehicle_type),
+      ...asPlateColour(ordered[0].plate_variant),
       waypoints,
       total_travel_time_seconds: 0,
       camera_count: 0,

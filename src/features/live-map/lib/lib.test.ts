@@ -4,9 +4,9 @@ import { alertHotspots, topOpenAlerts } from './alerts';
 import { formatIstTime, formatRelative, istHour } from './time';
 
 const alert = (over: Partial<AlertRecord>): AlertRecord => ({
-  id: 'a', detection_event_id: 'd', blacklist_entry_id: 'b', plate_text: 'DL01AB1234', camera_id: 'cam-001',
-  camera_name: 'India Gate', priority: 'low', category: 'stolen', reason: 'r', timestamp: '2026-09-30T10:00:00Z',
-  lat: 28.6, lng: 77.2, acknowledged: false, ...over,
+  id: 'a', detection_event_id: 'd', blacklist_entry_id: 'b', plate_text: 'MH01AB1234', camera_id: 'cam-001',
+  camera_name: 'Jogeshwari', priority: 'low', category: 'stolen', reason: 'r', timestamp: '2026-09-30T10:00:00Z',
+  lat: 19.14, lng: 72.85, acknowledged: false, ...over,
 });
 
 describe('live-map lib', () => {

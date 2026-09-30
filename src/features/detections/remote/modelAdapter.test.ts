@@ -41,7 +41,7 @@ describe('buildAuthHeaders / buildUpstreamRequest', () => {
   const base: ModelApiConfig = {
     url: 'http://gpu/detect', apiKey: 'sekret', authHeader: 'Authorization', timeoutMs: 1000, requestFormat: 'multipart', imageField: 'image',
   };
-  const frame = { bytes: fakeJpeg(), mimeType: 'image/jpeg' as const, cameraCode: 'IG-01', frameTimestampSec: 1.5 };
+  const frame = { bytes: fakeJpeg(), mimeType: 'image/jpeg' as const, cameraCode: 'JG-01', frameTimestampSec: 1.5 };
 
   it('uses Bearer for Authorization and the raw key otherwise', () => {
     expect(buildAuthHeaders(base)).toEqual({ Authorization: 'Bearer sekret' });
@@ -53,7 +53,7 @@ describe('buildAuthHeaders / buildUpstreamRequest', () => {
     expect(init.body).toBeInstanceOf(FormData);
     const form = init.body as FormData;
     expect((form.get('image') as File).size).toBe(frame.bytes.length);
-    expect(form.get('camera_code')).toBe('IG-01');
+    expect(form.get('camera_code')).toBe('JG-01');
     expect(form.get('frame_timestamp_sec')).toBe('1.5');
   });
 
@@ -61,7 +61,7 @@ describe('buildAuthHeaders / buildUpstreamRequest', () => {
     const j = buildUpstreamRequest({ ...base, requestFormat: 'json', imageField: 'img' }, frame);
     const body = JSON.parse(j.body as string);
     expect(body.img).toBe(Buffer.from(frame.bytes).toString('base64'));
-    expect(body.camera_code).toBe('IG-01');
+    expect(body.camera_code).toBe('JG-01');
     const r = buildUpstreamRequest({ ...base, requestFormat: 'raw' }, frame);
     expect((r.headers as Record<string, string>)['Content-Type']).toBe('image/jpeg');
     expect(r.body).toBe(frame.bytes);
@@ -121,13 +121,13 @@ describe('readBox', () => {
 
 describe('readPlate / readVehicleType', () => {
   it('reads plate text from strings and nested objects', () => {
-    expect(readPlate({ plate: 'dl 01-ab 1234', plate_confidence: 0.97 })).toEqual({ text: 'DL 01 AB 1234', confidence: 0.97 });
+    expect(readPlate({ plate: 'mh 01-ab 1234', plate_confidence: 0.97 })).toEqual({ text: 'MH 01 AB 1234', confidence: 0.97 });
     expect(readPlate({ ocr: { text: 'MH12DE1433', conf: 0.99 } })).toEqual({ text: 'MH12DE1433', confidence: 0.99 });
     expect(readPlate({ text: 'KA 05 MN 7777', text_score: 91 })).toEqual({ text: 'KA 05 MN 7777', confidence: 0.91 });
     expect(readPlate({ label: 'car' })).toEqual({ text: null, confidence: null });
   });
   it('normalises plate text', () => {
-    expect(normalisePlateText('  hr26-dk.8337 ')).toBe('HR26 DK 8337');
+    expect(normalisePlateText('  mh02-dk.8337 ')).toBe('MH02 DK 8337');
   });
   it('maps class / label / name to vehicle types', () => {
     expect(readVehicleType({ class: 'Car' })).toBe('car');
@@ -145,7 +145,7 @@ describe('normaliseUpstreamResponse', () => {
       {
         model: 'yolov7-tiny-anpr', version: '1.2.0', inference_ms: 12.34,
         predictions: [
-          { class: 'car', confidence: 0.93, bbox: [10, 20, 110, 70], plate: { text: 'DL 3C AB 1234', confidence: 0.985 } },
+          { class: 'car', confidence: 0.93, bbox: [10, 20, 110, 70], plate: { text: 'MH 3C AB 1234', confidence: 0.985 } },
           { class: 'number_plate', score: 0.9, xywhn: [0.5, 0.5, 0.1, 0.05], ocr: 'UP16BT5678' },
           { class: 'car', confidence: 0.5 }, // no box → dropped
         ],
@@ -157,7 +157,7 @@ describe('normaliseUpstreamResponse', () => {
     expect(out.inference_ms).toBe(12.3);
     expect(out.detections).toHaveLength(2);
     expect(out.detections[0]).toEqual({
-      plate_text: 'DL 3C AB 1234', plate_confidence: 0.985, vehicle_type: 'car', confidence: 0.93,
+      plate_text: 'MH 3C AB 1234', plate_confidence: 0.985, vehicle_type: 'car', confidence: 0.93,
       bbox: { x: 10, y: 20, width: 100, height: 50 },
     });
     expect(out.detections[1]).toMatchObject({ plate_text: 'UP16BT5678', vehicle_type: 'unknown', bbox: { x: 288, y: 171, width: 64, height: 18 } });

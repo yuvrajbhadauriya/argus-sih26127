@@ -19,7 +19,7 @@ const SQL = ['20260925_init_schema.sql', '20260927_add_detection_pipeline_column
   .join('\n');
 
 const SUMMARY = JSON.parse(readFileSync(resolve(process.cwd(), 'public/sim/summary.json'), 'utf8'));
-const WATCH = SUMMARY.demo.watchlist[0].plate_text as string; // e.g. "DL 04 RS 9598"
+const WATCH = SUMMARY.demo.watchlist[0].plate_text as string; // e.g. "MH 01 CS 0126"
 const CLONE = SUMMARY.demo.anomalies.find((a: { kind: string }) => a.kind === 'cloned_plate').plate_text as string;
 const CIRCLE = SUMMARY.demo.anomalies.find((a: { kind: string }) => a.kind === 'circling').plate_text as string;
 
@@ -85,9 +85,9 @@ describe('searchVehicles — Supabase configured', () => {
   });
 
   it('uses ilike for a query and uppercases it', async () => {
-    h.fake.enqueue('vehicles', { data: [{ plate_text: 'DL 1', detection_count: 0 }] });
+    h.fake.enqueue('vehicles', { data: [{ plate_text: 'MH 1', detection_count: 0 }] });
     const [v] = await searchVehicles(' dl ');
-    expect(v.plate_text).toBe('DL 1');
+    expect(v.plate_text).toBe('MH 1');
     expect(v.detection_count).toBe(0); // ?? keeps 0
     expect(h.fake.opsFor(h.fake.calls[0], 'ilike')[0]).toEqual(['plate_text', '%DL%']);
   });
@@ -109,12 +109,12 @@ describe('searchVehicles — Supabase configured', () => {
     expect((await searchVehicles(WATCH)).map((v) => v.plate_text)).toContain(WATCH);
   });
 
-  // DB plates are stored as "DL 01 AB 1234" (spaces); ilike on the raw column
+  // DB plates are stored as "MH 01 AB 1234" (spaces); ilike on the raw column
   // does not normalise separators (the simulated fallback does).
   it('documents that the DB search does not normalise separators', async () => {
     h.fake.enqueue('vehicles', { data: [] });
-    await searchVehicles('DL-01-AB-1234');
-    expect(h.fake.opsFor(h.fake.calls[0], 'ilike')[0]).toEqual(['plate_text', '%DL-01-AB-1234%']);
+    await searchVehicles('MH-01-AB-1234');
+    expect(h.fake.opsFor(h.fake.calls[0], 'ilike')[0]).toEqual(['plate_text', '%MH-01-AB-1234%']);
   });
 });
 
@@ -168,31 +168,31 @@ describe('fetchTrajectoryByPlate — Supabase configured', () => {
     const row = {
       id: 't', plate_text: 'X', vehicle_type: 'car', camera_count: 2, first_seen: '', last_seen: '', total_travel_time_seconds: 0,
       waypoints: [
-        { camera_id: 'cam-008', camera_name: 'DW', lat: 0, lng: 0, timestamp: '2026-09-29T08:00:00+05:30', time_since_previous_seconds: null },
-        { camera_id: 'cam-009', camera_name: 'DK', lat: 0, lng: 0, timestamp: '2026-09-29T08:30:00+05:30', time_since_previous_seconds: 1800 },
+        { camera_id: 'cam-001', camera_name: 'JG', lat: 0, lng: 0, timestamp: '2026-09-29T08:00:00+05:30', time_since_previous_seconds: null },
+        { camera_id: 'cam-005', camera_name: 'DD', lat: 0, lng: 0, timestamp: '2026-09-29T08:30:00+05:30', time_since_previous_seconds: 1800 },
       ],
     };
     h.fake.enqueue('trajectories', { data: row });
     const t = (await fetchTrajectoryByPlate('x'))!;
     expect(t.source).toBe('supabase');
-    expect(t.waypoints[1].camera_code).toBe('DK-01');
+    expect(t.waypoints[1].camera_code).toBe('DD-01');
     expect(t.waypoints[1].path_from_prev!.length).toBeGreaterThan(2);
     expect(t.waypoints[1].distance_m_from_prev).toBeGreaterThan(10000);
-    expect(t.waypoints[0].lat).toBeGreaterThan(28); // coordinates come from the camera registry
+    expect(t.waypoints[0].lat).toBeGreaterThan(19); // coordinates come from the camera registry
   });
 
   it('reconstructs from detections, collapsing repeated reads at one camera', async () => {
     h.fake.enqueue('trajectories', { data: null });
     h.fake.enqueue('detections', {
       data: [
-        { camera_id: 'c1', detected_at: '2026-01-01T00:00:00Z', lat: 1, lng: 2, plate_text_raw: 'DL 01', vehicle_type: 'bus', cameras: { name: 'Cam1' } },
+        { camera_id: 'c1', detected_at: '2026-01-01T00:00:00Z', lat: 1, lng: 2, plate_text_raw: 'MH 01', vehicle_type: 'bus', cameras: { name: 'Cam1' } },
         { camera_id: 'c2', detected_at: '2026-01-01T00:01:30Z', lat: 3, lng: 4, cameras: {} },
         { camera_id: 'c2', detected_at: '2026-01-01T00:02:00Z', lat: 3, lng: 4, cameras: {} },
       ],
     });
-    const t = (await fetchTrajectoryByPlate('dl-01'))!;
+    const t = (await fetchTrajectoryByPlate('mh-01'))!;
     expect(t).toMatchObject({
-      plate_text: 'DL 01',
+      plate_text: 'MH 01',
       vehicle_type: 'bus',
       total_travel_time_seconds: 90,
       camera_count: 2,
@@ -204,13 +204,13 @@ describe('fetchTrajectoryByPlate — Supabase configured', () => {
     expect(t.waypoints[0].camera_name).toBe('Cam1');
     expect(t.waypoints[1].camera_name).toBe('CCTV Node');
     const detCall = h.fake.calls.find((c) => c.table === 'detections')!;
-    expect(h.fake.opsFor(detCall, 'eq')[0]).toEqual(['plate_text_normalized', 'DL01']);
+    expect(h.fake.opsFor(detCall, 'eq')[0]).toEqual(['plate_text_normalized', 'MH01']);
   });
 
   it('prefers the simulated journey when the DB only saw the plate at one camera', async () => {
     h.fake.enqueue('trajectories', { data: null });
     h.fake.enqueue('detections', {
-      data: [{ camera_id: 'cam-008', detected_at: '2026-09-27T12:00:00Z', lat: 1, lng: 2, plate_text_raw: WATCH, cameras: { name: 'DW', code: 'DW-01' } }],
+      data: [{ camera_id: 'cam-008', detected_at: '2026-09-27T12:00:00Z', lat: 1, lng: 2, plate_text_raw: WATCH, cameras: { name: 'BH', code: 'BH-01' } }],
     });
     const t = (await fetchTrajectoryByPlate(WATCH))!;
     expect(t.source).toBe('simulation');

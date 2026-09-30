@@ -19,7 +19,7 @@ const ROUTES = {
 
 describe('geo helpers', () => {
   it('normalises plates', () => {
-    expect(normalizePlate(' dl-04 rs 9598 ')).toBe('DL04RS9598');
+    expect(normalizePlate(' mh-01 cs 0126 ')).toBe('MH01CS0126');
   });
   it('formats values', () => {
     expect(compass8(91)).toBe('E');
@@ -43,18 +43,18 @@ const DOC: SimJourneysDoc = {
   version: 1, simulated: true, seed: 1, date: '2026-09-29', timezone: '+05:30', routes_source: 'osrm',
   sighting_fields: [],
   journeys: [
-    { id: 'J2', plate_text: 'DL 01 AB 1234', vehicle_type: 'car', trip: 1, sightings: [['B', '2026-09-29T18:00:00+05:30', 'S', null, null]] },
+    { id: 'J2', plate_text: 'MH 01 AB 1234', vehicle_type: 'car', trip: 1, sightings: [['B', '2026-09-29T18:00:00+05:30', 'S', null, null]] },
     {
-      id: 'J1', plate_text: 'DL 01 AB 1234', vehicle_type: 'car', trip: 0, tags: ['watchlist'],
+      id: 'J1', plate_text: 'MH 01 AB 1234', vehicle_type: 'car', trip: 0, tags: ['watchlist'],
       sightings: [['A', '2026-09-29T08:00:00+05:30', 'N', null, null], ['B', '2026-09-29T08:10:00+05:30', 'N', 15, 2500]],
     },
-    { id: 'J3', plate_text: 'HR 26 CD 5678', vehicle_type: 'truck', trip: 0, sightings: [['C', '2026-09-29T02:00:00+05:30', 'E', null, null]] },
+    { id: 'J3', plate_text: 'MH 43 BM 3816', vehicle_type: 'truck', trip: 0, sightings: [['C', '2026-09-29T02:00:00+05:30', 'E', null, null]] },
   ],
 };
 
 describe('trajectoryFromJourneys', () => {
   it('orders trips chronologically and attaches road geometry', () => {
-    const t = trajectoryFromJourneys(DOC.journeys.filter((j) => j.plate_text.startsWith('DL')), CAMS, ROUTES)!;
+    const t = trajectoryFromJourneys(DOC.journeys.filter((j) => j.plate_text.startsWith('MH 01')), CAMS, ROUTES)!;
     expect(t.waypoints.map((w) => w.camera_code)).toEqual(['A', 'B', 'B']);
     expect(t.waypoints.map((w) => w.trip_index)).toEqual([0, 0, 1]);
     expect(t.waypoints[1].path_from_prev).toHaveLength(3);
@@ -72,7 +72,7 @@ describe('trajectoryFromJourneys', () => {
 
   it('aggregates vehicles for search', () => {
     const v = vehiclesFromJourneys(DOC);
-    expect(v[0]).toMatchObject({ plate_text: 'DL 01 AB 1234', detection_count: 3, camera_count: 2, first_seen: '2026-09-29T08:00:00+05:30' });
+    expect(v[0]).toMatchObject({ plate_text: 'MH 01 AB 1234', detection_count: 3, camera_count: 2, first_seen: '2026-09-29T08:00:00+05:30' });
   });
 });
 

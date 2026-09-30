@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════
 // VehiclesPage — Vehicle Trace (trajectory reconstruction)
-// Query a plate → chronological multi-camera journey on the Delhi road map,
+// Query a plate → chronological multi-camera journey on the Mumbai road map,
 // synced timeline, totals and anomaly flags. The plate lives in `?plate=`,
 // so the global top-bar search and deep links from Alerts/Detections work
 // even while this page is already open.
@@ -26,7 +26,7 @@ import type { Trajectory, Vehicle } from '@/types';
 import { searchVehicles, fetchTrajectoryByPlate } from '@/features/vehicles/api';
 import { getPlateSuggestions, type PlateSuggestion } from '@/features/vehicles/sim';
 import { formatDistance, formatDuration, formatIstDate, formatIstHm, formatIstTime, formatSpeed, normalizePlate } from '@/features/vehicles/lib/geo';
-import { formatPlate, vehicleClassToPlateVariant } from '@/shared/lib/plate';
+import { formatPlate, plateVariantOf } from '@/shared/lib/plate';
 import { Page, PageHeader } from '@/shared/layout/Page';
 import { Panel } from '@/shared/ui/Card';
 import { Badge } from '@/shared/ui/Badge';
@@ -281,7 +281,7 @@ export function VehiclesPage() {
             <Input
               type="text"
               aria-label="Licence plate"
-              placeholder="Enter plate — DL 04 RS 9598"
+              placeholder="Enter plate — MH 01 CS 0126"
               icon={<SearchIcon size={16} strokeWidth={1.75} />}
               mono
               value={query}
@@ -305,7 +305,7 @@ export function VehiclesPage() {
                       onClick={() => selectPlate(v.plate_text)}
                       className="flex w-full items-center justify-between gap-3 px-3 py-1.5 text-left hover:bg-surface-2"
                     >
-                      <PlateChip plate={v.plate_text} size="sm" variant={vehicleClassToPlateVariant(v.vehicle_type)} />
+                      <PlateChip plate={v.plate_text} size="sm" variant={plateVariantOf(v)} />
                       <span className="text-xs tabular-nums text-fg-muted">
                         <span className="capitalize">{v.vehicle_type}</span> · {v.camera_count} camera{v.camera_count === 1 ? '' : 's'} · {v.detection_count} sightings
                       </span>
@@ -378,7 +378,7 @@ export function VehiclesPage() {
         <div className="flex min-w-0 flex-col gap-4">
           {hasJourney && (
             <Panel title="Target" id="vehicle-target">
-              <PlateChip plate={trajectory!.plate_text} size="lg" variant={vehicleClassToPlateVariant(trajectory!.vehicle_type)} flag={plateFlag} />
+              <PlateChip plate={trajectory!.plate_text} size="lg" variant={plateVariantOf(trajectory!)} flag={plateFlag} />
               <dl className="mt-3 divide-y divide-line">
                 <DetailRow label="Class"><span className="capitalize">{trajectory!.vehicle_type}</span></DetailRow>
                 {(chip?.kind === 'watchlist' || anomalies.length > 0) && (

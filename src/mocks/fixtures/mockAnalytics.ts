@@ -6,74 +6,74 @@
 import type { CongestionMetric, ODPair, CorridorStats } from '@/types';
 
 export const mockCongestionMetrics: CongestionMetric[] = [
-  { zone: 'Central Delhi', time_bucket: '08:00 - 09:00', detection_count: 1420, avg_speed: 18, congestion_level: 'high' },
-  { zone: 'South Delhi', time_bucket: '08:00 - 09:00', detection_count: 1180, avg_speed: 24, congestion_level: 'medium' },
-  { zone: 'West Delhi', time_bucket: '08:00 - 09:00', detection_count: 890, avg_speed: 32, congestion_level: 'low' },
-  { zone: 'Old Delhi', time_bucket: '08:00 - 09:00', detection_count: 1650, avg_speed: 12, congestion_level: 'high' },
+  { zone: 'Western Suburbs', time_bucket: '08:00 - 09:00', detection_count: 1580, avg_speed: 17, congestion_level: 'high' },
+  { zone: 'Island City', time_bucket: '08:00 - 09:00', detection_count: 1240, avg_speed: 21, congestion_level: 'medium' },
+  { zone: 'Eastern Suburbs', time_bucket: '08:00 - 09:00', detection_count: 960, avg_speed: 26, congestion_level: 'medium' },
 ];
 
+// Coordinates are camera sites from mockCameras.ts.
 export const mockODPairs: ODPair[] = [
   {
-    origin_zone: 'Central Delhi',
-    destination_zone: 'South Delhi',
-    origin_lat: 28.6129,
-    origin_lng: 77.2295,
-    destination_lat: 28.5672,
-    destination_lng: 77.2100,
-    trip_count: 480,
-    avg_travel_time_seconds: 1440, // 24 mins
+    origin_zone: 'Western Suburbs',
+    destination_zone: 'Island City',
+    origin_lat: 19.0995, // VP-01 Vile Parle
+    origin_lng: 72.85411,
+    destination_lat: 19.02041, // DD-01 Dadar TT
+    destination_lng: 72.84968,
+    trip_count: 470,
+    avg_travel_time_seconds: 1680, // 28 mins
   },
   {
-    origin_zone: 'West Delhi',
-    destination_zone: 'Central Delhi',
-    origin_lat: 28.6519,
-    origin_lng: 77.1905,
-    destination_lat: 28.6315,
-    destination_lng: 77.2167,
-    trip_count: 360,
-    avg_travel_time_seconds: 1080, // 18 mins
+    origin_zone: 'Eastern Suburbs',
+    destination_zone: 'Island City',
+    origin_lat: 19.14194, // BH-01 Bhandup
+    origin_lng: 72.93236,
+    destination_lat: 19.04273, // SN-01 Sion Circle
+    destination_lng: 72.86349,
+    trip_count: 340,
+    avg_travel_time_seconds: 2040, // 34 mins
   },
   {
-    origin_zone: 'South Delhi',
-    destination_zone: 'Old Delhi',
-    origin_lat: 28.5494,
-    origin_lng: 77.2530,
-    destination_lat: 28.6506,
-    destination_lng: 77.2302,
-    trip_count: 290,
-    avg_travel_time_seconds: 2100, // 35 mins
+    origin_zone: 'Western Suburbs',
+    destination_zone: 'Eastern Suburbs',
+    origin_lat: 19.1395, // JG-01 Jogeshwari (JVLR)
+    origin_lng: 72.85487,
+    destination_lat: 19.14194, // BH-01 Bhandup
+    destination_lng: 72.93236,
+    trip_count: 260,
+    avg_travel_time_seconds: 1860, // 31 mins
   },
 ];
 
 export const mockCorridors: CorridorStats[] = [
   {
     id: 'corr-01',
-    name: 'India Gate – Connaught Place Express',
-    from_zone: 'Central Delhi',
-    to_zone: 'Central Delhi',
-    trajectory_count: 640,
-    avg_travel_time_seconds: 900, // 15 mins
-    peak_hour: '08:30 AM - 09:30 AM',
-    peak_count: 210,
+    name: 'Western Express Highway (Jogeshwari – Santacruz)',
+    from_zone: 'Western Suburbs',
+    to_zone: 'Western Suburbs',
+    trajectory_count: 720,
+    avg_travel_time_seconds: 1020, // 17 mins
+    peak_hour: '09:00 AM - 10:00 AM',
+    peak_count: 240,
   },
   {
     id: 'corr-02',
-    name: 'Ring Road South Corridor (AIIMS – Lajpat Nagar)',
-    from_zone: 'South Delhi',
-    to_zone: 'South Delhi',
-    trajectory_count: 510,
-    avg_travel_time_seconds: 1140, // 19 mins
-    peak_hour: '09:00 AM - 10:00 AM',
-    peak_count: 180,
+    name: 'LBS Marg (Bhandup – Kurla – Sion)',
+    from_zone: 'Eastern Suburbs',
+    to_zone: 'Island City',
+    trajectory_count: 480,
+    avg_travel_time_seconds: 1560, // 26 mins
+    peak_hour: '08:30 AM - 09:30 AM',
+    peak_count: 165,
   },
   {
     id: 'corr-03',
-    name: 'West-Central Arterial (Karol Bagh – CP)',
-    from_zone: 'West Delhi',
-    to_zone: 'Central Delhi',
-    trajectory_count: 430,
-    avg_travel_time_seconds: 1320, // 22 mins
-    peak_hour: '08:15 AM - 09:15 AM',
-    peak_count: 155,
+    name: 'JVLR (Jogeshwari – Vikhroli link)',
+    from_zone: 'Western Suburbs',
+    to_zone: 'Eastern Suburbs',
+    trajectory_count: 390,
+    avg_travel_time_seconds: 1500, // 25 mins
+    peak_hour: '06:00 PM - 07:00 PM',
+    peak_count: 130,
   },
 ];

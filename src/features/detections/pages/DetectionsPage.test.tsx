@@ -37,7 +37,7 @@ describe('DetectionsPage', () => {
   it('renders the header, KPIs and rows', async () => {
     renderAt('/detections');
     expect(screen.getByRole('heading', { name: 'Detections' })).toBeInTheDocument();
-    expect(await screen.findAllByLabelText(/^Plate DL 01 AB 1234/)).not.toHaveLength(0);
+    expect(await screen.findAllByLabelText(/^Plate MH 01 CS 0126/)).not.toHaveLength(0);
     expect(screen.getByText('Unique plates')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /export csv/i })).toBeEnabled();
   });
@@ -63,7 +63,7 @@ describe('DetectionsPage', () => {
   });
 
   it('opens a detail drawer on row click and traces the route', async () => {
-    renderAt('/detections?plate=HR26CD5678');
+    renderAt('/detections?plate=MH43BM3816');
     const table = await screen.findByRole('table');
     const row = await waitFor(() => {
       const r = within(table).getAllByRole('row').slice(1)[0];
@@ -74,6 +74,6 @@ describe('DetectionsPage', () => {
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText('Raw OCR text')).toBeInTheDocument();
     await userEvent.click(within(dialog).getByRole('button', { name: /trace route/i }));
-    expect(location).toBe('/vehicles?plate=HR26CD5678');
+    expect(location).toBe('/vehicles?plate=MH43BM3816');
   });
 });

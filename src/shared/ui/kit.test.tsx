@@ -21,9 +21,9 @@ import { Panel } from './Card';
 
 describe('plate helpers', () => {
   it.each([
-    ['dl04rs9598', 'DL 04 RS 9598'],
-    ['DL-04-RS-9598', 'DL 04 RS 9598'],
-    ['dl4c1234', 'DL 04 C 1234'],
+    ['mh01cs0126', 'MH 01 CS 0126'],
+    ['MH-01-CS-0126', 'MH 01 CS 0126'],
+    ['mh4c1234', 'MH 04 C 1234'],
     ['22BH1234AA', '22 BH 1234 AA'],
     ['  weird plate ', 'WEIRD PLATE'],
   ])('formatPlate(%s) = %s', (raw, out) => {
@@ -31,7 +31,7 @@ describe('plate helpers', () => {
   });
 
   it('normalizePlate keeps uppercase alphanumerics only', () => {
-    expect(normalizePlate('dl 04-rs.9598')).toBe('DL04RS9598');
+    expect(normalizePlate('mh 01-cs.0126')).toBe('MH01CS0126');
   });
 
   it('maps trucks and buses to commercial plates', () => {
@@ -52,24 +52,24 @@ describe('IST time helpers', () => {
 
 describe('PlateChip', () => {
   it('renders formatted text with an accessible label and flag', () => {
-    render(<PlateChip plate="dl04rs9598" flag="watchlist" size="md" />);
-    const chip = screen.getByRole('img', { name: 'Plate DL 04 RS 9598, watchlist' });
-    expect(chip).toHaveTextContent('DL 04 RS 9598');
+    render(<PlateChip plate="mh01cs0126" flag="watchlist" size="md" />);
+    const chip = screen.getByRole('img', { name: 'Plate MH 01 CS 0126, watchlist' });
+    expect(chip).toHaveTextContent('MH 01 CS 0126');
     expect(chip).toHaveTextContent('IND');
     expect(chip).toHaveAttribute('data-flag', 'watchlist');
   });
 
   it('renders a button when clickable and a link when `to` is set', async () => {
     const onClick = vi.fn();
-    const { rerender } = render(<PlateChip plate="DL04RS9598" onClick={onClick} />);
-    await userEvent.click(screen.getByRole('button', { name: 'Plate DL 04 RS 9598' }));
+    const { rerender } = render(<PlateChip plate="MH01CS0126" onClick={onClick} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Plate MH 01 CS 0126' }));
     expect(onClick).toHaveBeenCalledOnce();
     rerender(
       <MemoryRouter>
-        <PlateChip plate="DL04RS9598" to="/vehicles?plate=DL04RS9598" />
+        <PlateChip plate="MH01CS0126" to="/vehicles?plate=MH01CS0126" />
       </MemoryRouter>,
     );
-    expect(screen.getByRole('link', { name: 'Plate DL 04 RS 9598' })).toHaveAttribute('href', '/vehicles?plate=DL04RS9598');
+    expect(screen.getByRole('link', { name: 'Plate MH 01 CS 0126' })).toHaveAttribute('href', '/vehicles?plate=MH01CS0126');
   });
 });
 
@@ -267,17 +267,17 @@ describe('VideoTile', () => {
   it('shows the offline state with a Retry button that does not select the tile', async () => {
     const onRetry = vi.fn();
     const onSelect = vi.fn();
-    render(<VideoTile code="IG-01" name="India Gate" status="offline" onRetry={onRetry} onSelect={onSelect} />);
+    render(<VideoTile code="JG-01" name="Jogeshwari" status="offline" onRetry={onRetry} onSelect={onSelect} />);
     expect(screen.getByText('Feed offline')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Retry' }));
     expect(onRetry).toHaveBeenCalledOnce();
     expect(onSelect).not.toHaveBeenCalled();
-    await userEvent.click(screen.getByRole('button', { name: 'Open feed IG-01 India Gate' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Open feed JG-01 Jogeshwari' }));
     expect(onSelect).toHaveBeenCalledOnce();
   });
 
   it('shows LIVE for live feeds', () => {
-    render(<VideoTile code="IG-01" name="India Gate" status="live" />);
+    render(<VideoTile code="JG-01" name="Jogeshwari" status="live" />);
     expect(screen.getByText('LIVE')).toBeInTheDocument();
   });
 });

@@ -46,7 +46,7 @@ import { cn } from '@/shared/lib/cn';
 
 type AdminTab = 'cameras' | 'watchlist' | 'users' | 'audit' | 'system';
 
-const ZONES = ['Central Delhi', 'Old Delhi', 'South Delhi', 'South West Delhi', 'West Delhi'];
+const ZONES = ['Island City', 'Western Suburbs', 'Eastern Suburbs'];
 const DIRECTIONS = ['Northbound', 'Southbound', 'Eastbound', 'Westbound'];
 const CATEGORIES: WatchlistCategory[] = ['stolen', 'wanted', 'missing', 'flagged', 'custom'];
 const PRIORITIES: AlertPriority[] = ['critical', 'high', 'medium', 'low'];
@@ -169,7 +169,7 @@ export function AdminPage() {
     e.preventDefault();
     const n = normalizePlate(wlForm.plate);
     const errs: Errors<WatchForm> = {};
-    if (!PLATE.test(n)) errs.plate = 'Enter a valid Indian plate, e.g. DL 04 RS 9598.';
+    if (!PLATE.test(n)) errs.plate = 'Enter a valid Indian plate, e.g. MH 01 CS 0126.';
     else if (watchlist.some((w) => normalizePlate(w.plate_text) === n && w.is_active)) errs.plate = 'This plate is already on the active watchlist.';
     if (wlForm.reason.trim().length < 5) errs.reason = 'Give a short reason (at least 5 characters).';
     setWlErrors(errs);
@@ -276,7 +276,7 @@ export function AdminPage() {
   const system: [string, React.ReactNode][] = [
     ['ANPR model', 'YOLOv7-tiny ANPR (plate detection + OCR)'],
     ['Detection endpoint', <span key="e" className="font-mono">{DETECT_ENDPOINT}</span>],
-    ['Data source', isSupabaseConfigured() ? 'Live Supabase' : SHOW_SIMULATION_BADGE ? 'Simulated city network (seeded journeys on real Delhi roads)' : 'Sample data'],
+    ['Data source', isSupabaseConfigured() ? 'Live Supabase' : SHOW_SIMULATION_BADGE ? 'Simulated city network (seeded journeys on real Mumbai roads)' : 'Sample data'],
     ['Cameras registered', `${cameras.length} (${cameras.filter((c) => c.status === 'online').length} online)`],
     ['Road routing', 'OSRM road geometry between camera pairs'],
     ['Map tiles', 'Esri Canvas (light / dark) with reference labels'],
@@ -448,7 +448,7 @@ export function AdminPage() {
             className="sm:col-span-2"
             hint={wlForm.plate.trim() ? <span className="inline-flex items-center gap-2">Preview <PlateChip plate={wlForm.plate} size="sm" /></span> : 'Spaces and dashes are optional'}
           >
-            <Input id="wl-plate" mono value={wlForm.plate} invalid={!!wlErrors.plate} onChange={(e) => setWlForm({ ...wlForm, plate: e.target.value.toUpperCase() })} placeholder="DL 04 RS 9598" className="[&_input]:uppercase" />
+            <Input id="wl-plate" mono value={wlForm.plate} invalid={!!wlErrors.plate} onChange={(e) => setWlForm({ ...wlForm, plate: e.target.value.toUpperCase() })} placeholder="MH 01 CS 0126" className="[&_input]:uppercase" />
           </Field>
           <Field label="Category" htmlFor="wl-cat">
             <Select id="wl-cat" value={wlForm.category} onChange={(e) => setWlForm({ ...wlForm, category: e.target.value as WatchlistCategory })} className="w-full">

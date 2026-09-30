@@ -70,7 +70,7 @@ export function GlobalPlateSearch({ className }: { className?: string }) {
             e.currentTarget.blur();
           }
         }}
-        placeholder={isNarrow() ? 'Search plate' : 'Search plate — e.g. DL 04 RS 9598'}
+        placeholder={isNarrow() ? 'Search plate' : 'Search plate — e.g. MH 01 CS 0126'}
         aria-label="Search vehicle plate"
         autoComplete="off"
         spellCheck={false}

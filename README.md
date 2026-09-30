@@ -7,7 +7,8 @@ NERO is an automated traffic monitoring and licence plate tracking system (Smart
 ```
 .
 ├── index.html, vite.config.ts, vercel.json, package.json   # web app (root = Vercel root)
-├── public/detections/        # precomputed detection JSON served to the dashboard
+├── public/detections/        # ANPR pipeline output per camera (manifest.json lists which cameras have it)
+├── public/sim/               # simulated Mumbai network: road routes, journeys, demo summary
 ├── src/
 │   ├── main.tsx              # entry: ErrorBoundary + App
 │   ├── app/                  # App router, ErrorBoundary, cross-page smoke test
@@ -28,7 +29,8 @@ NERO is an automated traffic monitoring and licence plate tracking system (Smart
 ├── pipeline/
 │   ├── insert_detections.py  # bulk ingest detection JSON into Supabase
 │   ├── seed_alerts_and_watchlist.py
-│   ├── camera_config.json    # camera code ↔ video mapping
+│   ├── camera_config.json    # camera registry: code, Mumbai location, clip slug
+│   ├── simulation/           # OSRM road routes + city-network simulation (+ demo fixture export)
 │   ├── requirements.txt
 │   ├── tests/                # pytest suite
 │   └── legacy_local_model/   # old untrained local YOLOv7 inference (reference only)
@@ -48,6 +50,47 @@ npm run lint                  # oxlint
 ```
 
 Without Supabase env vars the dashboard falls back to the mock fixtures in `src/mocks/fixtures`.
+
+Camera clips stream from `VITE_VIDEO_SOURCE`: `local` (default in `npm run dev`) plays
+`public/videos-local/<slug>.mp4` — create it with `python3 pipeline/tools/link_local_videos.py` —
+and `supabase` (default in production builds) plays `videos/mumbai/720p/<slug>.mp4` from Supabase
+Storage. If the chosen source fails, the player tries the other one once.
+
+## Camera network (Mumbai)
+
+Eight cameras play real Mumbai traffic clips (Pexels; credits in
+`pipeline/data/candidate_clips/SOURCES.md`). Each clip is pinned to the junction it was plausibly
+shot at, on a connected corridor network: the Western Express Highway (Jogeshwari–Andheri–Vile
+Parle–Santacruz), Dadar TT and Sion Circle in the island city, and LBS Marg at Kurla and Bhandup.
+The rain (Bhandup) and night (Kurla) clips are the adverse-condition cameras.
+
+| Code | Camera | Road | Zone |
+| --- | --- | --- | --- |
+| JG-01 | Jogeshwari JVLR Junction | Western Express Highway at the JVLR interchange | Western Suburbs |
+| AN-01 | Andheri Flyover (Gundavali) | WEH at Andheri–Kurla Road | Western Suburbs |
+| VP-01 | Vile Parle Flyover | WEH at Vile Parle Flyover (the sign is visible in the clip) | Western Suburbs |
+| SC-01 | Santacruz Airport Approach | WEH near Airport Terminal 1 (signposted in the clip) | Western Suburbs |
+| DD-01 | Dadar TT Junction | Dr Babasaheb Ambedkar Road beside Dadar TT Flyover | Island City |
+| SN-01 | Sion Circle | Sion Circle at Sion–Panvel Highway | Island City |
+| KR-01 | Kurla Depot Junction | LBS Marg, Kurla West (night clip) | Eastern Suburbs |
+| BH-01 | Bhandup LBS Marg | LBS Marg, Bhandup West, Metro Line 4 (rain clip) | Eastern Suburbs |
+
+The registry lives in `pipeline/camera_config.json`, `src/mocks/fixtures/mockCameras.ts` and
+`supabase/migrations/20261001000200_mumbai_camera_network.sql`; `pipeline/tests/test_simulation_registry.py`
+keeps them identical.
+
+Cross-camera journeys are simulated (the clips have no shared vehicles):
+
+```bash
+python3 pipeline/simulation/build_road_routes.py        # OSRM road routes between every camera pair (cached)
+python3 pipeline/simulation/simulate_city_network.py    # --seed 26127 → public/sim/{journeys,summary}.json
+python3 pipeline/simulation/export_demo_fixtures.py     # → src/mocks/fixtures/simDemo.generated.ts
+```
+
+The simulator generates a realistic Mumbai fleet: MH01/02/03/47 city RTOs, MH04/05/43/46/48 MMR RTOs,
+other Maharashtra and out-of-state (GJ, KA, DL, RJ…) plates, BH-series plates, yellow commercial plates
+for taxis, buses and goods vehicles, and green EV plates. Once the ANPR model has been run on the new
+clips, seed the fleet from its real reads with `--plates-from public/detections`.
 
 ## Tests
 
@@ -104,12 +147,15 @@ Schema, row level security, audit trail and retention are defined in `supabase/m
 
 ### Detection JSON format (`detections_<camera_code>.json`)
 
+The dashboard only draws static detections for cameras listed in `public/detections/manifest.json`
+(`{"cameras": ["VP-01", …]}`); every other camera shows "No detections yet — run the AI pipeline".
+
 ```json
 [
   {
-    "camera_code": "IG-01",
+    "camera_code": "VP-01",
     "tracked_vehicle_id": "trk_0001",
-    "plate_text": "DL 01 AB 1234",
+    "plate_text": "MH 02 AB 1234",
     "vehicle_type": "car",
     "confidence": 0.87,
     "frame_timestamp_sec": 12.4,
@@ -120,4 +166,4 @@ Schema, row level security, audit trail and retention are defined in `supabase/m
 
 ### Legacy local model
 
-`pipeline/legacy_local_model/` holds the old untrained YOLOv7-tiny inference (`run_detection.py` etc.) that produced the committed `public/detections` files. It is superseded by the remote detection API and kept for reference only — see its [README](pipeline/legacy_local_model/README.md).
+`pipeline/legacy_local_model/` holds the old untrained YOLOv7-tiny inference (`run_detection.py` etc.) that produced the old (Delhi-era) `public/detections` files, which were removed when the network moved to Mumbai. It is superseded by the remote detection API and kept for reference only — see its [README](pipeline/legacy_local_model/README.md).
