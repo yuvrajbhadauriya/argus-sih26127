@@ -27,6 +27,14 @@ export const CODE_ALIAS_MAP: Record<string, string> = Object.fromEntries(
 
 export const DETECTIONS_MANIFEST_URL = '/detections/manifest.json';
 
+/**
+ * The /detections files keep their names across deploys, so every fetch
+ * revalidates with the server (a 304 when unchanged). A copy a browser cached
+ * before a data update would otherwise pair a new clip's overlay with the old
+ * clip's plate reads.
+ */
+export const DETECTION_FILE_FETCH: RequestInit = { cache: 'no-cache' };
+
 /** Shape of /detections/manifest.json (written when pipeline output is published). */
 export interface DetectionsManifest {
   /** Camera codes with a detections_<code>.json file for their current clip. */
@@ -38,7 +46,7 @@ let manifestPromise: Promise<Set<string>> | null = null;
 /** Camera codes that have static detections (memoised; empty when the manifest is missing). */
 export function loadDetectionsManifest(): Promise<Set<string>> {
   if (!manifestPromise) {
-    manifestPromise = fetch(DETECTIONS_MANIFEST_URL)
+    manifestPromise = fetch(DETECTIONS_MANIFEST_URL, DETECTION_FILE_FETCH)
       .then(async (res) => {
         if (!res.ok) return new Set<string>();
         const doc = (await res.json()) as Partial<DetectionsManifest>;
@@ -110,7 +118,7 @@ export async function fetchDetectionsFromStaticJson(
   options.signal?.throwIfAborted();
   try {
     const url = `/detections/detections_${effectiveCode}.json`;
-    const res = options.signal ? await fetch(url, { signal: options.signal }) : await fetch(url);
+    const res = await fetch(url, { ...DETECTION_FILE_FETCH, signal: options.signal });
     if (!res.ok) throw new Error(`HTTP error ${res.status}`);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const data: any[] = await res.json();
@@ -235,7 +243,7 @@ export function fetchCameraEvents(cameraCode: string): Promise<CameraEvents | nu
     p = loadDetectionsManifest()
       .then(async (codes) => {
         if (!codes.has(code)) return null;
-        const res = await fetch(`/detections/events_${code}.json`);
+        const res = await fetch(`/detections/events_${code}.json`, DETECTION_FILE_FETCH);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return parseCameraEvents(code, await res.json());
       })

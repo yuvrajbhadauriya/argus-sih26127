@@ -70,6 +70,9 @@ describe('useCameraDetections', () => {
     const { result } = renderHook(() => useCameraDetections('VP-01', 'cam-003'));
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(detectionCalls()[0][0]).toBe('/detections/detections_VP-01.json');
+    // Revalidated on every load: a stale browser copy must not survive a data update.
+    expect(detectionCalls()[0][1]).toMatchObject({ cache: 'no-cache' });
+    expect(fetchMock).toHaveBeenCalledWith(DETECTIONS_MANIFEST_URL, { cache: 'no-cache' });
     expect(result.current.detections[0]).toEqual({
       event_id: 'det-VP-01-0',
       camera_id: 'VP-01',
@@ -92,7 +95,7 @@ describe('useCameraDetections', () => {
 
   it('has no detections (and requests no file) for a camera the manifest does not list', async () => {
     const { result } = renderHook(() => useCameraDetections('BH-01', 'cam-008'));
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(DETECTIONS_MANIFEST_URL));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(DETECTIONS_MANIFEST_URL, { cache: 'no-cache' }));
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current).toEqual({ detections: [], loading: false, error: null });
     expect(files).not.toHaveBeenCalled();
