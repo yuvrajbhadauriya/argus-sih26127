@@ -63,7 +63,7 @@ Tests marked `it.fails` / `xfail(strict=True)` document known bugs; they flip to
 
 ## Detection pipeline (Python)
 
-Run everything from the repo root. `.env` needs `SUPABASE_SERVICE_ROLE_KEY` (and `VITE_SUPABASE_URL`) for ingestion.
+Run everything from the repo root. `.env` needs `SUPABASE_URL` (or `VITE_SUPABASE_URL`) and `SUPABASE_SERVICE_ROLE_KEY` for ingestion.
 
 ```bash
 pip install -r pipeline/requirements.txt
@@ -75,7 +75,32 @@ python pipeline/insert_detections.py --detections_dir ./public/detections
 python pipeline/seed_alerts_and_watchlist.py
 ```
 
-`insert_detections.py` options: `--detections_dir` (default `./detections`), `--config` (default `pipeline/camera_config.json`), `--start_time` (ISO base timestamp), `--batch_size` (default 500).
+`insert_detections.py` options:
+
+* `--detections_dir`: default `public/detections`.
+* `--start_time`: ISO 8601. A value without a timezone is read in `--tz`, which defaults to `Asia/Kolkata`. If omitted, it defaults to 08:00 on the simulated day.
+* `--batch_size`: default 500.
+* `--retries`: default 4.
+* `--dry_run`: build the rows without writing anything.
+
+Both scripts:
+
+* require `SUPABASE_SERVICE_ROLE_KEY` and never fall back to the anon key;
+* are idempotent, so re-running them is safe;
+* exit non-zero on any failed write.
+
+`seed_alerts_and_watchlist.py` builds the watchlist and alerts from `public/sim/summary.json`.
+
+## Database & security
+
+Schema, row level security, audit trail and retention are defined in `supabase/migrations/`. [docs/DATABASE.md](docs/DATABASE.md) covers:
+
+* which files to apply, and in what order
+* the full RLS policy matrix
+* how to verify the setup
+* the pgTAP tests (`supabase test db`)
+
+**Access model today:** the dashboard uses the anon key **read-only**. With RLS applied, the Admin page's writes (acknowledging alerts, editing the watchlist) **require a signed-in user whose `app_metadata.role` is `operator` or `admin`**. Production should also remove anon read access, because ANPR data is personal data under the DPDP Act.
 
 ### Detection JSON format (`detections_<camera_code>.json`)
 
