@@ -23,11 +23,16 @@ def compute_iou(box_a, box_b) -> float:
 
 
 class LightweightTracker:
-    """Greedy IoU matcher; detections of different vehicle_type never match."""
+    """Greedy IoU matcher; with ``match_types`` (default) different vehicle_types never match.
 
-    def __init__(self, iou_thresh: float = 0.25, max_missed: int = 5):
+    ``match_types=False`` suits detectors whose class flickers between frames
+    (e.g. Car/LCV/Truck on the same box); the caller then votes a class per track.
+    """
+
+    def __init__(self, iou_thresh: float = 0.25, max_missed: int = 5, match_types: bool = True):
         self.iou_thresh = iou_thresh
         self.max_missed = max_missed
+        self.match_types = match_types
         self.next_track_id = 1
         # track_id -> {bbox, vehicle_type, missed_frames}
         self.tracks: dict = {}
@@ -41,7 +46,7 @@ class LightweightTracker:
             best_iou, best_idx = 0.0, -1
             for idx in unmatched:
                 det = detections[idx]
-                if det["vehicle_type"] != track["vehicle_type"]:
+                if self.match_types and det["vehicle_type"] != track["vehicle_type"]:
                     continue
                 iou = compute_iou(track["bbox"], det["bbox"])
                 if iou > best_iou and iou >= self.iou_thresh:

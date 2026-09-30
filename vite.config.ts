@@ -5,6 +5,7 @@ import { fileURLToPath, URL } from 'node:url'
 import fs from 'node:fs'
 import path from 'node:path'
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { apiDevBridge } from './api/_lib/viteDevBridge.ts'
 
 /**
  * Pages are lazy chunks, so without help the browser only discovers the
@@ -150,7 +151,8 @@ function localVideosPlugin(): Plugin {
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), tailwindcss(), routePreloadPlugin(), localVideosPlugin()],
+  // apiDevBridge: dev-only /api/detect + /api/health (reads DETECTION_API_* server-side; see the file)
+  plugins: [react(), tailwindcss(), routePreloadPlugin(), localVideosPlugin(), apiDevBridge()],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),

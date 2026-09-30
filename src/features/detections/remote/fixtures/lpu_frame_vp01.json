@@ -1,0 +1,139 @@
+{
+ "image": {
+  "width": 1920,
+  "height": 1080
+ },
+ "detections": [
+  {
+   "plate": "MH02FX5860",
+   "ocr_confidence": 72.4,
+   "raw_ocr": "MH02FX5860",
+   "grammar_valid": true,
+   "plate_score": 0.7908,
+   "plate_box_xywh": [
+    155,
+    914,
+    42,
+    11
+   ],
+   "vehicle_class": "Bus",
+   "vehicle_confidence": 0.4448,
+   "vehicle_box_xywh": [
+    0,
+    675,
+    715,
+    404
+   ]
+  },
+  {
+   "plate": "MH02EZ1785",
+   "ocr_confidence": 93.4,
+   "raw_ocr": "MH02EZ1785",
+   "grammar_valid": true,
+   "plate_score": 0.8714,
+   "plate_box_xywh": [
+    830,
+    935,
+    46,
+    12
+   ],
+   "vehicle_class": "Car",
+   "vehicle_confidence": 0.5731,
+   "vehicle_box_xywh": [
+    778,
+    809,
+    186,
+    189
+   ]
+  },
+  {
+   "plate": "MH02GB4920",
+   "ocr_confidence": 66.1,
+   "raw_ocr": "MH02GB4920",
+   "grammar_valid": true,
+   "plate_score": 0.9194,
+   "plate_box_xywh": [
+    1335,
+    977,
+    49,
+    13
+   ],
+   "vehicle_class": "Car",
+   "vehicle_confidence": 0.9198,
+   "vehicle_box_xywh": [
+    1249,
+    833,
+    191,
+    187
+   ]
+  },
+  {
+   "plate": "Not Found",
+   "ocr_confidence": null,
+   "raw_ocr": "",
+   "grammar_valid": null,
+   "plate_score": null,
+   "plate_box_xywh": null,
+   "vehicle_class": "Truck",
+   "vehicle_confidence": 0.7035,
+   "vehicle_box_xywh": [
+    0,
+    313,
+    715,
+    447
+   ]
+  },
+  {
+   "plate": "Not Found",
+   "ocr_confidence": null,
+   "raw_ocr": "",
+   "grammar_valid": null,
+   "plate_score": null,
+   "plate_box_xywh": null,
+   "vehicle_class": "Truck",
+   "vehicle_confidence": 0.8432,
+   "vehicle_box_xywh": [
+    1204,
+    313,
+    715,
+    447
+   ]
+  },
+  {
+   "plate": "Not Found",
+   "ocr_confidence": null,
+   "raw_ocr": "",
+   "grammar_valid": null,
+   "plate_score": null,
+   "plate_box_xywh": null,
+   "vehicle_class": "Truck",
+   "vehicle_confidence": 0.4372,
+   "vehicle_box_xywh": [
+    0,
+    675,
+    715,
+    404
+   ]
+  },
+  {
+   "plate": "Not Found",
+   "ocr_confidence": null,
+   "raw_ocr": "",
+   "grammar_valid": null,
+   "plate_score": null,
+   "plate_box_xywh": null,
+   "vehicle_class": "Car",
+   "vehicle_confidence": 0.3306,
+   "vehicle_box_xywh": [
+    114,
+    830,
+    147,
+    137
+   ]
+  }
+ ],
+ "engine": "lpu_on_gpu",
+ "model_version": "deim50k+raw35",
+ "inference_ms": 330.2,
+ "latency_ms": 1284.6
+}

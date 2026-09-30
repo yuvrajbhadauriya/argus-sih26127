@@ -3,11 +3,13 @@
 // Never returns the key or the upstream URL.
 //
 // Probe target: DETECTION_API_HEALTH_URL if set, otherwise `<origin>/health`
-// of DETECTION_API_URL. Any HTTP response counts as "reachable"; `model_ok`
-// is true only for a 2xx.
+// of DETECTION_API_URL (the LPU server's GET /health needs no key, so none is
+// sent). Any HTTP response counts as "reachable"; `model_ok` is true only for
+// a 2xx whose body does not say ok:false / model_loaded:false. engine,
+// model_version, model_loaded and gpu_busy are passed through when reported.
 // ═══════════════════════════════════════════════════════════════════════
 
-import { buildAuthHeaders, readModelApiConfig } from './_lib/modelAdapter.js';
+import { buildHealthUrl, readModelApiConfig } from './_lib/modelAdapter.js';
 import { errorResponse, json } from './_lib/http.js';
 
 type Env = Record<string, string | undefined>;
@@ -20,6 +22,10 @@ export interface HealthBody {
   model_ok: boolean | null;
   upstream_status: number | null;
   latency_ms: number | null;
+  engine?: string | null;
+  model_version?: string | null;
+  model_loaded?: boolean | null;
+  gpu_busy?: boolean | null;
   error?: string;
 }
 
@@ -36,24 +42,36 @@ export async function handleHealth(
   if (!cfg) {
     const body: HealthBody = {
       ok: false, configured: false, reachable: null, model_ok: null, upstream_status: null, latency_ms: null,
-      error: 'DETECTION_API_URL / DETECTION_API_KEY not set',
+      error: 'Model API not configured here (DETECTION_API_URL / DETECTION_API_KEY unset) — it is LAN/VPN-only',
     };
     return json(body, 503);
   }
 
-  const probeUrl = env.DETECTION_API_HEALTH_URL?.trim() || new URL('/health', cfg.url).toString();
+  const probeUrl = buildHealthUrl(cfg, env);
   const started = performance.now();
   try {
     const res = await doFetch(probeUrl, {
       method: 'GET',
-      headers: { Accept: 'application/json', ...buildAuthHeaders(cfg) },
+      headers: { Accept: 'application/json' },
       signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
     });
+    let info: Record<string, unknown> = {};
+    try {
+      const parsed: unknown = await res.json();
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) info = parsed as Record<string, unknown>;
+    } catch {
+      info = {};
+    }
+    const modelOk = res.ok && info.ok !== false && info.model_loaded !== false;
     const body: HealthBody = {
-      ok: res.ok, configured: true, reachable: true, model_ok: res.ok, upstream_status: res.status,
+      ok: modelOk, configured: true, reachable: true, model_ok: modelOk, upstream_status: res.status,
       latency_ms: Math.round(performance.now() - started),
+      engine: typeof info.engine === 'string' ? info.engine : null,
+      model_version: typeof info.model_version === 'string' ? info.model_version : null,
+      model_loaded: typeof info.model_loaded === 'boolean' ? info.model_loaded : null,
+      gpu_busy: typeof info.gpu_busy === 'boolean' ? info.gpu_busy : null,
     };
-    return json(body, res.ok ? 200 : 502);
+    return json(body, modelOk ? 200 : 502);
   } catch (err) {
     const timedOut = err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError');
     const body: HealthBody = {

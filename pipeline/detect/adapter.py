@@ -2,21 +2,32 @@
 Model API adapter (Python twin of api/_lib/modelAdapter.ts).
 
 THE ONE PLACE in the Python pipeline that knows the GPU model API contract.
-When the real contract is known:
 
-  1. REQUEST  -> edit ``build_upstream_request()`` (or set
-                 DETECTION_API_REQUEST_FORMAT / DETECTION_API_IMAGE_FIELD).
-  2. RESPONSE -> edit ``normalise_upstream_response()``. The helpers below
-                 already accept the common YOLO-API shapes; for anything
-                 else, map the real fields directly in that function.
-  3. Mirror the change in api/_lib/modelAdapter.ts (Vercel proxy) and update
-     pipeline/tests/test_remote_adapter.py +
-     src/features/detections/remote/modelAdapter.test.ts.
+Primary contract — the team's LPU ANPR server (``api_server.py`` on the GPU
+box, Tailscale/LAN only; detector DEIM ``deim50k`` + PARSeq OCR ``raw35``):
+
+    POST <base>/v1/frame?tiles=2x3&roi_top=0.33&min_conf=60
+         body = raw JPEG/PNG, header ``X-API-Key: <key>``
+      -> {"image": {"width", "height"}, "engine": "lpu_on_gpu",
+          "model_version": "deim50k+raw35", "inference_ms", "latency_ms",
+          "detections": [{"plate": "MH02FG0919" | "Not Found", "ocr_confidence": 0-100,
+                          "raw_ocr", "grammar_valid", "plate_score",
+                          "plate_box_xywh": [x, y, w, h], "vehicle_class": "Car"|"Bike"|...,
+                          "vehicle_confidence", "vehicle_box_xywh": [x, y, w, h]}]}
+    POST <base>/v1/video?frame_step=1&tiles=2x3  (raw mp4) -> {"events": [one per vehicle]}
+    GET  <base>/health  (no key)
+
+Boxes are TOP-LEFT x/y + width/height in pixels of the submitted image.
+``normalise_upstream_response()`` maps that natively; the older tolerant
+YOLO-style shape readers stay as a fallback for other/legacy servers.
 
 Normalised detection (both twins):
-    {"plate_text": str|None, "plate_confidence": float|None,
+    {"plate_text": str|None, "plate_confidence": 0..1|None,
      "vehicle_type": "car"|"truck"|"bus"|"motorcycle"|"unknown",
-     "confidence": float, "bbox": {"x","y","width","height"}}   # frame pixels
+     "confidence": float, "bbox": {"x","y","width","height"},   # frame pixels
+     # real-contract extras (None/absent for legacy servers):
+     "vehicle_class": "Car"|..., "grammar_valid": bool|None, "raw_ocr": str|None,
+     "plate_bbox": {...}|None, "bbox_source": "vehicle"|"plate"}
 """
 
 from __future__ import annotations
@@ -30,9 +41,16 @@ import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-DEFAULT_ENGINE = "yolov7-tiny-anpr"
+DEFAULT_ENGINE = "lpu_on_gpu"
 DEFAULT_TIMEOUT_MS = 15000
+DEFAULT_AUTH_HEADER = "X-API-Key"
+#: Default query for /v1/frame — wide overhead city views need 2x3 tiling.
+DEFAULT_FRAME_QUERY = "tiles=2x3&roi_top=0.33&min_conf=60"
+#: A plate read counts as "good" (shown as text) at/above this OCR confidence (0-100) + valid grammar.
+GOOD_READ_MIN_CONF = 75.0
+NOT_FOUND = "not found"
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -42,23 +60,30 @@ DEFAULT_TIMEOUT_MS = 15000
 class ModelApiConfig:
     url: str
     api_key: str
-    auth_header: str = "Authorization"
+    auth_header: str = DEFAULT_AUTH_HEADER
     timeout_ms: int = DEFAULT_TIMEOUT_MS
-    request_format: str = "multipart"  # multipart | json | raw
+    request_format: str = "raw"  # raw (real API) | multipart | json (legacy servers)
     image_field: str = "image"
     health_url: str | None = None
+    query: str = DEFAULT_FRAME_QUERY
+    video_url: str | None = None
 
-    def __repr__(self) -> str:  # never print the key
+    def __repr__(self) -> str:  # never print the key or the URL
         return (
             f"ModelApiConfig(url=<set>, api_key=<redacted>, auth_header={self.auth_header!r}, "
-            f"timeout_ms={self.timeout_ms}, request_format={self.request_format!r})"
+            f"timeout_ms={self.timeout_ms}, request_format={self.request_format!r}, query={self.query!r})"
         )
 
 
 def read_model_api_config(env: Mapping[str, str] | None = None) -> ModelApiConfig | None:
-    """Reads config from env. Returns None when URL or key is missing/invalid."""
+    """Reads config from env. Returns None when URL or key is missing/invalid.
+
+    ``DETECTION_API_URL`` is the frame endpoint (…/v1/frame); when only
+    ``ANPR_API_BASE`` is set, ``<base>/v1/frame`` is used.
+    """
     env = os.environ if env is None else env
-    url = (env.get("DETECTION_API_URL") or "").strip()
+    base = (env.get("ANPR_API_BASE") or "").strip().rstrip("/")
+    url = (env.get("DETECTION_API_URL") or "").strip() or (f"{base}/v1/frame" if base else "")
     key = (env.get("DETECTION_API_KEY") or "").strip()
     if not url or not key or not re.match(r"^https?://", url):
         return None
@@ -66,34 +91,75 @@ def read_model_api_config(env: Mapping[str, str] | None = None) -> ModelApiConfi
         timeout = int(float(env.get("DETECTION_API_TIMEOUT_MS") or DEFAULT_TIMEOUT_MS))
     except ValueError:
         timeout = DEFAULT_TIMEOUT_MS
-    fmt = (env.get("DETECTION_API_REQUEST_FORMAT") or "multipart").strip().lower()
+    fmt = (env.get("DETECTION_API_REQUEST_FORMAT") or "raw").strip().lower()
+    query = env.get("DETECTION_API_QUERY")
+    video = (env.get("DETECTION_API_VIDEO_URL") or "").strip() or None
     return ModelApiConfig(
         url=url,
         api_key=key,
-        auth_header=(env.get("DETECTION_API_AUTH_HEADER") or "Authorization").strip() or "Authorization",
+        auth_header=(env.get("DETECTION_API_AUTH_HEADER") or DEFAULT_AUTH_HEADER).strip() or DEFAULT_AUTH_HEADER,
         timeout_ms=timeout if timeout > 0 else DEFAULT_TIMEOUT_MS,
-        request_format=fmt if fmt in ("json", "raw") else "multipart",
+        request_format=fmt if fmt in ("json", "multipart") else "raw",
         image_field=(env.get("DETECTION_API_IMAGE_FIELD") or "image").strip() or "image",
         health_url=(env.get("DETECTION_API_HEALTH_URL") or "").strip() or None,
+        query=DEFAULT_FRAME_QUERY if query is None else query.strip().lstrip("?"),
+        video_url=video,
     )
 
 
 def build_auth_headers(cfg: ModelApiConfig) -> dict:
-    """``Authorization: Bearer <key>`` by default; custom headers get the raw key."""
+    """``Authorization: Bearer <key>`` for the Authorization header; any other header gets the raw key."""
     if cfg.auth_header.lower() == "authorization":
         return {"Authorization": f"Bearer {cfg.api_key}"}
     return {cfg.auth_header: cfg.api_key}
 
 
+def _origin(url: str) -> str:
+    m = re.match(r"^(https?://[^/?#]+)", url)
+    return m.group(1) if m else url
+
+
 def default_health_url(cfg: ModelApiConfig) -> str:
-    if cfg.health_url:
-        return cfg.health_url
-    m = re.match(r"^(https?://[^/]+)", cfg.url)
-    return f"{m.group(1)}/health" if m else cfg.url
+    return cfg.health_url or f"{_origin(cfg.url)}/health"
+
+
+def default_video_url(cfg: ModelApiConfig) -> str:
+    return cfg.video_url or f"{_origin(cfg.url)}/v1/video"
+
+
+def with_query(url: str, query: str | Mapping[str, Any] | None) -> str:
+    """Adds ``query`` params to ``url``; params already in the URL win."""
+    extra = parse_qsl(query, keep_blank_values=True) if isinstance(query, str) else list((query or {}).items())
+    if not extra:
+        return url
+    parts = urlsplit(url)
+    have = parse_qsl(parts.query, keep_blank_values=True)
+    names = {k for k, _ in have}
+    merged = have + [(k, str(v)) for k, v in extra if k not in names]
+    return urlunsplit(parts._replace(query=urlencode(merged)))
+
+
+def frame_request_url(cfg: ModelApiConfig) -> str:
+    return with_query(cfg.url, cfg.query)
+
+
+def parse_tiles(query: str | None) -> tuple[int, int, float]:
+    """(rows, cols, roi_top) from a /v1/frame query string (server defaults: 1x1, roi_top 0.33 when tiled)."""
+    q = dict(parse_qsl(query or ""))
+    rows, cols = 1, 1
+    m = re.match(r"^(\d+)x(\d+)$", (q.get("tiles") or "").strip())
+    if m:
+        rows, cols = max(1, int(m.group(1))), max(1, int(m.group(2)))
+    tiled = rows * cols > 1
+    try:
+        roi = float(q["roi_top"]) if "roi_top" in q else (0.33 if tiled else 0.0)
+    except ValueError:
+        roi = 0.33 if tiled else 0.0
+    return rows, cols, min(max(roi, 0.0), 0.9)
 
 
 # ──────────────────────────────────────────────────────────────────────
-# REQUEST  <- change here once the real contract is known
+# REQUEST
 # ──────────────────────────────────────────────────────────────────────
 def build_upstream_request(
     cfg: ModelApiConfig,
@@ -102,7 +168,11 @@ def build_upstream_request(
     camera_code: str | None = None,
     frame_timestamp_sec: float | None = None,
 ) -> tuple[dict, bytes]:
-    """Returns (headers, body) for the POST to cfg.url."""
+    """Returns (headers, body) for the POST to ``frame_request_url(cfg)``.
+
+    The real API takes the raw image bytes (``request_format="raw"``, the
+    default); multipart/json are kept for legacy servers.
+    """
     headers = {"Accept": "application/json", **build_auth_headers(cfg)}
     ext = "png" if mime_type == "image/png" else "jpg"
 
@@ -147,17 +217,130 @@ def build_upstream_request(
 
 
 # ──────────────────────────────────────────────────────────────────────
-# RESPONSE  <- change here once the real contract is known
+# RESPONSE
 # ──────────────────────────────────────────────────────────────────────
 class UpstreamShapeError(ValueError):
     """The model API answered, but with no recognisable detection list."""
 
 
-def normalise_upstream_response(raw: Any, image: tuple[int, int] | None = None) -> dict:
-    """Maps the model API response to {engine, model_version, inference_ms, detections}.
+#: Real-contract vehicle classes -> dashboard VehicleType (raw class is kept in ``vehicle_class``).
+LPU_VEHICLE_CLASSES = {
+    "car": "car", "auto": "car",
+    "bike": "motorcycle",
+    "bus": "bus",
+    "truck": "truck", "lcv": "truck", "mini-lcv": "truck", "mini_lcv": "truck", "tractor": "truck",
+}
+_LPU_KEYS = ("vehicle_box_xywh", "plate_box_xywh", "ocr_confidence", "grammar_valid")
 
-    ``image`` is (width, height) of the frame that was sent; used to scale 0..1 boxes.
+
+def is_lpu_response(raw: Any) -> bool:
+    """True for the real LPU API shape (a ``detections``/``events`` list of plate+vehicle records)."""
+    if not isinstance(raw, dict):
+        return False
+    items = raw.get("detections", raw.get("events"))
+    if not isinstance(items, list):
+        return False
+    if not items:
+        return str(raw.get("engine") or "").startswith("lpu") or "model_version" in raw
+    return isinstance(items[0], dict) and any(k in items[0] for k in _LPU_KEYS)
+
+
+def xywh_box(v: Any) -> dict | None:
+    """``[x, y, w, h]`` (top-left + size, pixels) -> {x, y, width, height}; None when absent/invalid."""
+    if not isinstance(v, (list, tuple)) or len(v) < 4:
+        return None
+    vals = [_num(x) for x in v[:4]]
+    if any(x is None for x in vals) or not (vals[2] > 0 and vals[3] > 0):  # type: ignore[operator]
+        return None
+    x, y, w, h = vals
+    return {"x": round(x, 1), "y": round(y, 1), "width": round(w, 1), "height": round(h, 1)}  # type: ignore[arg-type]
+
+
+def is_tile_artifact(box: dict, image: tuple[int, int] | None, tiles: tuple[int, int, float] | None) -> bool:
+    """True for a vehicle box that spans (almost) a whole detector tile.
+
+    With tiling the vehicle detector often answers "the whole tile is one
+    truck/bus" — boxes of exactly tile size at tile offsets. Real vehicles in
+    these views are far smaller than a tile, so such boxes are dropped (a plate
+    inside one is kept, drawn at its plate box instead).
     """
+    if not image or not tiles or image[0] <= 0 or image[1] <= 0:
+        return False
+    rows, cols, roi = tiles
+    tile_w = image[0] / cols
+    tile_h = image[1] * (1 - roi) / rows
+    return box["width"] >= 0.75 * tile_w and box["height"] >= 0.75 * tile_h
+
+
+def vehicle_type_from_class(cls: Any) -> str:
+    if isinstance(cls, str) and cls.strip():
+        k = cls.strip().lower()
+        return LPU_VEHICLE_CLASSES.get(k) or VEHICLE_ALIASES.get(re.sub(r"[\s-]+", "_", k), "unknown")
+    return "unknown"
+
+
+def normalise_lpu_detection(
+    item: dict, image: tuple[int, int] | None = None, tiles: tuple[int, int, float] | None = None
+) -> dict | None:
+    """One real-contract detection/event -> normalised detection (None when it has no usable box)."""
+    plate = item.get("plate")
+    has_plate = isinstance(plate, str) and plate.strip() and plate.strip().lower() != NOT_FOUND
+    ocr = _num(item.get("ocr_confidence"))
+    vbox = xywh_box(item.get("vehicle_box_xywh"))
+    pbox = xywh_box(item.get("plate_box_xywh"))
+    if vbox and is_tile_artifact(vbox, image, tiles):
+        vbox = None
+    bbox, source = (vbox, "vehicle") if vbox else (pbox, "plate")
+    if bbox is None or (source == "plate" and not has_plate):
+        return None
+    vconf = _num(item.get("vehicle_confidence"))
+    pscore = _num(item.get("plate_score"))
+    conf = vconf if vconf is not None else (pscore if pscore is not None else (ocr / 100 if ocr is not None else 0.0))
+    gv = item.get("grammar_valid")
+    raw_ocr = item.get("raw_ocr")
+    return {
+        "plate_text": normalise_plate_text(plate) if has_plate else None,
+        "plate_confidence": None if (ocr is None or not has_plate) else round(_clamp01(ocr / 100), 4),
+        "vehicle_type": vehicle_type_from_class(item.get("vehicle_class")),
+        "confidence": round(_clamp01(conf), 4),
+        "bbox": bbox,
+        "vehicle_class": item.get("vehicle_class") if isinstance(item.get("vehicle_class"), str) else None,
+        "grammar_valid": gv if isinstance(gv, bool) else None,
+        "raw_ocr": raw_ocr if isinstance(raw_ocr, str) and raw_ocr else None,
+        "plate_bbox": pbox,
+        "bbox_source": source,
+    }
+
+
+def is_good_read(det: Mapping[str, Any], min_conf: float = GOOD_READ_MIN_CONF) -> bool:
+    """A plate text worth showing: OCR confidence >= min_conf (0-100) and valid Indian plate grammar."""
+    pc = det.get("plate_confidence")
+    return bool(det.get("plate_text")) and det.get("grammar_valid") is True and pc is not None and pc * 100 >= min_conf - 1e-9
+
+
+def normalise_upstream_response(
+    raw: Any, image: tuple[int, int] | None = None, tiles: tuple[int, int, float] | None = None
+) -> dict:
+    """Maps the model API response to {engine, model_version, inference_ms, image, detections}.
+
+    ``image`` is (width, height) of the frame that was sent (the real API also
+    reports it); ``tiles`` is ``parse_tiles(query)`` of the request, used to
+    drop tile-sized vehicle-box artefacts.
+    """
+    if is_lpu_response(raw):
+        img = raw.get("image") if isinstance(raw.get("image"), dict) else None
+        size = (int(img["width"]), int(img["height"])) if img and _num(img.get("width")) and _num(img.get("height")) else image
+        items = raw.get("detections", raw.get("events")) or []
+        dets = [d for d in (normalise_lpu_detection(i, size, tiles) for i in items if isinstance(i, dict)) if d]
+        return {
+            "engine": _str(raw.get("engine")) or DEFAULT_ENGINE,
+            "model_version": _str(raw.get("model_version")) or "unknown",
+            "inference_ms": _read_inference_ms(raw),
+            "image": {"width": size[0], "height": size[1]} if size else None,
+            "detections": dets,
+        }
+
+    # ── fallback: tolerant reader for other / legacy YOLO-style servers ──
     items = find_detection_array(raw)
     if items is None:
         raise UpstreamShapeError("Model API response contained no detection list")
@@ -188,9 +371,10 @@ def normalise_upstream_response(raw: Any, image: tuple[int, int] | None = None) 
         )
 
     return {
-        "engine": _str(_pick(meta, ["engine"])) or DEFAULT_ENGINE,
+        "engine": _str(_pick(meta, ["engine"])) or "unknown",
         "model_version": _str(_pick(meta, ["model_version", "version", "model", "model_name"])) or "unknown",
         "inference_ms": _read_inference_ms(meta),
+        "image": {"width": image[0], "height": image[1]} if image else None,
         "detections": detections,
     }
 

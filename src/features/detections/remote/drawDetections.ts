@@ -2,7 +2,7 @@
 // Canvas drawing for remote (/api/detect) detection results.
 // ═══════════════════════════════════════════════════
 
-import type { RemoteDetection } from './detectFrame';
+import { isGoodRead, type RemoteDetection } from './detectFrame';
 import { VIDEO_OVERLAY } from '@/shared/theme/tokens';
 
 const BOX_COLOR = VIDEO_OVERLAY.box;
@@ -31,7 +31,10 @@ export function drawDetections(canvas: HTMLCanvasElement, frame: { width: number
     ctx.strokeStyle = BOX_COLOR;
     ctx.strokeRect(x, y, width, height);
 
-    const label = d.plate_text ? `${d.plate_text}  ${formatPct(d.plate_confidence ?? d.confidence)}` : `${d.vehicle_type} ${formatPct(d.confidence)}`;
+    const cls = d.vehicle_class || d.vehicle_type;
+    const label = d.plate_text && isGoodRead(d)
+      ? `${d.plate_text}  ${formatPct(d.plate_confidence ?? d.confidence)}`
+      : `${cls} ${formatPct(d.confidence)}`;
     const tw = ctx.measureText(label).width + 8;
     const th = fontPx + 6;
     const ly = y - th >= 0 ? y - th : y + height;

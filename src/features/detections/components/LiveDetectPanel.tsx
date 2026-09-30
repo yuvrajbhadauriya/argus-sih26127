@@ -1,9 +1,13 @@
 // ═══════════════════════════════════════════════════
 // LiveDetectPanel
 // "Run AI detection on this frame": captures the current frame of a camera
-// <video>, sends it to /api/detect (trained YOLOv7-tiny ANPR model on the GPU
-// server, key kept server-side), and shows the analysed still with boxes +
-// plate text, plus a list of plates with confidence and latency.
+// <video>, sends it to /api/detect (the team's LPU ANPR model on the GPU
+// server — DEIM vehicle/plate detector + PARSeq OCR; key kept server-side),
+// and shows the analysed still with boxes + plate text, plus a list of plates
+// with confidence and latency. Only reads with OCR ≥ 75 % and valid plate
+// grammar are shown as plates; weaker reads are listed as low-confidence.
+// The model API is LAN/VPN-only: on a public deployment the request answers
+// 503 and the panel says so.
 // Panel-body content: the caller supplies the surrounding Panel/title.
 // ═══════════════════════════════════════════════════
 
@@ -17,6 +21,7 @@ import { VehicleClass } from './VehicleClass';
 import {
   detectVideoFrame,
   DetectFrameError,
+  isGoodRead,
   type CapturedFrame,
   type RemoteDetectResponse,
 } from '../remote/detectFrame';
@@ -102,7 +107,8 @@ export function LiveDetectPanel({ videoRef, cameraCode, ready = true, className 
 
       {status === 'idle' && (
         <p className="text-xs text-fg-muted">
-          Captures the current frame of camera <span className="font-mono">{cameraCode}</span> and runs plate detection + OCR on the GPU server.
+          Captures the current frame of camera <span className="font-mono">{cameraCode}</span> and runs vehicle + plate detection
+          (DEIM) and OCR (PARSeq) on the team&apos;s GPU server. The model API is reachable on the team network only.
         </p>
       )}
 
@@ -137,13 +143,19 @@ export function LiveDetectPanel({ videoRef, cameraCode, ready = true, className 
             <ul className="divide-y divide-line rounded-md border border-line">
               {plates.map((d, i) => (
                 <li key={i} className="flex items-center justify-between gap-3 px-3 py-2 text-xs">
-                  {d.plate_text ? (
+                  {d.plate_text && isGoodRead(d) ? (
                     <PlateChip plate={d.plate_text} size="sm" variant={vehicleClassToPlateVariant(d.vehicle_type)} />
+                  ) : d.plate_text ? (
+                    <span className="text-fg-muted" title="OCR below 75 % or not a valid plate format">
+                      Low-confidence read <span className="font-mono">{d.plate_text}</span>
+                    </span>
                   ) : (
                     <span className="text-fg-muted">Plate unreadable</span>
                   )}
                   <span className="flex items-center gap-3 text-fg-muted">
-                    <VehicleClass type={d.vehicle_type} iconOnly />
+                    <span title={d.vehicle_class ?? undefined}>
+                      <VehicleClass type={d.vehicle_type} iconOnly />
+                    </span>
                     <span className="font-mono tabular-nums">OCR {pct(d.plate_confidence)}</span>
                     <span className="font-mono tabular-nums">Det {pct(d.confidence)}</span>
                   </span>

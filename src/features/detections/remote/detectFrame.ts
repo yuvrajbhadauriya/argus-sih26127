@@ -12,11 +12,26 @@ export const DETECT_ENDPOINT = '/api/detect';
 /** Mirrors NormalisedDetection in api/_lib/modelAdapter.ts. */
 export interface RemoteDetection {
   plate_text: string | null;
+  /** OCR confidence 0..1. */
   plate_confidence: number | null;
   vehicle_type: VehicleType;
+  /** Vehicle detector confidence 0..1. */
   confidence: number;
-  /** Top-left + size in pixels of the submitted frame. */
+  /** Top-left + size in pixels of the submitted frame (vehicle box, else plate box). */
   bbox: { x: number; y: number; width: number; height: number };
+  /** Model's own class name (Car, Bike, Bus, Truck, LCV, Auto, Tractor, Mini-LCV). */
+  vehicle_class?: string | null;
+  /** Plate text matches Indian plate grammar. */
+  grammar_valid?: boolean | null;
+  raw_ocr?: string | null;
+  plate_bbox?: { x: number; y: number; width: number; height: number } | null;
+  bbox_source?: 'vehicle' | 'plate';
+}
+
+/** A read worth trusting: OCR ≥ 75 % and valid plate grammar (same rule as the batch pipeline). */
+export const GOOD_READ_MIN_CONFIDENCE = 0.75;
+export function isGoodRead(d: Pick<RemoteDetection, 'plate_text' | 'plate_confidence' | 'grammar_valid'>): boolean {
+  return !!d.plate_text && d.grammar_valid !== false && (d.plate_confidence ?? 0) >= GOOD_READ_MIN_CONFIDENCE;
 }
 
 /** Mirrors NormalisedDetectResponse in api/_lib/modelAdapter.ts. */
@@ -140,14 +155,16 @@ export async function detectCapturedFrame(
     const message =
       (body && typeof body.error === 'string' && body.error) ||
       (res.status === 404
-        ? 'Detection endpoint /api/detect not found — run the app with `vercel dev` (plain `vite` has no API routes).'
-        : `Detection service returned HTTP ${res.status}.`);
+        ? 'Detection endpoint /api/detect not found — run `npm run dev` (it mounts /api through the dev bridge) or `vercel dev`.'
+        : res.status === 503
+          ? 'The ANPR model API is LAN/VPN-only and is not reachable from this deployment.'
+          : `Detection service returned HTTP ${res.status}.`);
     throw new DetectFrameError('http', message, res.status);
   }
   if (!body || !Array.isArray(body.detections)) {
     throw new DetectFrameError(
       'bad_response',
-      'Detection service returned an unexpected response — is /api/detect deployed (use `vercel dev` locally)?',
+      'Detection service returned an unexpected response — is /api/detect available (`npm run dev` or `vercel dev`)?',
       res.status,
     );
   }

@@ -7,6 +7,7 @@ read a tiny synthetic video, and is skipped when OpenCV isn't installed.
 
 import importlib.machinery
 import json
+import re
 import socket
 import sys
 
@@ -36,9 +37,10 @@ def stub_encode(monkeypatch):
 def mock_api(monkeypatch):
     server, _ = start_server(api_key=KEY)
     port = server.server_address[1]
-    monkeypatch.setenv("DETECTION_API_URL", f"http://127.0.0.1:{port}/detect")
+    monkeypatch.setenv("DETECTION_API_URL", f"http://127.0.0.1:{port}/v1/frame")
     monkeypatch.setenv("DETECTION_API_KEY", KEY)
     monkeypatch.delenv("DETECTION_API_AUTH_HEADER", raising=False)
+    monkeypatch.delenv("DETECTION_API_QUERY", raising=False)
     yield server
     server.shutdown()
     server.server_close()
@@ -55,50 +57,85 @@ def _setup_videos(tmp_path, codes=("IG-01",)):
     return vids, tmp_path / "cams.json"
 
 
+def _args(tmp_path, vids, cfg, *extra):
+    return ["--videos_dir", str(vids), "--output_dir", str(tmp_path / "out"), "--config", str(cfg),
+            "--cache_dir", str(tmp_path / "cache"), "--env_file", str(tmp_path / "none.env"), *extra]
+
+
 def test_end_to_end_with_mock_server(tmp_path, fake_capture, stub_encode, mock_api, capsys):
     fake_capture.spec = {"fps": 10.0, "frames": 20, "shape": (720, 1280, 3), "opened": True}
     vids, cfg = _setup_videos(tmp_path, ("IG-01", "CP-01"))
     out_dir = tmp_path / "out"
-    code = R.main([
-        "--videos_dir", str(vids), "--output_dir", str(out_dir), "--config", str(cfg),
-        "--sample_interval", "0.2", "--workers", "3", "--env_file", str(tmp_path / "none.env"),
-    ])
-    assert code == 0
+    assert R.main(_args(tmp_path, vids, cfg, "--sample_interval", "0.2")) == 0
     text = (out_dir / "detections_IG-01.json").read_text()
     assert "\n" not in text and ", " not in text  # compact JSON
     dets = json.loads(text)
-    assert len(dets) == 10 * 3  # 10 sampled frames x 3 synthetic vehicles
+    # 10 sampled frames x (3 plated vehicles + 1 vehicle without a readable plate)
+    assert len(dets) == 10 * 4
     for d in dets:
         assert REQUIRED <= d.keys()
-        assert d["engine"] == "yolov7-tiny-anpr" and d["model_version"] == "mock-1"
-        assert 0 < d["plate_confidence"] <= 1 and d["plate_text"] != "UNKNOWN"
+        assert d["engine"] == "lpu_on_gpu" and d["model_version"] == "mock+raw35"
         assert set(d["bbox"]) == {"x", "y", "width", "height"}
         assert 0 <= d["bbox"]["x"] <= 640 and 0 <= d["bbox"]["y"] <= 360
-    # Frames come back in order and the tracker keeps ids stable -> 3 tracks, one plate each.
     assert [d["frame_timestamp_sec"] for d in dets] == sorted(d["frame_timestamp_sec"] for d in dets)
     tracks = {}
     for d in dets:
         tracks.setdefault(d["tracked_vehicle_id"], set()).add(d["plate_text"])
-    assert len(tracks) == 3 and all(len(p) == 1 for p in tracks.values())
-    summary = json.loads((out_dir / "summary.json").read_text())
+    assert len(tracks) == 4 and all(len(p) == 1 for p in tracks.values())
+    plates = sorted(p for ps in tracks.values() for p in ps)
+    assert plates[-1] == "UNKNOWN" and all(re.fullmatch(r"MH \d\d [A-Z]{2} \d{4}", p) for p in plates[:3])
+    # 1280x720 -> 640x360: a 154 px wide (0.12*1280, rounded) car box becomes 77 px
+    assert {d["bbox"]["width"] for d in dets if d["plate_text"] != "UNKNOWN"} == {77.0}
+
+    events = json.loads((out_dir / "events_IG-01.json").read_text())
+    assert events["engine"] == "lpu_on_gpu" and len(events["events"]) == 3
+    assert all(e["good_read"] and e["tracked_vehicle_id"] in tracks for e in events["events"])
+    assert {e["plate_text"] for e in events["events"]} == set(plates[:3])
+
+    manifest = json.loads((out_dir / "manifest.json").read_text())
+    assert manifest["cameras"] == ["CP-01", "IG-01"]
+    assert {s["camera_code"]: s["good_reads"] for s in manifest["stats"]} == {"CP-01": 3, "IG-01": 3}
+    summary = json.loads((tmp_path / "cache" / "summary.json").read_text())
     assert [s["camera_code"] for s in summary] == ["IG-01", "CP-01"]
     assert KEY not in capsys.readouterr().out
+    for f in out_dir.iterdir():
+        assert KEY not in f.read_text()
+
+    # Outputs can be rebuilt from the cached raw responses without the API.
+    for f in out_dir.glob("detections_*.json"):
+        f.unlink()
+    assert R.main(_args(tmp_path, vids, cfg, "--from_cache")) == 0
+    assert json.loads((out_dir / "detections_IG-01.json").read_text()) == dets
 
 
-def test_conf_threshold_filters(tmp_path, fake_capture, stub_encode, mock_api):
-    fake_capture.spec = {"fps": 10.0, "frames": 4, "shape": (360, 640, 3), "opened": True}
+def test_weak_reads_keep_boxes_but_not_text(tmp_path, fake_capture, stub_encode, mock_api):
+    fake_capture.spec = {"fps": 10.0, "frames": 4, "shape": (720, 1280, 3), "opened": True}
     vids, cfg = _setup_videos(tmp_path)
-    out_dir = tmp_path / "out"
-    assert R.main(["--videos_dir", str(vids), "--output_dir", str(out_dir), "--config", str(cfg),
-                   "--conf_threshold", "0.93", "--env_file", str(tmp_path / "none.env")]) == 0
-    dets = json.loads((out_dir / "detections_IG-01.json").read_text())
-    assert dets and all(d["confidence"] >= 0.93 for d in dets)
+    # Mock OCR confidences are 90-92: a 95 bar makes every read "weak".
+    assert R.main(_args(tmp_path, vids, cfg, "--min_good_conf", "95")) == 0
+    dets = json.loads((tmp_path / "out" / "detections_IG-01.json").read_text())
+    assert dets and {d["plate_text"] for d in dets} == {"UNKNOWN"}
+    events = json.loads((tmp_path / "out" / "events_IG-01.json").read_text())["events"]
+    assert events and not any(e["good_read"] for e in events) and all(e["plate_text"] is None for e in events)
+    assert all(e["plate_read"] for e in events)  # the raw read stays in the event log
+
+
+def test_format_plate_and_overlay_transform():
+    assert R.format_plate("MH02FG0919") == "MH 02 FG 0919"
+    assert R.format_plate("24BH5283G") == "24 BH 5283 G"
+    assert R.format_plate("MH2A123") == "MH 02 A 0123"
+    assert R.overlay_transform(1920, 1080) == (1 / 3, 0.0, 0.0)
+    s, ox, oy = R.overlay_transform(1080, 1920)  # portrait clip is pillar-boxed in the 16:9 tile
+    assert s == 360 / 1920 and ox == (640 - 1080 * s) / 2 and oy == 0
+    box = R.to_overlay_box({"x": 900, "y": 900, "width": 30, "height": 9}, (1 / 3, 0, 0), pad_to=26)
+    assert box["width"] == 26 and box["height"] == 26
 
 
 def test_missing_config_exits_2(tmp_path, monkeypatch):
-    monkeypatch.delenv("DETECTION_API_URL", raising=False)
-    monkeypatch.delenv("DETECTION_API_KEY", raising=False)
-    assert R.main(["--output_dir", str(tmp_path), "--env_file", str(tmp_path / "none.env")]) == 2
+    for k in ("DETECTION_API_URL", "DETECTION_API_KEY", "ANPR_API_BASE"):
+        monkeypatch.delenv(k, raising=False)
+    assert R.main(["--output_dir", str(tmp_path), "--cache_dir", str(tmp_path / "c"),
+                   "--env_file", str(tmp_path / "none.env")]) == 2
 
 
 def test_unreachable_api_exits_2_without_fallback(tmp_path, monkeypatch, fake_capture, stub_encode):
@@ -106,22 +143,17 @@ def test_unreachable_api_exits_2_without_fallback(tmp_path, monkeypatch, fake_ca
     s.bind(("127.0.0.1", 0))
     port = s.getsockname()[1]
     s.close()  # nothing listens here now
-    monkeypatch.setenv("DETECTION_API_URL", f"http://127.0.0.1:{port}/detect")
+    monkeypatch.setenv("DETECTION_API_URL", f"http://127.0.0.1:{port}/v1/frame")
     monkeypatch.setenv("DETECTION_API_KEY", KEY)
     vids, cfg = _setup_videos(tmp_path)
-    out_dir = tmp_path / "out"
-    code = R.main(["--videos_dir", str(vids), "--output_dir", str(out_dir), "--config", str(cfg),
-                   "--max_retries", "0", "--env_file", str(tmp_path / "none.env")])
-    assert code == 2
-    assert not (out_dir / "detections_IG-01.json").exists()
+    assert R.main(_args(tmp_path, vids, cfg, "--max_retries", "0")) == 2
+    assert not (tmp_path / "out" / "detections_IG-01.json").exists()
 
 
 def test_wrong_key_aborts(tmp_path, monkeypatch, fake_capture, stub_encode, mock_api, capsys):
     monkeypatch.setenv("DETECTION_API_KEY", "wrong-key")
     vids, cfg = _setup_videos(tmp_path)
-    code = R.main(["--videos_dir", str(vids), "--output_dir", str(tmp_path / "out"), "--config", str(cfg),
-                   "--env_file", str(tmp_path / "none.env")])
-    assert code == 2
+    assert R.main(_args(tmp_path, vids, cfg)) == 2
     err = capsys.readouterr().err
     assert "401" in err and "wrong-key" not in err
 
@@ -129,14 +161,13 @@ def test_wrong_key_aborts(tmp_path, monkeypatch, fake_capture, stub_encode, mock
 def test_retries_through_transient_503(tmp_path, monkeypatch, fake_capture, stub_encode):
     server, _ = start_server(api_key=KEY, fail_first=2)
     try:
-        monkeypatch.setenv("DETECTION_API_URL", f"http://127.0.0.1:{server.server_address[1]}/detect")
+        monkeypatch.setenv("DETECTION_API_URL", f"http://127.0.0.1:{server.server_address[1]}/v1/frame")
         monkeypatch.setenv("DETECTION_API_KEY", KEY)
         monkeypatch.setattr(R.RemoteDetectionClient, "__init__",
                             _patched_init(R.RemoteDetectionClient.__init__), raising=True)
         fake_capture.spec = {"fps": 10.0, "frames": 2, "shape": (360, 640, 3), "opened": True}
         vids, cfg = _setup_videos(tmp_path)
-        assert R.main(["--videos_dir", str(vids), "--output_dir", str(tmp_path / "out"), "--config", str(cfg),
-                       "--workers", "1", "--env_file", str(tmp_path / "none.env")]) == 0
+        assert R.main(_args(tmp_path, vids, cfg)) == 0
     finally:
         server.shutdown()
         server.server_close()
@@ -168,8 +199,6 @@ def test_real_video_end_to_end(tmp_path, monkeypatch, mock_api):
         writer.write(frame)
     writer.release()
     (tmp_path / "cams.json").write_text(json.dumps([{"camera_code": "SY-01", "video_filename": "synthetic.mp4"}]))
-    out_dir = tmp_path / "out"
-    assert R.main(["--videos_dir", str(vids), "--output_dir", str(out_dir), "--config", str(tmp_path / "cams.json"),
-                   "--env_file", str(tmp_path / "none.env")]) == 0
-    dets = json.loads((out_dir / "detections_SY-01.json").read_text())
+    assert R.main(_args(tmp_path, vids, tmp_path / "cams.json")) == 0
+    dets = json.loads((tmp_path / "out" / "detections_SY-01.json").read_text())
     assert dets and REQUIRED <= dets[0].keys()

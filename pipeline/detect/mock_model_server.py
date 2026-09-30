@@ -1,25 +1,20 @@
 #!/usr/bin/env python3
 """
-Mock GPU model API (stdlib only) — lets the proxy and the pipeline be tested
-end-to-end without the real YOLOv7-tiny ANPR server.
+Mock of the team's LPU ANPR model API (stdlib only) — lets the proxy and the
+pipeline be tested end-to-end without the GPU box.
 
-    python pipeline/detect/mock_model_server.py --port 8765 --api_key dev-key
-    # then: DETECTION_API_URL=http://127.0.0.1:8765/detect DETECTION_API_KEY=dev-key
+    python pipeline/detect/mock_model_server.py --port 8766 --api_key dev-key
+    # then: DETECTION_API_URL=http://127.0.0.1:8766/v1/frame DETECTION_API_KEY=dev-key
 
-Endpoints
-    GET  /health  -> {"status":"ok", ...}                      (no key needed)
-    POST /detect  -> YOLO-style JSON; requires the key in
-                     `Authorization: Bearer <key>` or the header given by --auth_header.
-                     Accepts multipart (field `image`), JSON ({"image": base64}) or raw JPEG/PNG.
+Endpoints (same contract as api_server.py on the GPU box, see pipeline/detect/README.md)
+    GET  /health     -> {"ok": true, "engine": "lpu_on_gpu", "model_version": "mock+raw35", ...}  (no key)
+    POST /v1/frame   raw JPEG/PNG body, key in X-API-Key (or Authorization: Bearer)
+                     -> {"image", "engine", "model_version", "inference_ms", "latency_ms", "detections": [...]}
+    POST /v1/video   raw mp4 body -> {"events": [one per vehicle]}
+    POST /detect     legacy YOLO-style shape (multipart / JSON / raw), kept for the fallback path
 
-Response (a plausible real-world shape the adapters must handle):
-    {"model": "yolov7-tiny-anpr", "version": "mock-1", "inference_ms": 7.3,
-     "image": {"width": W, "height": H},
-     "predictions": [{"class": "car", "confidence": 0.93, "xyxy": [x1,y1,x2,y2],
-                      "plate": {"text": "DL 01 AB 1234", "confidence": 0.98}}]}
-
-Vehicles are synthetic: 3 cars drift across the frame as `frame_timestamp_sec`
-advances, so the tracker produces stable IDs and plates.
+Vehicles are synthetic: 3 plated vehicles at fixed positions plus one
+vehicle without a readable plate ("Not Found").
 """
 
 from __future__ import annotations
@@ -38,6 +33,7 @@ from email.policy import HTTP
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 STATES = ["DL", "HR", "UP", "RJ", "MH", "KA", "TN", "WB", "GJ", "PB"]
+LPU_CLASSES = ["Car", "Truck", "Bike"]
 TYPES = ["car", "truck", "motorcycle"]
 
 
@@ -89,10 +85,36 @@ def mock_predictions(size: tuple[int, int], t: float) -> list[dict]:
     return preds
 
 
+def lpu_plate(i: int) -> str:
+    rng = random.Random(2000 + i)
+    return f"MH{rng.randint(1, 48):02d}{''.join(rng.choices('ABCDEFGHJKLMNPRSTUVWXYZ', k=2))}{rng.randint(1000, 9999)}"
+
+
+def lpu_detections(size: tuple[int, int]) -> list[dict]:
+    """Real-contract detections: top-left [x, y, w, h] boxes in pixels of the submitted image."""
+    w, h = size
+    out = []
+    for i in range(3):
+        vx, vy, vw, vh = round((0.08 + 0.3 * i) * w), round(0.55 * h), round(0.12 * w), round(0.18 * h)
+        px, py, pw, ph = vx + round(vw * 0.35), vy + round(vh * 0.7), max(4, round(vw * 0.3)), max(2, round(vh * 0.1))
+        out.append({
+            "plate": lpu_plate(i), "ocr_confidence": 90.0 + i, "raw_ocr": lpu_plate(i), "grammar_valid": True,
+            "plate_score": 0.8, "plate_box_xywh": [px, py, pw, ph],
+            "vehicle_class": LPU_CLASSES[i % len(LPU_CLASSES)], "vehicle_confidence": 0.9 + 0.02 * i,
+            "vehicle_box_xywh": [vx, vy, vw, vh],
+        })
+    out.append({
+        "plate": "Not Found", "ocr_confidence": None, "raw_ocr": None, "grammar_valid": None, "plate_score": None,
+        "plate_box_xywh": None, "vehicle_class": "Bus", "vehicle_confidence": 0.88,
+        "vehicle_box_xywh": [round(0.5 * w), round(0.4 * h), round(0.15 * w), round(0.12 * h)],
+    })
+    return out
+
+
 class MockModelHandler(BaseHTTPRequestHandler):
     server_version = "MockANPR/1.0"
     api_key = "dev-key"
-    auth_header = "Authorization"
+    auth_header = "X-API-Key"
     delay_ms = 0
     fail_first = 0  # respond 503 to the first N detect calls (to exercise retries)
     calls = 0
@@ -111,17 +133,20 @@ class MockModelHandler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def _authorised(self) -> bool:
-        if self.auth_header.lower() == "authorization":
-            return self.headers.get("Authorization", "") == f"Bearer {self.api_key}"
-        return self.headers.get(self.auth_header, "") == self.api_key
+        # Like api_server.py: the configured header or `Authorization: Bearer <key>`.
+        if self.headers.get("Authorization", "") == f"Bearer {self.api_key}":
+            return True
+        return self.auth_header.lower() != "authorization" and self.headers.get(self.auth_header, "") == self.api_key
 
     def do_GET(self):
-        if self.path.rstrip("/") in ("/health", ""):
-            return self._send(200, {"status": "ok", "model": "yolov7-tiny-anpr", "version": "mock-1"})
+        if self.path.split("?")[0].rstrip("/") in ("/health", ""):
+            return self._send(200, {"ok": True, "engine": "lpu_on_gpu", "model_version": "mock+raw35",
+                                    "model_loaded": True, "gpu_busy": False})
         return self._send(404, {"error": "not found"})
 
     def do_POST(self):
-        if self.path.rstrip("/") != "/detect":
+        route = self.path.split("?")[0].rstrip("/")
+        if route not in ("/detect", "/v1/frame", "/v1/video"):
             return self._send(404, {"error": "not found"})
         if not self._authorised():
             return self._send(401, {"error": "invalid or missing API key"})
@@ -130,6 +155,10 @@ class MockModelHandler(BaseHTTPRequestHandler):
             n = type(self).calls
         if n <= self.fail_first:
             return self._send(503, {"error": "warming up"})
+        if route == "/v1/frame":
+            return self._lpu_frame()
+        if route == "/v1/video":
+            return self._lpu_video()
 
         length = int(self.headers.get("Content-Length") or 0)
         body = self.rfile.read(length)
@@ -166,7 +195,7 @@ class MockModelHandler(BaseHTTPRequestHandler):
         return self._send(
             200,
             {
-                "model": "yolov7-tiny-anpr",
+                "model": "legacy-yolo-anpr",
                 "version": "mock-1",
                 "inference_ms": round(5 + seed % 50 / 10, 1),
                 "image": {"width": size[0], "height": size[1]},
@@ -175,11 +204,42 @@ class MockModelHandler(BaseHTTPRequestHandler):
         )
 
 
+def _mock_lpu_frame(self):
+    length = int(self.headers.get("Content-Length") or 0)
+    body = self.rfile.read(length)
+    size = image_size(body)
+    if not size:
+        return self._send(415 if not self.headers.get("Content-Type", "").startswith("image/") else 400,
+                          {"error": "expected a raw JPEG or PNG body"})
+    if self.delay_ms:
+        time.sleep(self.delay_ms / 1000)
+    return self._send(200, {"image": {"width": size[0], "height": size[1]}, "engine": "lpu_on_gpu",
+                            "model_version": "mock+raw35", "inference_ms": 12.5, "latency_ms": 20.0,
+                            "detections": lpu_detections(size)})
+
+
+def _mock_lpu_video(self):
+    length = int(self.headers.get("Content-Length") or 0)
+    self.rfile.read(length)
+    size = (1280, 720)  # the mock does not decode the clip
+    events = []
+    for i, d in enumerate(d for d in lpu_detections(size) if d["plate"] != "Not Found"):
+        events.append({k: d[k] for k in ("plate", "ocr_confidence", "raw_ocr", "grammar_valid", "vehicle_class",
+                                          "vehicle_confidence", "plate_box_xywh", "vehicle_box_xywh")}
+                      | {"vehicle_track": i, "plate_track": i, "time_sec": 0.1, "frame": 1})
+    return self._send(200, {"engine": "lpu_on_gpu", "model_version": "mock+raw35", "frame_step": 1, "tiles": "2x3",
+                            "roi_top": 0.33, "inference_ms": 40.0, "latency_ms": 50.0, "events": events})
+
+
+MockModelHandler._lpu_frame = _mock_lpu_frame
+MockModelHandler._lpu_video = _mock_lpu_video
+
+
 def start_server(
     host: str = "127.0.0.1",
     port: int = 0,
     api_key: str = "dev-key",
-    auth_header: str = "Authorization",
+    auth_header: str = "X-API-Key",
     delay_ms: int = 0,
     fail_first: int = 0,
 ) -> tuple[ThreadingHTTPServer, threading.Thread]:
@@ -196,16 +256,17 @@ def start_server(
 
 
 def main() -> None:
-    p = argparse.ArgumentParser(description="Mock YOLOv7-tiny ANPR model API")
+    p = argparse.ArgumentParser(description="Mock of the LPU ANPR model API")
     p.add_argument("--host", default="127.0.0.1")
-    p.add_argument("--port", type=int, default=8765)
+    p.add_argument("--port", type=int, default=8766)
     p.add_argument("--api_key", default=os.environ.get("DETECTION_API_KEY") or "dev-key")
-    p.add_argument("--auth_header", default=os.environ.get("DETECTION_API_AUTH_HEADER") or "Authorization")
+    p.add_argument("--auth_header", default=os.environ.get("DETECTION_API_AUTH_HEADER") or "X-API-Key")
     p.add_argument("--delay_ms", type=int, default=0, help="Simulated inference delay")
     args = p.parse_args()
     server, thread = start_server(args.host, args.port, args.api_key, args.auth_header, args.delay_ms)
     host, port = server.server_address[:2]
-    print(f"Mock model API on http://{host}:{port}  (POST /detect, GET /health; auth header: {args.auth_header})")
+    print(f"Mock model API on http://{host}:{port}  (POST /v1/frame, /v1/video, /detect; GET /health; "
+          f"auth header: {args.auth_header})")
     try:
         thread.join()
     except KeyboardInterrupt:

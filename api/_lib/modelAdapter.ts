@@ -1,24 +1,25 @@
 // ═══════════════════════════════════════════════════════════════════════
 // Model API adapter — THE ONE PLACE that knows the GPU model API contract.
 //
-// The trained YOLOv7-tiny ANPR model runs on the team's GPU box behind an
-// API key. Its exact request/response contract is not final yet, so this
-// module is deliberately tolerant. When the real contract is known:
+// Primary contract: the team's LPU ANPR server (api_server.py on the GPU box,
+// reachable on LAN/Tailscale only — never expose it publicly). Detector DEIM
+// (deim50k) + PARSeq OCR (raw35), engine "lpu_on_gpu".
 //
-//   1. REQUEST  → edit `buildUpstreamRequest()` below (or just set
-//                 DETECTION_API_REQUEST_FORMAT / DETECTION_API_IMAGE_FIELD).
-//   2. RESPONSE → edit `normaliseUpstreamResponse()` below. Most real APIs
-//                 already fit one of the shapes handled by the helpers
-//                 (`findDetectionArray`, `readBox`, `readPlate`, ...); if not,
-//                 replace the body of `normaliseUpstreamResponse()` with a
-//                 direct mapping.
-//   3. Mirror the same change in pipeline/detect/adapter.py (Python batch
-//      pipeline) and update the shape tests in
-//      src/features/detections/remote/modelAdapter.test.ts +
-//      pipeline/tests/test_remote_adapter.py.
+//   POST <base>/v1/frame?tiles=2x3&roi_top=0.33&min_conf=60
+//        body = raw JPEG/PNG bytes, header X-API-Key: <key>
+//     → { image:{width,height}, engine, model_version, inference_ms, latency_ms,
+//         detections:[{ plate:"MH02FG0919"|"Not Found", ocr_confidence:0-100,
+//                       raw_ocr, grammar_valid, plate_score, plate_box_xywh:[x,y,w,h],
+//                       vehicle_class:"Car"|"Bike"|"Bus"|"Truck"|"LCV"|"Auto"|"Tractor"|"Mini-LCV",
+//                       vehicle_confidence, vehicle_box_xywh:[x,y,w,h] }] }
+//   GET  <base>/health (no key)
 //
-// Nothing outside this file (and its Python twin) should need to change.
-// Auth header handling lives in `buildAuthHeaders()` here too.
+// Boxes are TOP-LEFT x/y + width/height in pixels of the submitted image.
+// `normaliseUpstreamResponse()` maps that shape natively; the older tolerant
+// YOLO-style readers below stay as a fallback for other/legacy servers.
+// Mirror any change in pipeline/detect/adapter.py and update
+// src/features/detections/remote/modelAdapter.test.ts +
+// pipeline/tests/test_remote_adapter.py.
 // ═══════════════════════════════════════════════════════════════════════
 
 /** Vehicle classes the dashboard understands (mirrors src/types VehicleType). */
@@ -34,11 +35,19 @@ export interface NormalisedBox {
 /** One detection in the normalised contract returned by /api/detect. */
 export interface NormalisedDetection {
   plate_text: string | null;
+  /** OCR confidence 0..1 (the API's ocr_confidence / 100); null without a read. */
   plate_confidence: number | null;
   vehicle_type: VehicleType;
+  /** Detector confidence 0..1 (vehicle_confidence). */
   confidence: number;
-  /** Top-left x/y + width/height in PIXELS of the submitted frame. */
+  /** Top-left x/y + width/height in PIXELS of the submitted frame (vehicle box, else plate box). */
   bbox: NormalisedBox;
+  /** Real-contract extras (absent for legacy servers). */
+  vehicle_class?: string | null;
+  grammar_valid?: boolean | null;
+  raw_ocr?: string | null;
+  plate_bbox?: NormalisedBox | null;
+  bbox_source?: 'vehicle' | 'plate';
 }
 
 /** Response body of /api/detect (success). */
@@ -56,6 +65,7 @@ export interface NormalisedDetectResponse {
 export type RequestFormat = 'multipart' | 'json' | 'raw';
 
 export interface ModelApiConfig {
+  /** Frame endpoint, e.g. http://100.64.0.1:8765/v1/frame. */
   url: string;
   apiKey: string;
   /** Header that carries the key. `Authorization` → `Bearer <key>`, anything else → raw key. */
@@ -64,6 +74,8 @@ export interface ModelApiConfig {
   requestFormat: RequestFormat;
   /** Field name of the image in multipart/json requests. */
   imageField: string;
+  /** Query added to the frame URL (DETECTION_API_QUERY). */
+  query: string;
 }
 
 export interface FrameInput {
@@ -75,8 +87,11 @@ export interface FrameInput {
   height?: number | null;
 }
 
-export const DEFAULT_ENGINE = 'yolov7-tiny-anpr';
+export const DEFAULT_ENGINE = 'lpu_on_gpu';
 export const DEFAULT_TIMEOUT_MS = 15000;
+export const DEFAULT_AUTH_HEADER = 'X-API-Key';
+/** Wide overhead city views need 2x3 tiling (1 vs 29 vehicles measured on a 10 s clip). */
+export const DEFAULT_QUERY = 'tiles=2x3&roi_top=0.33&min_conf=60';
 
 // ───────────────────────────────────────────────────────────────────────
 // Config (server-side env only — never VITE_ prefixed)
@@ -84,9 +99,14 @@ export const DEFAULT_TIMEOUT_MS = 15000;
 
 type Env = Record<string, string | undefined>;
 
-/** Reads the model API config from env. Returns null when URL or key is missing. */
+/**
+ * Reads the model API config from env. Returns null when URL or key is missing.
+ * DETECTION_API_URL is the frame endpoint; with only ANPR_API_BASE set,
+ * `<base>/v1/frame` is used.
+ */
 export function readModelApiConfig(env: Env = process.env): ModelApiConfig | null {
-  const url = env.DETECTION_API_URL?.trim();
+  const base = env.ANPR_API_BASE?.trim().replace(/\/+$/, '');
+  const url = env.DETECTION_API_URL?.trim() || (base ? `${base}/v1/frame` : '');
   const apiKey = env.DETECTION_API_KEY?.trim();
   if (!url || !apiKey) return null;
   try {
@@ -95,18 +115,19 @@ export function readModelApiConfig(env: Env = process.env): ModelApiConfig | nul
     return null;
   }
   const timeout = Number(env.DETECTION_API_TIMEOUT_MS);
-  const fmt = (env.DETECTION_API_REQUEST_FORMAT || 'multipart').trim().toLowerCase();
+  const fmt = (env.DETECTION_API_REQUEST_FORMAT || 'raw').trim().toLowerCase();
   return {
     url,
     apiKey,
-    authHeader: env.DETECTION_API_AUTH_HEADER?.trim() || 'Authorization',
+    authHeader: env.DETECTION_API_AUTH_HEADER?.trim() || DEFAULT_AUTH_HEADER,
     timeoutMs: Number.isFinite(timeout) && timeout > 0 ? timeout : DEFAULT_TIMEOUT_MS,
-    requestFormat: fmt === 'json' || fmt === 'raw' ? fmt : 'multipart',
+    requestFormat: fmt === 'json' || fmt === 'multipart' ? fmt : 'raw',
     imageField: env.DETECTION_API_IMAGE_FIELD?.trim() || 'image',
+    query: env.DETECTION_API_QUERY === undefined ? DEFAULT_QUERY : env.DETECTION_API_QUERY.trim().replace(/^\?/, ''),
   };
 }
 
-/** `Authorization: Bearer <key>` by default; custom headers (e.g. x-api-key) get the raw key. */
+/** `X-API-Key: <key>` by default; `Authorization` gets `Bearer <key>`. */
 export function buildAuthHeaders(cfg: Pick<ModelApiConfig, 'authHeader' | 'apiKey'>): Record<string, string> {
   if (cfg.authHeader.toLowerCase() === 'authorization') {
     return { Authorization: `Bearer ${cfg.apiKey}` };
@@ -114,10 +135,41 @@ export function buildAuthHeaders(cfg: Pick<ModelApiConfig, 'authHeader' | 'apiKe
   return { [cfg.authHeader]: cfg.apiKey };
 }
 
+/** Adds `query` params to `url`; params already present in the URL win. */
+export function withQuery(url: string, query: string): string {
+  const u = new URL(url);
+  for (const [k, v] of new URLSearchParams(query)) {
+    if (!u.searchParams.has(k)) u.searchParams.set(k, v);
+  }
+  return u.toString();
+}
+
+/** The URL /api/detect POSTs to: DETECTION_API_URL + DETECTION_API_QUERY. */
+export function buildUpstreamUrl(cfg: Pick<ModelApiConfig, 'url' | 'query'>): string {
+  return withQuery(cfg.url, cfg.query);
+}
+
+/** Health probe: DETECTION_API_HEALTH_URL, else `<origin of DETECTION_API_URL>/health`. */
+export function buildHealthUrl(cfg: Pick<ModelApiConfig, 'url'>, env: Env = process.env): string {
+  return env.DETECTION_API_HEALTH_URL?.trim() || new URL('/health', cfg.url).toString();
+}
+
+/** (rows, cols, roi_top) of a /v1/frame query; server defaults 1x1 and roi_top 0.33 when tiled. */
+export function parseTiles(query: string | null | undefined): { rows: number; cols: number; roiTop: number } {
+  const q = new URLSearchParams(query || '');
+  const m = /^(\d+)x(\d+)$/.exec((q.get('tiles') || '').trim());
+  const rows = m ? Math.max(1, Number(m[1])) : 1;
+  const cols = m ? Math.max(1, Number(m[2])) : 1;
+  const tiled = rows * cols > 1;
+  const roi = q.has('roi_top') ? Number(q.get('roi_top')) : tiled ? 0.33 : 0;
+  return { rows, cols, roiTop: Number.isFinite(roi) ? Math.min(Math.max(roi, 0), 0.9) : tiled ? 0.33 : 0 };
+}
+
 // ───────────────────────────────────────────────────────────────────────
-// REQUEST  ← change here once the real contract is known
+// REQUEST
 // ───────────────────────────────────────────────────────────────────────
 
+/** The real API takes the raw image bytes (`raw`, the default); multipart/json are for legacy servers. */
 export function buildUpstreamRequest(cfg: ModelApiConfig, frame: FrameInput): RequestInit {
   const headers: Record<string, string> = { Accept: 'application/json', ...buildAuthHeaders(cfg) };
   const ext = frame.mimeType === 'image/png' ? 'png' : 'jpg';
@@ -145,20 +197,120 @@ export function buildUpstreamRequest(cfg: ModelApiConfig, frame: FrameInput): Re
 }
 
 // ───────────────────────────────────────────────────────────────────────
-// RESPONSE  ← change here once the real contract is known
+// RESPONSE
 // ───────────────────────────────────────────────────────────────────────
 
 export class UpstreamShapeError extends Error {}
 
+type Tiles = { rows: number; cols: number; roiTop: number };
+
+/** Real-contract vehicle classes → dashboard VehicleType (the raw class is kept in vehicle_class). */
+const LPU_VEHICLE_CLASSES: Record<string, VehicleType> = {
+  car: 'car', auto: 'car',
+  bike: 'motorcycle',
+  bus: 'bus',
+  truck: 'truck', lcv: 'truck', 'mini-lcv': 'truck', mini_lcv: 'truck', tractor: 'truck',
+};
+const LPU_KEYS = ['vehicle_box_xywh', 'plate_box_xywh', 'ocr_confidence', 'grammar_valid'];
+
+/** True for the real LPU API shape (a `detections`/`events` list of plate+vehicle records). */
+export function isLpuResponse(raw: unknown): raw is Record<string, unknown> {
+  if (!isObj(raw)) return false;
+  const items = raw.detections ?? raw.events;
+  if (!Array.isArray(items)) return false;
+  if (items.length === 0) return String(raw.engine ?? '').startsWith('lpu') || 'model_version' in raw;
+  return isObj(items[0]) && LPU_KEYS.some((k) => k in (items[0] as Record<string, unknown>));
+}
+
+/** `[x, y, w, h]` (top-left + size, pixels) → box; null when absent/invalid. */
+export function xywhBox(v: unknown): NormalisedBox | null {
+  if (!Array.isArray(v) || v.length < 4) return null;
+  const [x, y, w, h] = v.slice(0, 4).map(num);
+  if (x == null || y == null || w == null || h == null || !(w > 0) || !(h > 0)) return null;
+  return { x: round(x, 1), y: round(y, 1), width: round(w, 1), height: round(h, 1) };
+}
+
 /**
- * Maps whatever the model API returned into the normalised contract.
- * `image` is the pixel size of the frame we sent (used to scale normalised
- * 0..1 boxes). Throws UpstreamShapeError when no detection list can be found.
+ * A vehicle box spanning (almost) a whole detector tile. With tiling the
+ * vehicle detector often answers "the whole tile is one truck" — boxes of tile
+ * size at tile offsets; real vehicles in these views are far smaller. Such
+ * boxes are dropped (a plate inside one is kept and drawn at its plate box).
+ */
+export function isTileArtifact(box: NormalisedBox, image: { width: number; height: number } | null, tiles: Tiles | null): boolean {
+  if (!image || !tiles || !(image.width > 0) || !(image.height > 0)) return false;
+  const tileW = image.width / tiles.cols;
+  const tileH = (image.height * (1 - tiles.roiTop)) / tiles.rows;
+  return box.width >= 0.75 * tileW && box.height >= 0.75 * tileH;
+}
+
+export function vehicleTypeFromClass(cls: unknown): VehicleType {
+  if (typeof cls !== 'string' || !cls.trim()) return 'unknown';
+  const k = cls.trim().toLowerCase();
+  return LPU_VEHICLE_CLASSES[k] ?? VEHICLE_ALIASES[k.replace(/[\s-]+/g, '_')] ?? 'unknown';
+}
+
+/** One real-contract detection → normalised detection (null when it has no usable box). */
+export function normaliseLpuDetection(
+  item: Record<string, unknown>,
+  image: { width: number; height: number } | null,
+  tiles: Tiles | null,
+): NormalisedDetection | null {
+  const plate = typeof item.plate === 'string' ? item.plate.trim() : '';
+  const hasPlate = !!plate && plate.toLowerCase() !== 'not found';
+  const ocr = num(item.ocr_confidence);
+  let vbox = xywhBox(item.vehicle_box_xywh);
+  const pbox = xywhBox(item.plate_box_xywh);
+  if (vbox && isTileArtifact(vbox, image, tiles)) vbox = null;
+  const bbox = vbox ?? pbox;
+  if (!bbox || (!vbox && !hasPlate)) return null;
+  const vconf = num(item.vehicle_confidence);
+  const pscore = num(item.plate_score);
+  const conf = vconf ?? pscore ?? (ocr != null ? ocr / 100 : 0);
+  return {
+    plate_text: hasPlate ? normalisePlateText(plate) : null,
+    plate_confidence: hasPlate && ocr != null ? round(clamp01(ocr / 100), 4) : null,
+    vehicle_type: vehicleTypeFromClass(item.vehicle_class),
+    confidence: round(clamp01(conf), 4),
+    bbox,
+    vehicle_class: typeof item.vehicle_class === 'string' ? item.vehicle_class : null,
+    grammar_valid: typeof item.grammar_valid === 'boolean' ? item.grammar_valid : null,
+    raw_ocr: typeof item.raw_ocr === 'string' && item.raw_ocr ? item.raw_ocr : null,
+    plate_bbox: pbox,
+    bbox_source: vbox ? 'vehicle' : 'plate',
+  };
+}
+
+/**
+ * Maps the model API response into the normalised contract. `image` is the
+ * pixel size of the frame we sent (the real API also reports it); `tiles` is
+ * parseTiles() of the request query, used to drop tile-sized box artefacts.
+ * Throws UpstreamShapeError when no detection list can be found.
  */
 export function normaliseUpstreamResponse(
   raw: unknown,
   image: { width: number; height: number } | null,
-): Omit<NormalisedDetectResponse, 'latency_ms' | 'image'> {
+  tiles: Tiles | null = null,
+): Omit<NormalisedDetectResponse, 'latency_ms'> {
+  if (isLpuResponse(raw)) {
+    const img = isObj(raw.image) ? raw.image : null;
+    const w = img ? num(img.width) : null;
+    const h = img ? num(img.height) : null;
+    const size = w && h ? { width: w, height: h } : image;
+    const items = (raw.detections ?? raw.events) as unknown[];
+    const detections = items
+      .filter(isObj)
+      .map((i) => normaliseLpuDetection(i, size, tiles))
+      .filter((d): d is NormalisedDetection => d !== null);
+    return {
+      engine: str(raw.engine) || DEFAULT_ENGINE,
+      model_version: str(raw.model_version) || 'unknown',
+      inference_ms: readInferenceMs(raw),
+      image: size,
+      detections,
+    };
+  }
+
+  // ── fallback: tolerant reader for other / legacy YOLO-style servers ──
   const items = findDetectionArray(raw);
   if (!items) throw new UpstreamShapeError('Model API response contained no detection list');
 
@@ -183,9 +335,10 @@ export function normaliseUpstreamResponse(
   }
 
   return {
-    engine: str(pick(meta, ['engine'])) || DEFAULT_ENGINE,
+    engine: str(pick(meta, ['engine'])) || 'unknown',
     model_version: str(pick(meta, ['model_version', 'version', 'model', 'model_name'])) || 'unknown',
     inference_ms: readInferenceMs(meta),
+    image,
     detections,
   };
 }

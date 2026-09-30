@@ -2,8 +2,15 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildAuthHeaders,
+  buildHealthUrl,
   buildUpstreamRequest,
+  buildUpstreamUrl,
+  DEFAULT_QUERY,
   findDetectionArray,
+  isLpuResponse,
+  isTileArtifact,
+  parseTiles,
+  vehicleTypeFromClass,
   normalisePlateText,
   normaliseUpstreamResponse,
   readBox,
@@ -15,6 +22,9 @@ import {
 } from '../../../../api/_lib/modelAdapter';
 import { readImageSize, sniffImageType } from '../../../../api/_lib/http';
 import { fakeJpeg, fakePng } from './testFrames';
+// REAL responses of the team's LPU model API (Mumbai stock clips VP-01 / JG-01).
+import lpuFrame from './fixtures/lpu_frame_vp01.json';
+import lpuVideo from './fixtures/lpu_video_jg01.json';
 
 const IMG = { width: 640, height: 360 };
 
@@ -26,26 +36,52 @@ describe('readModelApiConfig', () => {
     expect(readModelApiConfig({ DETECTION_API_URL: 'not a url', DETECTION_API_KEY: 'k' })).toBeNull();
   });
 
-  it('applies defaults and overrides', () => {
-    const cfg = readModelApiConfig({ DETECTION_API_URL: 'http://gpu:8000/detect', DETECTION_API_KEY: ' k ' });
-    expect(cfg).toMatchObject({ apiKey: 'k', authHeader: 'Authorization', timeoutMs: 15000, requestFormat: 'multipart', imageField: 'image' });
-    const cfg2 = readModelApiConfig({
-      DETECTION_API_URL: 'http://gpu:8000/detect', DETECTION_API_KEY: 'k', DETECTION_API_AUTH_HEADER: 'x-api-key',
-      DETECTION_API_TIMEOUT_MS: '2500', DETECTION_API_REQUEST_FORMAT: 'JSON', DETECTION_API_IMAGE_FIELD: 'file',
+  it('applies the real-API defaults and overrides', () => {
+    const cfg = readModelApiConfig({ DETECTION_API_URL: 'http://gpu:8765/v1/frame', DETECTION_API_KEY: ' k ' });
+    expect(cfg).toMatchObject({
+      apiKey: 'k', authHeader: 'X-API-Key', timeoutMs: 15000, requestFormat: 'raw', imageField: 'image', query: DEFAULT_QUERY,
     });
-    expect(cfg2).toMatchObject({ authHeader: 'x-api-key', timeoutMs: 2500, requestFormat: 'json', imageField: 'file' });
+    expect(DEFAULT_QUERY).toBe('tiles=2x3&roi_top=0.33&min_conf=60');
+    const cfg2 = readModelApiConfig({
+      DETECTION_API_URL: 'http://gpu:8000/detect', DETECTION_API_KEY: 'k', DETECTION_API_AUTH_HEADER: 'Authorization',
+      DETECTION_API_TIMEOUT_MS: '2500', DETECTION_API_REQUEST_FORMAT: 'JSON', DETECTION_API_IMAGE_FIELD: 'file',
+      DETECTION_API_QUERY: '?tiles=1x1',
+    });
+    expect(cfg2).toMatchObject({ authHeader: 'Authorization', timeoutMs: 2500, requestFormat: 'json', imageField: 'file', query: 'tiles=1x1' });
+  });
+
+  it('falls back to ANPR_API_BASE/v1/frame', () => {
+    expect(readModelApiConfig({ ANPR_API_BASE: 'http://gpu:8765/', DETECTION_API_KEY: 'k' })?.url).toBe('http://gpu:8765/v1/frame');
+  });
+
+  it('builds the upstream and health URLs', () => {
+    const cfg = readModelApiConfig({ DETECTION_API_URL: 'http://gpu:8765/v1/frame', DETECTION_API_KEY: 'k' })!;
+    expect(buildUpstreamUrl(cfg)).toBe('http://gpu:8765/v1/frame?tiles=2x3&roi_top=0.33&min_conf=60');
+    // params already on the URL win
+    expect(buildUpstreamUrl({ url: 'http://gpu/v1/frame?tiles=1x1', query: 'tiles=2x3&min_conf=75' })).toBe(
+      'http://gpu/v1/frame?tiles=1x1&min_conf=75',
+    );
+    expect(buildHealthUrl(cfg, {})).toBe('http://gpu:8765/health');
+    expect(buildHealthUrl(cfg, { DETECTION_API_HEALTH_URL: 'http://gpu:1/h' })).toBe('http://gpu:1/h');
   });
 });
 
 describe('buildAuthHeaders / buildUpstreamRequest', () => {
   const base: ModelApiConfig = {
     url: 'http://gpu/detect', apiKey: 'sekret', authHeader: 'Authorization', timeoutMs: 1000, requestFormat: 'multipart', imageField: 'image',
+    query: '',
   };
   const frame = { bytes: fakeJpeg(), mimeType: 'image/jpeg' as const, cameraCode: 'JG-01', frameTimestampSec: 1.5 };
 
   it('uses Bearer for Authorization and the raw key otherwise', () => {
     expect(buildAuthHeaders(base)).toEqual({ Authorization: 'Bearer sekret' });
-    expect(buildAuthHeaders({ ...base, authHeader: 'x-api-key' })).toEqual({ 'x-api-key': 'sekret' });
+    expect(buildAuthHeaders({ ...base, authHeader: 'X-API-Key' })).toEqual({ 'X-API-Key': 'sekret' });
+  });
+
+  it('sends the raw JPEG with X-API-Key for the real API', () => {
+    const init = buildUpstreamRequest({ ...base, authHeader: 'X-API-Key', requestFormat: 'raw' }, frame);
+    expect(init.body).toBe(frame.bytes);
+    expect(init.headers).toMatchObject({ 'Content-Type': 'image/jpeg', 'X-API-Key': 'sekret' });
   });
 
   it('builds multipart by default', async () => {
@@ -139,8 +175,70 @@ describe('readPlate / readVehicleType', () => {
   });
 });
 
-describe('normaliseUpstreamResponse', () => {
-  it('maps a plausible YOLOv7 ANPR response', () => {
+describe('real LPU contract (/v1/frame, /v1/video)', () => {
+  const tiles = parseTiles(DEFAULT_QUERY);
+
+  it('parses tiles', () => {
+    expect(tiles).toEqual({ rows: 2, cols: 3, roiTop: 0.33 });
+    expect(parseTiles('')).toEqual({ rows: 1, cols: 1, roiTop: 0 });
+    expect(parseTiles('tiles=3x4')).toEqual({ rows: 3, cols: 4, roiTop: 0.33 });
+  });
+
+  it('maps a real /v1/frame response', () => {
+    expect(isLpuResponse(lpuFrame)).toBe(true);
+    const out = normaliseUpstreamResponse(lpuFrame, null, tiles);
+    expect(out).toMatchObject({ engine: 'lpu_on_gpu', model_version: 'deim50k+raw35', inference_ms: 330.2, image: { width: 1920, height: 1080 } });
+    // Car with a read: vehicle box, OCR 93.4 → 0.934, raw fields passed through.
+    expect(out.detections).toContainEqual({
+      plate_text: 'MH02EZ1785', plate_confidence: 0.934, vehicle_type: 'car', confidence: 0.5731,
+      bbox: { x: 778, y: 809, width: 186, height: 189 },
+      vehicle_class: 'Car', grammar_valid: true, raw_ocr: 'MH02EZ1785',
+      plate_bbox: { x: 830, y: 935, width: 46, height: 12 }, bbox_source: 'vehicle',
+    });
+    // A plate inside a tile-sized "vehicle" box is drawn at its plate box.
+    expect(out.detections.find((d) => d.plate_text === 'MH02FX5860')).toMatchObject({
+      bbox_source: 'plate', bbox: { x: 155, y: 914, width: 42, height: 11 }, vehicle_type: 'bus',
+    });
+    // "Not Found" vehicles keep their box without a plate; tile-sized ones are dropped.
+    const plateless = out.detections.filter((d) => d.plate_text === null);
+    expect(plateless).toHaveLength(1);
+    expect(plateless[0]).toMatchObject({ plate_confidence: null, bbox: { x: 114, y: 830, width: 147, height: 137 } });
+    expect(out.detections).toHaveLength(4);
+  });
+
+  it('maps real /v1/video events', () => {
+    expect(isLpuResponse(lpuVideo)).toBe(true);
+    const out = normaliseUpstreamResponse(lpuVideo, { width: 1920, height: 1080 }, tiles);
+    expect(out.engine).toBe('lpu_on_gpu');
+    expect(out.detections.length).toBeGreaterThan(0);
+    for (const d of out.detections) {
+      expect(d.plate_text).toMatch(/^[A-Z0-9]+$/);
+      expect(d.plate_confidence).toBeGreaterThan(0);
+      expect(d.plate_confidence).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('flags tile-sized boxes and maps model classes', () => {
+    const img = { width: 1920, height: 1080 };
+    expect(isTileArtifact({ x: 0, y: 313, width: 715, height: 447 }, img, tiles)).toBe(true);
+    expect(isTileArtifact({ x: 778, y: 809, width: 186, height: 189 }, img, tiles)).toBe(false);
+    expect(isTileArtifact({ x: 4, y: 0, width: 1908, height: 1079 }, img, parseTiles('tiles=1x1'))).toBe(true);
+    expect(vehicleTypeFromClass('Bike')).toBe('motorcycle');
+    expect(vehicleTypeFromClass('LCV')).toBe('truck');
+    expect(vehicleTypeFromClass('Mini-LCV')).toBe('truck');
+    expect(vehicleTypeFromClass('Auto')).toBe('car');
+    expect(vehicleTypeFromClass('Unknown')).toBe('unknown');
+    expect(vehicleTypeFromClass(null)).toBe('unknown');
+  });
+
+  it('accepts an empty detection list', () => {
+    const out = normaliseUpstreamResponse({ engine: 'lpu_on_gpu', model_version: 'deim50k+raw35', detections: [] }, null, tiles);
+    expect(out.detections).toEqual([]);
+  });
+});
+
+describe('normaliseUpstreamResponse (legacy fallback)', () => {
+  it('maps a plausible YOLO-style response', () => {
     const out = normaliseUpstreamResponse(
       {
         model: 'yolov7-tiny-anpr', version: '1.2.0', inference_ms: 12.34,
@@ -152,7 +250,7 @@ describe('normaliseUpstreamResponse', () => {
       },
       IMG,
     );
-    expect(out.engine).toBe('yolov7-tiny-anpr');
+    expect(out.engine).toBe('unknown');
     expect(out.model_version).toBe('1.2.0');
     expect(out.inference_ms).toBe(12.3);
     expect(out.detections).toHaveLength(2);

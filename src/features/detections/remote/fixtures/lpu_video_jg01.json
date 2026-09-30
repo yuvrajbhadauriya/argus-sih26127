@@ -1,0 +1,198 @@
+{
+ "engine": "lpu_on_gpu",
+ "model_version": "deim50k+raw35",
+ "frame_step": 1,
+ "tiles": "2x3",
+ "roi_top": 0.33,
+ "inference_ms": 33438.6,
+ "latency_ms": 53716,
+ "events": [
+  {
+   "plate": "MH02DJ877",
+   "ocr_confidence": 94.2,
+   "raw_ocr": "MH02DJ877",
+   "grammar_valid": false,
+   "vehicle_class": "Unknown",
+   "vehicle_confidence": null,
+   "vehicle_track": null,
+   "plate_track": 0,
+   "time_sec": 0.0,
+   "frame": 0,
+   "plate_box_xywh": [
+    1305,
+    1020,
+    50,
+    17
+   ],
+   "vehicle_box_xywh": null
+  },
+  {
+   "plate": "MH02DJ877C",
+   "ocr_confidence": 62.3,
+   "raw_ocr": "MH02DJ877C",
+   "grammar_valid": false,
+   "vehicle_class": "Car",
+   "vehicle_confidence": 0.334,
+   "vehicle_track": 2,
+   "plate_track": 0,
+   "time_sec": 0.0,
+   "frame": 0,
+   "plate_box_xywh": [
+    1306,
+    1022,
+    56,
+    15
+   ],
+   "vehicle_box_xywh": [
+    1205,
+    675,
+    714,
+    404
+   ]
+  },
+  {
+   "plate": "H01EB5731",
+   "ocr_confidence": 73.4,
+   "raw_ocr": "H01EB5731",
+   "grammar_valid": false,
+   "vehicle_class": "Car",
+   "vehicle_confidence": 0.414,
+   "vehicle_track": 3,
+   "plate_track": 1,
+   "time_sec": 0.67,
+   "frame": 20,
+   "plate_box_xywh": [
+    227,
+    1027,
+    54,
+    15
+   ],
+   "vehicle_box_xywh": [
+    0,
+    886,
+    397,
+    193
+   ]
+  },
+  {
+   "plate": "MH03DV2502",
+   "ocr_confidence": 55.2,
+   "raw_ocr": "MH03DV2502",
+   "grammar_valid": true,
+   "vehicle_class": "Truck",
+   "vehicle_confidence": 0.307,
+   "vehicle_track": 5,
+   "plate_track": 0,
+   "time_sec": 0.67,
+   "frame": 20,
+   "plate_box_xywh": [
+    278,
+    856,
+    33,
+    19
+   ],
+   "vehicle_box_xywh": [
+    0,
+    675,
+    453,
+    219
+   ]
+  },
+  {
+   "plate": "MH02DJ8770",
+   "ocr_confidence": 68.1,
+   "raw_ocr": "MH02DJ8770",
+   "grammar_valid": true,
+   "vehicle_class": "Truck",
+   "vehicle_confidence": 0.357,
+   "vehicle_track": 6,
+   "plate_track": 2,
+   "time_sec": 1.07,
+   "frame": 32,
+   "plate_box_xywh": [
+    1312,
+    972,
+    55,
+    14
+   ],
+   "vehicle_box_xywh": [
+    1204,
+    675,
+    715,
+    404
+   ]
+  },
+  {
+   "plate": "MH01ED5731",
+   "ocr_confidence": 77.4,
+   "raw_ocr": "MH01ED5731",
+   "grammar_valid": true,
+   "vehicle_class": "Car",
+   "vehicle_confidence": 0.498,
+   "vehicle_track": 22,
+   "plate_track": 2,
+   "time_sec": 2.93,
+   "frame": 88,
+   "plate_box_xywh": [
+    250,
+    871,
+    50,
+    13
+   ],
+   "vehicle_box_xywh": [
+    0,
+    679,
+    485,
+    399
+   ]
+  },
+  {
+   "plate": "HH47W285",
+   "ocr_confidence": 51.1,
+   "raw_ocr": "HH47W285",
+   "grammar_valid": false,
+   "vehicle_class": "Truck",
+   "vehicle_confidence": 0.364,
+   "vehicle_track": 3,
+   "plate_track": 3,
+   "time_sec": 3.57,
+   "frame": 107,
+   "plate_box_xywh": [
+    1316,
+    1006,
+    63,
+    15
+   ],
+   "vehicle_box_xywh": [
+    1206,
+    675,
+    713,
+    405
+   ]
+  },
+  {
+   "plate": "AA40020157",
+   "ocr_confidence": 17.7,
+   "raw_ocr": "AA40020157",
+   "grammar_valid": false,
+   "vehicle_class": "Car",
+   "vehicle_confidence": 0.38,
+   "vehicle_track": 16,
+   "plate_track": 5,
+   "time_sec": 3.8,
+   "frame": 114,
+   "plate_box_xywh": [
+    511,
+    953,
+    28,
+    16
+   ],
+   "vehicle_box_xywh": [
+    0,
+    715,
+    715,
+    364
+   ]
+  }
+ ]
+}
