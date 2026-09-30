@@ -15,9 +15,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT))
-sys.path.insert(0, str(ROOT / "scripts"))
+ROOT = Path(__file__).resolve().parents[2]          # repo root
+PIPELINE = Path(__file__).resolve().parents[1]      # pipeline/
+sys.path.insert(0, str(PIPELINE))
+sys.path.insert(0, str(PIPELINE / "legacy_local_model"))
 
 
 # ── cv2 stub ──────────────────────────────────────────────────────────
@@ -192,4 +193,5 @@ def chdir_tmp(tmp_path, monkeypatch):
 
 
 ROOT_DIR = ROOT
+PIPELINE_DIR = PIPELINE
 os.environ.setdefault("PYTHONHASHSEED", "0")

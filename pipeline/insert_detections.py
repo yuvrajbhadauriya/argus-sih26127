@@ -12,7 +12,7 @@ Uses the Supabase service role key (NOT the anon key) for trusted
 backend access.
 
 Usage:
-    python insert_detections.py --detections_dir ./detections --config camera_config.json
+    python pipeline/insert_detections.py --detections_dir ./public/detections
 
 Prerequisites:
     - Run the migration to add tracked_vehicle_id + frame_timestamp_sec columns
@@ -26,9 +26,11 @@ import os
 import sys
 import uuid
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 
 from dotenv import load_dotenv
+
+# camera_config.json lives next to this script
+DEFAULT_CONFIG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "camera_config.json")
 
 # Load .env from project root
 load_dotenv()
@@ -154,8 +156,8 @@ def main():
     parser.add_argument(
         "--config",
         type=str,
-        default="camera_config.json",
-        help="Camera config file for fallback lookups (default: camera_config.json)",
+        default=DEFAULT_CONFIG,
+        help="Camera config file for fallback lookups (default: pipeline/camera_config.json)",
     )
     parser.add_argument(
         "--start_time",

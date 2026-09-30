@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from conftest import ROOT_DIR
+from conftest import PIPELINE_DIR
 
 
 def write_dets(dirpath, code, n, **over):
@@ -70,7 +70,7 @@ class TestLoadConfigFallback:
         assert insert_detections.load_config_fallback(str(tmp_path / "x.json")) == {}
 
     def test_keys_by_camera_code(self, insert_detections):
-        m = insert_detections.load_config_fallback(str(ROOT_DIR / "camera_config.json"))
+        m = insert_detections.load_config_fallback(str(PIPELINE_DIR / "camera_config.json"))
         assert "IG-01" in m and m["IG-01"]["video_filename"].endswith(".mp4")
 
 
@@ -150,7 +150,7 @@ class TestMainIngestion:
             insert_detections.main()
 
     @pytest.mark.xfail(strict=True, reason=(
-        "BUG insert_detections.py:224-233 — `--start_time 2026-09-27T12:00:00` (no 'Z'/offset) "
+        "BUG insert_detections.py:226-235 — `--start_time 2026-09-27T12:00:00` (no 'Z'/offset) "
         "yields a naive datetime and tz-less ISO strings; Postgres then interprets them in the "
         "server's timezone, silently shifting detected_at."))
     def test_naive_start_time_is_treated_as_utc(self, run_main, tmp_path):
@@ -159,7 +159,7 @@ class TestMainIngestion:
         assert datetime.fromisoformat(fake.inserted["detections"][0][0]["detected_at"]).tzinfo is not None
 
     @pytest.mark.xfail(strict=True, reason=(
-        "BUG insert_detections.py:260 — event_id is uuid4() per run, so the 'independently "
+        "BUG insert_detections.py:262 — event_id is uuid4() per run, so the 'independently "
         "re-runnable' ingestion duplicates every detection on each re-run (no upsert key)."))
     def test_reingestion_is_idempotent(self, run_main, tmp_path):
         write_dets(tmp_path / "dets", "IG-01", 2)
@@ -169,12 +169,12 @@ class TestMainIngestion:
         assert ids(a) == ids(b)
 
     @pytest.mark.xfail(strict=True, reason=(
-        "BUG insert_detections.py:244 — for cameras missing from the DB the fallback id is "
+        "BUG insert_detections.py:246 — for cameras missing from the DB the fallback id is "
         "f'cam-{code.lower()}' (e.g. 'cam-np-01') because camera_config.json has no camera_id; "
         "that id matches no cameras.id ('cam-006'), so every insert violates the FK."))
     def test_fallback_camera_id_matches_seeded_id_format(self, run_main, tmp_path):
         write_dets(tmp_path / "dets", "NP-01", 1)
-        fake = run_main(cameras=[], config=json.loads((ROOT_DIR / "camera_config.json").read_text()))
+        fake = run_main(cameras=[], config=json.loads((PIPELINE_DIR / "camera_config.json").read_text()))
         assert fake.inserted["detections"][0][0]["camera_id"] == "cam-006"
 
 
@@ -182,7 +182,7 @@ class TestSchemaContract:
     """Rows written by the pipeline must fit supabase/migrations."""
 
     @pytest.mark.xfail(strict=True, reason=(
-        "BUG (schema drift) insert_detections.py:259-274 writes detected_at/latitude/longitude, "
+        "BUG (schema drift) insert_detections.py:261-276 writes detected_at/latitude/longitude, "
         "which the migrations never create, and omits `timestamp` which is NOT NULL. Against a "
         "migration-built DB every chunk fails and is counted as skipped (the retry path only "
         "handles tracked_vehicle_id/frame_timestamp_sec errors)."))
@@ -195,7 +195,7 @@ class TestSchemaContract:
         assert "timestamp" in row
 
     def test_every_config_camera_is_seeded(self, columns_of, migrations_sql):
-        cfg = json.loads((ROOT_DIR / "camera_config.json").read_text())
+        cfg = json.loads((PIPELINE_DIR / "camera_config.json").read_text())
         missing = [c["camera_code"] for c in cfg if f"'{c['camera_code']}'" not in migrations_sql]
         if missing:
             pytest.xfail(

@@ -1,4 +1,4 @@
-"""Tests for seed_alerts_and_watchlist.py and the legacy scripts/*.py helpers."""
+"""Tests for seed_alerts_and_watchlist.py and the legacy_local_model/*.py helpers."""
 
 import importlib
 import json
@@ -63,7 +63,7 @@ def test_seed_is_idempotent(seed):
     assert len(fake.inserted["alerts"]) == len(ids)
 
 
-# ── scripts/yolov7_offline_inference.py ───────────────────────────────
+# ── legacy_local_model/yolov7_offline_inference.py ───────────────────────────────
 def test_offline_inference_writes_consistent_records(tmp_path):
     mod = importlib.import_module("yolov7_offline_inference")
     out = tmp_path / "sub" / "o.json"
@@ -76,7 +76,7 @@ def test_offline_inference_writes_consistent_records(tmp_path):
 
 
 @pytest.mark.xfail(strict=True, raises=FileNotFoundError, reason=(
-    "BUG scripts/yolov7_offline_inference.py:59 and scripts/run_yolov7_on_videos.py:147 — "
+    "BUG legacy_local_model/yolov7_offline_inference.py:59 and legacy_local_model/run_yolov7_on_videos.py:147 — "
     "os.makedirs(os.path.dirname(output_path)) raises FileNotFoundError when --output is a "
     "bare filename (dirname == '')."))
 def test_offline_inference_accepts_bare_output_filename(chdir_tmp):
@@ -91,7 +91,7 @@ def test_plate_formats_are_inconsistent_between_generators(run_detection):
     assert " " in run_detection.get_deterministic_plate("IG-01", "trk_0001")
 
 
-# ── scripts/run_yolov7_on_videos.py ───────────────────────────────────
+# ── legacy_local_model/run_yolov7_on_videos.py ───────────────────────────────────
 class _Pred:
     def __init__(self, rows):
         self.pred = [rows]
@@ -127,7 +127,7 @@ def test_run_yolov7_simulation_mode(tmp_path, fake_capture):
 
 
 @pytest.mark.xfail(strict=True, raises=AttributeError, reason=(
-    "BUG scripts/run_yolov7_on_videos.py:92 — `class_names.get(cls_id, 'car')` assumes a dict, "
+    "BUG legacy_local_model/run_yolov7_on_videos.py:92 — `class_names.get(cls_id, 'car')` assumes a dict, "
     "but YOLOv7 torch.hub models expose model.names as a list → AttributeError on the first "
     "detection with real weights."))
 def test_run_yolov7_with_real_style_model_names(tmp_path, fake_capture, fake_torch):
@@ -160,7 +160,7 @@ def test_public_detection_files_are_well_formed():
 
 
 @pytest.mark.xfail(strict=True, reason=(
-    "BUG run_detection.py:430-474 — every committed public/detections/*.json starts with a "
+    "BUG legacy_local_model/run_detection.py:432-476 — every committed public/detections/*.json starts with a "
     "full-frame 640x360 'bus' box (MOG2's first frame is all foreground) and confidences span "
     "only 0.76–0.98 (the heuristic formula), i.e. the shipped data came from the background-"
     "subtraction fallback, not YOLOv7. The frontend papers over this with hard-coded filters."))

@@ -202,7 +202,7 @@ class TestProcessSingleVideo:
         assert summary["total_detections"] == 0
 
     @pytest.mark.xfail(strict=True, reason=(
-        "BUG run_detection.py:443-447 — inference exceptions after the 2nd sampled frame are "
+        "BUG legacy_local_model/run_detection.py:445-449 — inference exceptions after the 2nd sampled frame are "
         "swallowed silently: no log, model kept, frame yields zero detections. A mid-video "
         "CUDA/OOM failure produces a silently truncated dataset."))
     def test_late_inference_error_is_reported(self, run_detection, fake_capture, tmp_path, capsys):
@@ -214,7 +214,7 @@ class TestProcessSingleVideo:
         assert "error" in capsys.readouterr().out.lower()
 
     @pytest.mark.xfail(strict=True, reason=(
-        "BUG run_detection.py:353 + main():661-670 — main() sets video_path to an http URL "
+        "BUG legacy_local_model/run_detection.py:355 + main():663-672 — main() sets video_path to an http URL "
         "for 'streaming', but process_single_video() rejects anything that is not a local "
         "file via os.path.exists(), so the URL-streaming fallback is dead code."))
     def test_url_video_paths_are_opened(self, run_detection, fake_capture):

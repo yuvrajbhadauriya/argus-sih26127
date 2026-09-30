@@ -7,14 +7,14 @@ lightweight IoU tracking, assigns deterministic mock license plates per
 tracked vehicle, and outputs structured JSON.
 
 Usage:
-    python run_detection.py --videos_dir ./videos --output_dir ./detections \
+    python pipeline/legacy_local_model/run_detection.py --videos_dir ./videos --output_dir ./detections \
         --sample_interval 0.2 --conf_threshold 0.4
 
 Requirements:
-    pip install -r requirements.txt
+    pip install -r pipeline/requirements.txt
 
 Model weights (auto-downloaded on first run):
-    ./weights/yolov7-tiny.pt
+    pipeline/legacy_local_model/weights/yolov7-tiny.pt
 """
 
 import argparse
@@ -25,10 +25,12 @@ import os
 import random
 import sys
 import time
-from pathlib import Path
 
 import cv2
-import numpy as np
+
+_HERE = os.path.dirname(os.path.abspath(__file__))
+DEFAULT_CONFIG = os.path.normpath(os.path.join(_HERE, "..", "camera_config.json"))
+DEFAULT_WEIGHTS = os.path.join(_HERE, "weights", "yolov7-tiny.pt")
 
 # Optional imports — degrade gracefully
 try:
@@ -570,14 +572,14 @@ def main():
     parser.add_argument(
         "--config",
         type=str,
-        default="camera_config.json",
-        help="Camera config mapping file (default: camera_config.json)",
+        default=DEFAULT_CONFIG,
+        help="Camera config mapping file (default: pipeline/camera_config.json)",
     )
     parser.add_argument(
         "--weights",
         type=str,
-        default="./weights/yolov7-tiny.pt",
-        help="Path to YOLOv7-tiny .pt weights file (default: ./weights/yolov7-tiny.pt)",
+        default=DEFAULT_WEIGHTS,
+        help="Path to YOLOv7-tiny .pt weights file (default: pipeline/legacy_local_model/weights/yolov7-tiny.pt)",
     )
     parser.add_argument(
         "--sample_interval",

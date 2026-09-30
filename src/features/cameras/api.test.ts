@@ -64,7 +64,7 @@ describe('resolveSupabaseVideoUrl', () => {
   // detection pipeline actually ran on) for KB-01, CC-01, DW-01, DK-01, so the
   // bbox overlay for those cameras is drawn on top of a *different* video.
   it.fails('BUG: frontend video per camera matches camera_config.json used by the pipeline', async () => {
-    const cfg = (await import('../../../camera_config.json')).default as {
+    const cfg = (await import('../../../pipeline/camera_config.json')).default as {
       camera_code: string;
       video_filename: string;
     }[];
@@ -76,7 +76,7 @@ describe('resolveSupabaseVideoUrl', () => {
 
   // BUG: three different CAM-X → code alias tables exist and disagree.
   // features/cameras/api.ts says cam-d → LN-01, cam-e → AI-01, cam-h → DW-01;
-  // useCameraDetections.ts and insert_detections.py say CAM-D → DW-01, CAM-E → LN-01, CAM-G → AI-01.
+  // features/detections/api.ts and pipeline/insert_detections.py say CAM-D → DW-01, CAM-E → LN-01, CAM-G → AI-01.
   it.fails('BUG: CAM-D alias resolves to DW-01 as in useCameraDetections/insert_detections', () => {
     const dw = `${SUPABASE_STORAGE_BASE}${CAMERA_VIDEOS.find((v) => v.code === 'DW-01')!.filename}`;
     const lnAliases = CAMERA_VIDEOS.find((v) => v.code === 'LN-01')!.aliases;
