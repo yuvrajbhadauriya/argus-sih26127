@@ -7,10 +7,8 @@ import { Drawer } from '@/shared/ui/Modal';
 import { Button } from '@/shared/ui/Button';
 import { Badge } from '@/shared/ui/Badge';
 import { PlateChip } from '@/shared/ui/PlateChip';
-import { vehicleClassToPlateVariant } from '@/shared/lib/plate';
 import { formatFrameTime, plateKey } from '../lib/log';
 import { ConfidenceBar } from './ConfidenceBar';
-import { VehicleClass } from './VehicleClass';
 
 interface DetectionDrawerProps {
   detection: Detection | null;
@@ -60,7 +58,7 @@ export function DetectionDrawer({ detection: d, camera, onWatchlist, onClose }: 
     >
       <div className="space-y-4">
         <div className="flex flex-wrap items-center gap-3">
-          <PlateChip plate={d.plate_text_raw} size="lg" variant={vehicleClassToPlateVariant(d.vehicle_type)} flag={onWatchlist ? 'watchlist' : null} />
+          <PlateChip plate={d.plate_text_raw} size="lg" flag={onWatchlist ? 'watchlist' : null} />
           {onWatchlist && <Badge tone="danger" size="sm">Watchlist</Badge>}
         </div>
 
@@ -74,7 +72,6 @@ export function DetectionDrawer({ detection: d, camera, onWatchlist, onClose }: 
           <Row label="Raw OCR text"><span className="font-mono">{d.plate_text_raw}</span></Row>
           <Row label="Normalised"><span className="font-mono">{normalized}</span></Row>
           <Row label="Confidence"><ConfidenceBar value={d.confidence_score} /></Row>
-          <Row label="Class"><VehicleClass type={d.vehicle_type} /></Row>
           <Row label="Camera">
             {camera ? (
               <span className="flex min-w-0 items-center gap-2">

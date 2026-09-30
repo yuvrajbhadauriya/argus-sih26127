@@ -14,7 +14,8 @@ export interface LiveFeedEntry {
   plate: string;
   cameraCode: string;
   cameraName: string;
-  vehicleType: VehicleType;
+  /** Simulated entries only: real model reads carry no class (the model's class output is unreliable). */
+  vehicleType?: VehicleType;
   /** Plate colour (yellow taxis / goods, green EVs). */
   plateVariant?: PlateColour;
   /** 0–100 */

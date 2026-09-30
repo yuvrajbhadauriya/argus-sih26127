@@ -22,21 +22,22 @@ describe('detections log helpers', () => {
   });
 
   it('round-trips filters through URL params and keeps other params', () => {
-    const f = { plate: 'MH01', camera: 'cam-001', vclass: 'car', conf: '90' as const };
+    const f = { plate: 'MH01', camera: 'cam-001', conf: '90' as const };
     const p = filtersToParams(f, new URLSearchParams('x=1'));
     expect(p.get('x')).toBe('1');
-    expect(p.get('class')).toBe('car');
+    expect(p.get('camera')).toBe('cam-001');
     expect(filtersFromParams(p)).toEqual(f);
     expect(filtersFromParams(new URLSearchParams('conf=50'))).toEqual(EMPTY_FILTERS);
+    // Vehicle class is not a filter (the model's class output is unreliable).
+    expect(filtersFromParams(new URLSearchParams('class=truck'))).toEqual(EMPTY_FILTERS);
     expect(filtersToParams(EMPTY_FILTERS).toString()).toBe('');
     expect(hasActiveFilters(EMPTY_FILTERS)).toBe(false);
     expect(hasActiveFilters(f)).toBe(true);
   });
 
-  it('filters by plate (format-insensitive), camera, class and min confidence', () => {
+  it('filters by plate (format-insensitive), camera and min confidence', () => {
     expect(filterDetections(rows, { ...EMPTY_FILTERS, plate: 'mh 43' }).map((d) => d.event_id)).toEqual(['e2']);
     expect(filterDetections(rows, { ...EMPTY_FILTERS, camera: 'cam-001' })).toHaveLength(2);
-    expect(filterDetections(rows, { ...EMPTY_FILTERS, vclass: 'truck' })).toHaveLength(1);
     expect(filterDetections(rows, { ...EMPTY_FILTERS, conf: '90' }).map((d) => d.event_id)).toEqual(['e1']);
     expect(filterDetections(rows, { ...EMPTY_FILTERS, conf: '75' })).toHaveLength(2);
   });

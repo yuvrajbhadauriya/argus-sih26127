@@ -1,7 +1,8 @@
 // ═══════════════════════════════════════════════════
 // DetectionsPage — ANPR event log across all cameras.
-// Filters live in the URL (?plate=&camera=&class=&conf=) so other screens
-// (Live Map popup, Cameras) can deep-link into a filtered log.
+// Filters live in the URL (?plate=&camera=&conf=) so other screens
+// (Live Map popup, Cameras) can deep-link into a filtered log. No vehicle
+// class column or filter: the model's class output is unreliable on the clips.
 // ═══════════════════════════════════════════════════
 
 import { useEffect, useMemo, useState } from 'react';
@@ -22,7 +23,6 @@ import { DataTable, type Column } from '@/shared/ui/DataTable';
 import { EmptyState } from '@/shared/ui/EmptyState';
 import { ErrorState } from '@/shared/ui/ErrorState';
 import { PlateChip } from '@/shared/ui/PlateChip';
-import { vehicleClassToPlateVariant } from '@/shared/lib/plate';
 import { useDetectionsLog } from '../hooks/useDetectionsLog';
 import { DISPLAY_READ_MIN_CONFIDENCE } from '../api';
 import {
@@ -30,16 +30,7 @@ import {
   filtersToParams, formatFrameTime, hasActiveFilters, plateKey, type DetectionFilters,
 } from '../lib/log';
 import { ConfidenceBar } from '../components/ConfidenceBar';
-import { VehicleClass } from '../components/VehicleClass';
 import { DetectionDrawer } from '../components/DetectionDrawer';
-
-const CLASS_OPTIONS = [
-  { value: '', label: 'All classes' },
-  { value: 'car', label: 'Car' },
-  { value: 'truck', label: 'Truck' },
-  { value: 'bus', label: 'Bus' },
-  { value: 'motorcycle', label: 'Motorcycle' },
-];
 
 function downloadCsv(csv: string) {
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
@@ -96,7 +87,7 @@ export function DetectionsPage() {
     { key: 'time', header: 'Frame time', width: '104px', mono: true, cell: (d) => formatFrameTime(d.timestamp), sortValue: (d) => Number(d.frame_timestamp_sec ?? d.timestamp) || 0 },
     {
       key: 'plate', header: 'Plate', width: '150px',
-      cell: (d) => <PlateChip plate={d.plate_text_raw} size="xs" variant={vehicleClassToPlateVariant(d.vehicle_type)} flag={watchlist.has(plateKey(d.plate_text_raw)) ? 'watchlist' : null} />,
+      cell: (d) => <PlateChip plate={d.plate_text_raw} size="xs" flag={watchlist.has(plateKey(d.plate_text_raw)) ? 'watchlist' : null} />,
       sortValue: (d) => plateKey(d.plate_text_raw),
     },
     {
@@ -109,7 +100,6 @@ export function DetectionsPage() {
       ),
       sortValue: (d) => cameraName(d.camera_id),
     },
-    { key: 'class', header: 'Class', width: '130px', cell: (d) => <VehicleClass type={d.vehicle_type} />, sortValue: (d) => d.vehicle_type },
     { key: 'conf', header: 'Confidence', width: '130px', cell: (d) => <ConfidenceBar value={d.confidence_score} />, sortValue: (d) => d.confidence_score },
     { key: 'event', header: 'Event ID', width: '110px', hideBelow: 'lg', cell: (d) => <span className="font-mono text-xs text-fg-subtle">{d.event_id}</span> },
     {
@@ -167,9 +157,6 @@ export function DetectionsPage() {
               onChange={(e) => setPlateInput(e.target.value.toUpperCase())}
               className="w-full sm:w-64"
             />
-            <Select aria-label="Vehicle class" label="Class" value={filters.vclass} onChange={(e) => update({ vclass: e.target.value })}>
-              {CLASS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </Select>
             <Select aria-label="Camera" icon={<CctvIcon size={14} strokeWidth={1.75} />} value={filters.camera} onChange={(e) => update({ camera: e.target.value })}>
               <option value="">All cameras</option>
               {cameras.map((c) => <option key={c.id} value={c.id}>{c.code} · {c.name}</option>)}

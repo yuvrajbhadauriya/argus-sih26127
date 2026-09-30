@@ -112,17 +112,21 @@ describe('useDetectionOverlay', () => {
     expect(plateReadState(det({ confidence_score: 0.7 }))).toBe('reading');
   });
 
-  it('labels reads with plate · confidence · class and low reads as "reading…"', () => {
+  it('labels reads with plate · confidence (no vehicle class) and low reads as "reading…"', () => {
     const read = det({ plate_text_raw: 'MH 02 FG 0919', plate_confidence: 0.98 });
     const low = det({ plate_text_raw: 'MH 02 AB 1111', plate_confidence: 0.5, bbox: { x: 300, y: 200, width: 60, height: 50 } });
     setup([read, low], 0);
     stepFrame();
     const texts = ctx.fillText.mock.calls.map((c) => c[0]);
-    expect(texts).toContain('MH 02 FG 0919');
-    expect(texts).toContain('98%');
-    expect(texts).toContain('CAR');
-    expect(texts).toContain('reading…');
-    expect(texts).not.toContain('MH 02 AB 1111');
+    expect(texts).toEqual(['MH 02 FG 0919', '98%', 'reading…']);
+  });
+
+  it('draws a vehicle without a plate read as a box with no label', () => {
+    const unread = det({ plate_text_raw: 'UNKNOWN', plate_text_normalized: '', vehicle_type: 'truck', confidence_score: 0.9 });
+    setup([unread], 0);
+    stepFrame();
+    expect(ctx.strokeRect).toHaveBeenCalledWith(100, 100, 80, 60);
+    expect(ctx.fillText).not.toHaveBeenCalled();
   });
 
   it('draws watchlist reads in red with a WATCHLIST tag', () => {

@@ -7,11 +7,10 @@ import type { Detection } from '@/types';
 export interface DetectionFilters {
   plate: string;
   camera: string; // camera id or ''
-  vclass: string; // vehicle type or ''
   conf: '' | '90' | '75';
 }
 
-export const EMPTY_FILTERS: DetectionFilters = { plate: '', camera: '', vclass: '', conf: '' };
+export const EMPTY_FILTERS: DetectionFilters = { plate: '', camera: '', conf: '' };
 
 /** Uppercase alphanumerics only ("dl-01 ab" → "DL01AB"). */
 export function plateKey(raw: string): string {
@@ -23,7 +22,6 @@ export function filtersFromParams(params: URLSearchParams): DetectionFilters {
   return {
     plate: params.get('plate') ?? '',
     camera: params.get('camera') ?? '',
-    vclass: params.get('class') ?? '',
     conf: conf === '90' || conf === '75' ? conf : '',
   };
 }
@@ -34,13 +32,12 @@ export function filtersToParams(f: DetectionFilters, params: URLSearchParams = n
   const set = (k: string, v: string) => (v ? next.set(k, v) : next.delete(k));
   set('plate', f.plate.trim());
   set('camera', f.camera);
-  set('class', f.vclass);
   set('conf', f.conf);
   return next;
 }
 
 export function hasActiveFilters(f: DetectionFilters): boolean {
-  return !!(f.plate.trim() || f.camera || f.vclass || f.conf);
+  return !!(f.plate.trim() || f.camera || f.conf);
 }
 
 export function filterDetections(rows: Detection[], f: DetectionFilters): Detection[] {
@@ -49,7 +46,6 @@ export function filterDetections(rows: Detection[], f: DetectionFilters): Detect
   return rows.filter((d) => {
     if (q && !plateKey(d.plate_text_normalized || d.plate_text_raw).includes(q) && !plateKey(d.plate_text_raw).includes(q)) return false;
     if (f.camera && d.camera_id !== f.camera) return false;
-    if (f.vclass && d.vehicle_type !== f.vclass) return false;
     if (min && d.confidence_score < min) return false;
     return true;
   });

@@ -53,7 +53,7 @@ export type PlateReadState = 'read' | 'reading' | 'none';
  * 'read'    the tracked vehicle's plate was read with OCR ≥ 75 % (pipeline
  *           output only carries text for grammar-valid reads)
  * 'reading' a plate was found but the read is below 75 % → shown as "reading…"
- * 'none'    no plate read for this vehicle (box + class only)
+ * 'none'    no plate read for this vehicle (box only)
  */
 export function plateReadState(d: Pick<Detection, 'plate_text_raw' | 'plate_confidence' | 'confidence_score'>): PlateReadState {
   const text = (d.plate_text_raw || '').trim();
@@ -298,12 +298,14 @@ export function drawDetections(
   }
 
   // Pass 2 — labels: plate reads claim their spot first; later labels avoid them.
+  // Labels never name the vehicle class: the model's class output is unreliable
+  // on these clips (cars come out as TRUCK / BUS), so a vehicle without a plate
+  // read keeps its box only.
   const placed: Rect[] = [];
   for (const det of [...byRankAsc].reverse()) {
     const { bx, by, bh } = boxOf(det);
     const state = plateReadState(det);
     const watch = isWatch(det);
-    const cls = String(det.vehicle_type || 'vehicle').toUpperCase();
     let segments: { text: string; bg: string; fg: string; font: string }[];
     let h = chipH;
     if (state === 'read') {
@@ -311,11 +313,11 @@ export function drawDetections(
       segments = [{ text: det.plate_text_raw, bg: watch ? VIDEO_OVERLAY.watchlistBox : VIDEO_OVERLAY.plateBg, fg: watch ? '#FFFFFF' : VIDEO_OVERLAY.plateFg, font: mono }];
       if (!tile) {
         segments.push({ text: `${Math.round(conf * 100)}%`, bg: VIDEO_OVERLAY.labelBg, fg: VIDEO_OVERLAY.labelFg, font: sans });
-        segments.push({ text: watch ? 'WATCHLIST' : cls, bg: watch ? VIDEO_OVERLAY.watchlistBox : VIDEO_OVERLAY.labelBg, fg: watch ? '#FFFFFF' : VIDEO_OVERLAY.labelMuted, font: sans });
+        if (watch) segments.push({ text: 'WATCHLIST', bg: VIDEO_OVERLAY.watchlistBox, fg: '#FFFFFF', font: sans });
       }
-    } else if (!tile) {
+    } else if (state === 'reading' && !tile) {
       h = Math.round(chipH * 0.85);
-      segments = [{ text: state === 'reading' ? 'reading…' : cls, bg: VIDEO_OVERLAY.labelBg, fg: state === 'reading' ? VIDEO_OVERLAY.labelFg : VIDEO_OVERLAY.labelMuted, font: sans }];
+      segments = [{ text: 'reading…', bg: VIDEO_OVERLAY.labelBg, fg: VIDEO_OVERLAY.labelFg, font: sans }];
     } else {
       continue;
     }

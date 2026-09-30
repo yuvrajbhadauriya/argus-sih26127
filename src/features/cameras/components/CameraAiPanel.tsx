@@ -12,9 +12,8 @@ import { EmptyState } from '@/shared/ui/EmptyState';
 import { PlateChip } from '@/shared/ui/PlateChip';
 import { SeverityChip } from '@/shared/ui/SeverityChip';
 import { StatusPill } from '@/shared/ui/StatusPill';
-import { vehicleClassToPlateVariant, normalizePlate } from '@/shared/lib/plate';
+import { normalizePlate } from '@/shared/lib/plate';
 import { AiEngineStatusPill } from '@/features/ai-engine/components/AiEngineStatus';
-import { VehicleClassIcon } from '@/features/detections/components/VehicleClass';
 import { useLiveReads } from '@/features/detections/hooks/useLiveReads';
 import { useWatchlistIndex } from '@/features/detections/hooks/useWatchlistKeys';
 import { DISPLAY_READ_MIN_CONFIDENCE } from '@/features/detections/api';
@@ -89,13 +88,9 @@ export function LivePlateReads({ camera }: { camera: Camera }) {
                   aria-label={`Trace ${plate}`}
                 >
                   {hit && <span className="absolute inset-y-0 left-0 w-0.5 bg-danger" aria-hidden="true" />}
-                  <PlateChip plate={plate} size="sm" variant={vehicleClassToPlateVariant(r.event.vehicle_type)} flag={hit ? 'watchlist' : null} />
+                  <PlateChip plate={plate} size="sm" flag={hit ? 'watchlist' : null} />
                   {hit && <SeverityChip severity={hit} size="sm" />}
-                  <span className="flex min-w-0 flex-1 items-center gap-1.5 text-xs text-fg-muted" title={r.event.vehicle_class}>
-                    <VehicleClassIcon type={r.event.vehicle_type} />
-                    <span className="truncate">{r.event.vehicle_class}</span>
-                  </span>
-                  <span className="flex shrink-0 flex-col items-end leading-tight">
+                  <span className="ml-auto flex shrink-0 flex-col items-end leading-tight">
                     <span className="font-mono text-2xs tabular-nums text-fg">{Math.round((r.event.plate_confidence ?? 0) * 100)}%</span>
                     <span className="font-mono text-2xs tabular-nums text-fg-subtle" title={`${ago}s ago`}>{formatIstTime(r.at)}</span>
                   </span>

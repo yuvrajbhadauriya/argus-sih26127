@@ -94,7 +94,6 @@ export function LiveMapPage() {
       plate: r.event.plate_text!,
       cameraCode: r.camera_code,
       cameraName: names.get(r.camera_code) ?? r.camera_code,
-      vehicleType: r.event.vehicle_type,
       confidence: Math.round((r.event.plate_confidence ?? 0) * 100),
       secondsAgo: Math.max(0, Math.round((now - r.at) / 1000)),
       watchlist: watch.get(plateKey(r.event.plate_text!)) ?? null,
