@@ -14,6 +14,7 @@ import { useAuth, ROLE_LABEL } from '@/features/auth/session';
 import { Badge, type Tone } from '@/shared/ui/Badge';
 import { Popover } from '@/shared/ui/Popover';
 import { StatusPill } from '@/shared/ui/StatusPill';
+import { useAiEngineStatus } from '@/features/ai-engine/hooks/useAiEngineStatus';
 
 type Health = 'nominal' | 'degraded' | 'offline' | 'loading';
 
@@ -43,6 +44,7 @@ export function SystemStatus({ className }: { className?: string }) {
   const tag = SOURCE_TAG[ds.source];
   const channel = useSyncExternalStore(subscribeLiveChannelStatus, getLiveChannelStatus, getLiveChannelStatus);
   const { user } = useAuth();
+  const engine = useAiEngineStatus();
   const total = cameras.length;
   const online = cameras.filter((c) => c.status === 'online').length;
   const offlineCams = cameras.filter((c) => c.status !== 'online');
@@ -88,7 +90,16 @@ export function SystemStatus({ className }: { className?: string }) {
         <dt className="text-fg-muted">Session</dt>
         <dd className="text-right text-fg">{user ? `${ROLE_LABEL[user.role]}${user.demo ? ' (demo)' : ''}` : 'Read-only guest'}</dd>
         <dt className="text-fg-muted">ANPR model</dt>
-        <dd className="text-right text-fg">DEIM + PARSeq (deim50k+raw35)</dd>
+        <dd className="text-right text-fg">{engine.engineLabel}</dd>
+        <dt className="text-fg-muted">AI engine</dt>
+        <dd
+          className={cn(
+            'text-right font-medium tabular-nums',
+            engine.tone === 'success' ? 'text-success' : engine.tone === 'warning' ? 'text-warning' : engine.tone === 'danger' ? 'text-danger' : 'text-fg-muted',
+          )}
+        >
+          {engine.label}
+        </dd>
       </dl>
       <p className="border-t border-line px-3 py-2.5 text-xs text-fg-muted">{ds.description}</p>
       {ds.liveError && (
