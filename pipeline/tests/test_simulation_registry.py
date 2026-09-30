@@ -73,7 +73,8 @@ def test_every_camera_has_its_own_clip_in_both_sources():
         assert c["video_url"].endswith(f"/videos/mumbai/720p/{slug}.mp4")
         assert c["poster_url"].endswith(f"/videos/mumbai/720p/{slug}.jpg")
         assert f"video_slug: '{slug}'" in MOCK_TS
-        assert c["video_url"] in SQL
+        # host = whichever Supabase project is deployed; the bucket path must match
+        assert c["video_url"].split("/storage/", 1)[1] in SQL
         # The clip exists in the candidate set the network was built from.
         assert (ROOT_DIR / "pipeline" / "data" / "candidate_clips" / f"{slug}.jpg").exists() or \
             not (ROOT_DIR / "pipeline" / "data" / "candidate_clips").exists()
