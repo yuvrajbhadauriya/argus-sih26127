@@ -3,7 +3,7 @@
 // ═══════════════════════════════════════════════════
 
 import { useState } from 'react';
-import { useThemeTokens } from '@/shared/theme/tokens';
+import { TOKENS, useThemeTokens } from '@/shared/theme/tokens';
 import { ChartTooltip, SrTable, TooltipRow } from './ChartTooltip';
 import { fmtInt, luminance, mixHex, useElementWidth } from './chartUtils';
 
@@ -57,7 +57,7 @@ export function MatrixHeat({ rows, cols, cells, ariaLabel, rowTitle, colTitle, v
             {cols.map((c, j) => {
               const cell = cells[i]?.[j] ?? { count: 0 };
               const bg = colorOf(cell.count);
-              const fg = luminance(bg) > 0.4 ? '#0F1722' : '#FFFFFF';
+              const fg = luminance(bg) > 0.4 ? TOKENS.light.fg : TOKENS.dark.fg;
               const active = hover?.r === i && hover?.c === j;
               return (
                 <g key={c} onMouseEnter={() => setHover({ r: i, c: j })}>
