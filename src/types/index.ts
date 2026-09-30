@@ -15,9 +15,6 @@ export type AlertPriority = 'low' | 'medium' | 'high' | 'critical';
 /** Watchlist/blacklist category */
 export type WatchlistCategory = 'stolen' | 'wanted' | 'missing' | 'flagged' | 'custom';
 
-/** User role */
-export type UserRole = 'operator' | 'admin';
-
 // ── Core entities ──────────────────────────────────
 
 /** A virtual camera mapped 1:1 to a pre-downloaded traffic video */
@@ -169,14 +166,4 @@ export interface CorridorStats {
   avg_travel_time_seconds: number;
   peak_hour: string;
   peak_count: number;
-}
-
-// ── UI / Navigation ────────────────────────────────
-
-/** Navigation route definition */
-export interface NavRoute {
-  path: string;
-  label: string;
-  icon: string;
-  adminOnly?: boolean;
 }

@@ -15,7 +15,6 @@ vi.mock('react-leaflet', () => {
   };
 });
 vi.mock('@/components/video/CameraVideoPlayer', () => ({ CameraVideoPlayer: () => <div data-testid="player" /> }));
-vi.mock('@/components/video/PublicVideoPlayer', () => ({ PublicVideoPlayer: () => <div data-testid="player" /> }));
 
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { LiveMapPage } from './LiveMapPage';
