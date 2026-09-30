@@ -516,7 +516,7 @@ def build_camera_outputs(camera_code: str, frames_doc: dict, video_doc: dict | N
                 "plate_text": e["plate_text"],
                 "plate_confidence": round(e["plate_confidence"], 3),
                 "vehicle_type": e["vehicle_type"],
-                "confidence": round(det["confidence"], 3),
+                "confidence": round(max(det["confidence"], e["plate_confidence"]), 3),
                 "frame_timestamp_sec": e["time_sec"],
                 "bbox": e["bbox"],
                 "engine": engine,

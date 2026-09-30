@@ -1,4 +1,90 @@
 {
-  "note": "Camera codes whose current clip has pipeline output in detections_<code>.json. Add a code here after copying the ANPR pipeline output for that camera (pipeline/detect/run_remote_detection.py) into this folder.",
-  "cameras": []
+  "note": "Camera codes whose current clip has ANPR output in detections_<code>.json (per-frame overlay boxes, 640x360 canvas) and events_<code>.json (one event per vehicle). Written by pipeline/detect/run_remote_detection.py from the team's LPU model API.",
+  "engine": "lpu_on_gpu",
+  "model_version": "deim50k+raw35",
+  "generated_at": "2026-09-30T16:36:43Z",
+  "cameras": [
+    "AN-01",
+    "BH-01",
+    "DD-01",
+    "JG-01",
+    "KR-01",
+    "SC-01",
+    "SN-01",
+    "VP-01"
+  ],
+  "stats": [
+    {
+      "camera_code": "AN-01",
+      "video_filename": "mumbai_overhead-flyover-receding_pexels31048580.mp4",
+      "vehicles": 169,
+      "good_reads": 8,
+      "plates": 9,
+      "overlay_tracks": 106,
+      "gpu_seconds": 199.6
+    },
+    {
+      "camera_code": "BH-01",
+      "video_filename": "india_rain-overhead-wet-road_pexels33588922.mp4",
+      "vehicles": 28,
+      "good_reads": 0,
+      "plates": 0,
+      "overlay_tracks": 23,
+      "gpu_seconds": 82.0
+    },
+    {
+      "camera_code": "DD-01",
+      "video_filename": "mumbai_flyover-closeup-rear-plates_pexels30169858.mp4",
+      "vehicles": 53,
+      "good_reads": 9,
+      "plates": 13,
+      "overlay_tracks": 34,
+      "gpu_seconds": 92.0
+    },
+    {
+      "camera_code": "JG-01",
+      "video_filename": "mumbai_overhead-jam-6lane_pexels31046764.mp4",
+      "vehicles": 29,
+      "good_reads": 6,
+      "plates": 9,
+      "overlay_tracks": 25,
+      "gpu_seconds": 45.0
+    },
+    {
+      "camera_code": "KR-01",
+      "video_filename": "india_night-overhead-junction_pexels34766759.mp4",
+      "vehicles": 12,
+      "good_reads": 0,
+      "plates": 0,
+      "overlay_tracks": 1,
+      "gpu_seconds": 138.9
+    },
+    {
+      "camera_code": "SC-01",
+      "video_filename": "mumbai_overhead-dense-bus-autos_pexels31046718.mp4",
+      "vehicles": 66,
+      "good_reads": 0,
+      "plates": 0,
+      "overlay_tracks": 56,
+      "gpu_seconds": 129.6
+    },
+    {
+      "camera_code": "SN-01",
+      "video_filename": "mumbai_overhead-signal-multilane_pexels30609021.mp4",
+      "vehicles": 197,
+      "good_reads": 10,
+      "plates": 22,
+      "overlay_tracks": 183,
+      "gpu_seconds": 308.1
+    },
+    {
+      "camera_code": "VP-01",
+      "video_filename": "mumbai_overhead-dense-jam-plates_pexels31048534.mp4",
+      "vehicles": 192,
+      "good_reads": 16,
+      "plates": 32,
+      "overlay_tracks": 177,
+      "gpu_seconds": 268.0
+    }
+  ]
 }
