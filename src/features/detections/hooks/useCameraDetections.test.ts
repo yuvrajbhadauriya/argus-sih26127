@@ -123,7 +123,7 @@ describe('useCameraDetections', () => {
   // BUG: the Supabase query has no .range()/.limit() and no ordering. PostgREST caps
   // responses at 1000 rows by default, while the shipped detection files hold
   // 1.7k–25.8k rows per camera, so DB mode silently truncates to an arbitrary
-  // 1000-row subset (useCameraDetections.ts:42-45).
+  // 1000-row subset (features/detections/api.ts fetchDetectionsFromSupabase).
   it.fails('BUG: DB query paginates or orders by frame_timestamp_sec to avoid 1000-row truncation', async () => {
     h.configured = true;
     h.fake.enqueue('detections', { data: [{ event_id: 'x', bbox: {} }] });
