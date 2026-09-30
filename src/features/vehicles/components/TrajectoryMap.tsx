@@ -541,7 +541,7 @@ export function TrajectoryMap({ trajectory, activeIndex = null, onActiveIndexCha
       <MapLegend title="Legend" position="top-left" items={legend} />
 
       {trajectory.source === 'simulation' && (
-        <MapPanel position="top-right" className="pointer-events-none mr-14 p-1">
+        <MapPanel position="top-right" className="pointer-events-none mr-14 hidden p-1 sm:block">
           <SimulationBadge compact />
         </MapPanel>
       )}

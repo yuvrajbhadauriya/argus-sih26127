@@ -63,8 +63,8 @@ function SuggestionChips({ suggestions, selectedPlate, onPick, className }: {
 }) {
   if (suggestions.length === 0) return null;
   return (
-    <div className={cn('flex flex-wrap items-center gap-2', className)}>
-      <span className="text-xs font-medium text-fg-muted">Suggested:</span>
+    <div className={cn('-mx-1 flex items-center gap-2 overflow-x-auto px-1 pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0', className)}>
+      <span className="shrink-0 text-xs font-medium text-fg-muted">Suggested:</span>
       {suggestions.map((s) => {
         const active = selectedPlate != null && normalizePlate(selectedPlate) === normalizePlate(s.plate_text);
         return (
@@ -76,7 +76,7 @@ function SuggestionChips({ suggestions, selectedPlate, onPick, className }: {
             aria-label={`${formatPlate(s.plate_text)}${s.kind !== 'multi-camera' ? ` · ${s.label}` : ''}`}
             title={s.reason}
             className={cn(
-              'inline-flex items-center gap-1.5 rounded-sm border px-1 py-0.5 transition-colors',
+              'inline-flex shrink-0 items-center gap-1.5 rounded-sm border px-1 py-0.5 transition-colors',
               active ? 'border-primary bg-primary/12' : 'border-transparent hover:bg-surface-2',
             )}
           >

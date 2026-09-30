@@ -70,7 +70,7 @@ export const TrajectoryTimeline = memo(function TrajectoryTimeline({ trajectory,
             {showDate[i] && <TimelineDivider icon={<CalendarIcon />}>{formatIstDate(wp.timestamp)} · IST</TimelineDivider>}
             {newTrip && overlaps && wp.distance_m_from_prev == null && (
               <TimelineDivider icon={<TriangleAlertIcon className="text-danger" />}>
-                <span className="text-danger">Same plate read elsewhere during the previous trip</span>
+                <span className="text-danger" title="Same plate read elsewhere while the previous trip was still under way">Read elsewhere mid-trip</span>
               </TimelineDivider>
             )}
             {newTrip && !overlaps && (
