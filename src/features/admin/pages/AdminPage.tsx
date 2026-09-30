@@ -351,7 +351,7 @@ export function AdminPage() {
   ];
 
   const system: [string, React.ReactNode][] = [
-    ['ANPR model', 'YOLOv7-tiny ANPR (plate detection + OCR)'],
+    ['ANPR model', 'LPU ANPR on GPU — DEIM detector (deim50k) + PARSeq OCR (raw35); LAN/VPN-only API'],
     ['Detection endpoint', <span key="e" className="font-mono">{DETECT_ENDPOINT}</span>],
     ['Data source', `${ds.label} — ${ds.description}`],
     ['Signed in as', user ? `${user.name} (${user.email}) · ${ROLE_LABEL[user.role]}${user.demo ? ' · demo identity' : ''}` : 'Not signed in (read-only)'],

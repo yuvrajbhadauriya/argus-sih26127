@@ -88,7 +88,7 @@ export function SystemStatus({ className }: { className?: string }) {
         <dt className="text-fg-muted">Session</dt>
         <dd className="text-right text-fg">{user ? `${ROLE_LABEL[user.role]}${user.demo ? ' (demo)' : ''}` : 'Read-only guest'}</dd>
         <dt className="text-fg-muted">ANPR model</dt>
-        <dd className="text-right text-fg">YOLOv7-tiny ANPR</dd>
+        <dd className="text-right text-fg">DEIM + PARSeq (deim50k+raw35)</dd>
       </dl>
       <p className="border-t border-line px-3 py-2.5 text-xs text-fg-muted">{ds.description}</p>
       {ds.liveError && (

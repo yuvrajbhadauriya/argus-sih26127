@@ -81,7 +81,7 @@ export function CamerasPage() {
   const header = (
     <PageHeader
       title="Camera Network"
-      description="Live ANPR feeds with on-frame YOLOv7 detections"
+      description="Live ANPR feeds with on-frame DEIM + PARSeq detections"
       icon={CctvIcon}
       meta={
         !loading && !error && cameras.length > 0 ? (

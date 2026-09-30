@@ -111,7 +111,7 @@ describe('AdminPage', () => {
     renderPage();
     await screen.findByText(CAMS[0].name);
     await userEvent.click(screen.getByRole('tab', { name: /system/i }));
-    expect(screen.getByText(/YOLOv7-tiny ANPR/)).toBeInTheDocument();
+    expect(screen.getByText(/DEIM detector \(deim50k\) \+ PARSeq OCR/)).toBeInTheDocument();
     expect(screen.getByText(/Simulated network/)).toBeInTheDocument();
     expect(screen.getByText(/Demo Admin/)).toBeInTheDocument();
     expect(screen.getByRole('radiogroup')).toBeInTheDocument();

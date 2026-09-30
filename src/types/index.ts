@@ -6,7 +6,7 @@
 /** Camera/feed status */
 export type CameraStatus = 'online' | 'offline' | 'maintenance';
 
-/** Vehicle type as detected by YOLOv7 */
+/** Vehicle type (the ANPR model's classes mapped to the dashboard's five) */
 export type VehicleType = 'car' | 'truck' | 'bus' | 'motorcycle' | 'unknown';
 
 /** Indian plate colours: white private, yellow commercial (taxi / bus / goods), green EV. */
@@ -40,7 +40,7 @@ export interface CameraFeed {
   updated_at: string;
 }
 
-/** A single vehicle detection event from precomputed YOLOv7 output */
+/** A single vehicle detection event from the ANPR pipeline output */
 export interface Detection {
   event_id: string;
   camera_id: string;

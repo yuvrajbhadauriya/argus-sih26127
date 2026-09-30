@@ -51,7 +51,7 @@ export function CameraAiPanel({ camera, videoRef, feedStatus, detections, resolu
 
   return (
     <div className="flex min-w-0 flex-col gap-4">
-      <Panel title="AI Detection" subtitle="YOLOv7-tiny ANPR" icon={<BrainCircuitIcon />}>
+      <Panel title="AI Detection" subtitle="DEIM + PARSeq ANPR" icon={<BrainCircuitIcon />}>
         <LiveDetectPanel videoRef={videoRef} cameraCode={camera.code} ready={feedStatus === 'playing'} />
       </Panel>
 
