@@ -29,3 +29,10 @@ public/videos/*
 !public/videos/.gitkeep
 *.mp4
 *.zip
+
+# Python test venv / caches
+.venv-test
+.pytest_cache
+__pycache__
+.coverage
+coverage
