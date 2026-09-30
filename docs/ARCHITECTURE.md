@@ -16,6 +16,8 @@ flowchart LR
   subgraph Vercel["Vercel serverless (api/)"]
     DET["/api/detect<br/>modelAdapter.ts"]
     HLT["/api/health"]
+    DATA["/api/data/*<br/>service-role key · rate limit"]
+    SIGN["/api/media/sign<br/>1 h signed URLs"]
   end
 
   subgraph GPU["Team GPU box"]
@@ -25,8 +27,7 @@ flowchart LR
   subgraph Supabase["Supabase"]
     AUTH["Auth<br/>(email + password, app_metadata.role)"]
     PG[("Postgres<br/>cameras · detections · alerts<br/>blacklist_entries · audit_logs<br/>views: vehicles, trajectories<br/>RLS + audit triggers")]
-    RT["Realtime<br/>alerts only"]
-    ST["Storage<br/>720p clips + posters"]
+    ST["Storage (private)<br/>720p clips + posters"]
   end
 
   subgraph Pipeline["Python pipeline (batch)"]
@@ -41,10 +42,10 @@ flowchart LR
 
   UI -- "frame (JPEG)" --> DET --> MODEL
   HLT --> MODEL
-  UI -- "anon read / operator write (JWT)" --> PG
+  UI -- "reads; writes with operator JWT" --> DATA --> PG
+  UI -- "clip / crop paths" --> SIGN --> ST
   UI -- sign-in --> AUTH
-  RT -- "INSERT / UPDATE alerts" --> UI
-  UI -- "video (Range)" --> ST
+  UI -- "video (Range, signed URL)" --> ST
   UI -- lazy fetch --> STATIC
   RRD --> MODEL
   RRD --> STATIC
@@ -62,8 +63,8 @@ flowchart LR
 | Data source honesty | One `dataSource` (`src/lib/dataSource.ts`): **Live** when `VITE_SUPABASE_URL` is set, else **Simulated** (`public/sim`), else **Demo fixtures**. Live-mode errors are shown, never replaced by fixtures. |
 | Model integration | Single adapter contract: `api/_lib/modelAdapter.ts` (browser path, via the Vercel proxy that holds the API key) and its twin `pipeline/detect/adapter.py` (batch). Plugging in the trained model = setting `DETECTION_API_*`. |
 | Trajectories | `trajectories` view (one row per plate, consecutive reads at one camera collapsed); client snaps hops to OSRM road geometry. |
-| Alerts | Rows in `alerts` (watchlist hits, cloned plate, circling). Realtime push on INSERT/UPDATE, 30 s poll as fallback. In simulated mode the replay engine emits the same events. |
-| Security | RLS forced on every table; anon read-only; operator/admin writes via JWT role; pipeline uses the service role; audit trigger; 90-day retention (`purge_old_detections`). |
+| Alerts | Rows in `alerts` (watchlist hits, cloned plate, circling). Live mode polls `/api/data/alerts` every 10 s (CDN-cached 5 s). In simulated mode the replay engine emits the same events. |
+| Security | Private database: RLS forced, no anon/authenticated grants, all access through `/api/data` (service key server-side, rate-limited); private buckets with signed URLs; operator/admin writes verified from the JWT role; pipeline uses the service role; audit trigger; 90-day retention (`purge_old_detections`). |
 | Performance | Route-level code splitting + preload hints; Supabase SDK loaded on demand; Leaflet only on map pages; clips streamed with HTTP Range, never bundled. |
 
 **Limits of the prototype:** one Postgres, client-side analytics aggregation over one simulated

@@ -17,7 +17,7 @@ npm run dev                                   # http://localhost:5173
 * Browser at 1440×900 or larger, light theme (dark theme is one click on the ☾ icon if the room is dark).
 * Leave `VITE_SUPABASE_URL` unset for the scripted demo: the top-bar status pill shows
   **Simulated** and the login page offers the demo operator. (With Supabase configured the same
-  flow runs on the database and alerts arrive through Realtime.)
+  flow runs on the private database through `/api/data` and new alerts arrive within 10 s.)
 * Open `/login` in the tab and stop there.
 
 ## 0:00 — Sign in (20 s)
@@ -61,7 +61,7 @@ Click **Open alert** in the toast → Alerts page with that alert selected. Show
 watchlist reason, and *Last sightings up to this alert*. Click **Acknowledge** → *Alert
 acknowledged* toast, pending count drops, *Acknowledged by Demo Operator*.
 
-> "In production this is a Supabase Realtime push — no polling — and the server stamps who
+> "In live mode new alerts arrive through the server API within seconds, and the server stamps who
 > acknowledged it for the audit trail."
 
 Leave the replay running.

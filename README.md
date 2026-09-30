@@ -7,7 +7,7 @@ NERO is a city-wide multi-camera ANPR trajectory-tracking and traffic-analytics 
 | [docs/PS_COMPLIANCE.md](docs/PS_COMPLIANCE.md) | Every PS requirement → screen, code, how to demo, status |
 | [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md) | 5–7 minute judge walkthrough (plates, clicks, talking points) |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Current architecture + production scale-out (edge inference, event bus, partitioned PostGIS, HLS/CDN) |
-| [docs/DATABASE.md](docs/DATABASE.md) | Migrations, RLS matrix, Realtime, applying to the hosted project |
+| [docs/DATABASE.md](docs/DATABASE.md) | Migrations, private-database access model, `/api/data` routes, applying to the hosted project |
 | [pipeline/detect/README.md](pipeline/detect/README.md) | Model API contract and how to plug in the trained GPU model |
 
 ## Quick start
@@ -22,13 +22,13 @@ With no `.env` the app runs on the **simulated Mumbai network** (status pill: *S
 at `/login` with the **demo operator** to acknowledge alerts and edit the watchlist, and press
 **Replay the day** on the Live Map or Alerts page to watch plate reads stream in and alerts fire
 live. With `VITE_SUPABASE_URL` set the same screens read the database (status pill: *Live*),
-sign-in uses Supabase Auth and new alerts arrive through Supabase Realtime.
+sign-in uses Supabase Auth and new alerts arrive through a 10 s poll of the server API.
 
 ### Environment variables
 
 | Variable | Where | Purpose |
 | --- | --- | --- |
-| `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` | browser | Live mode (read with the anon key; writes need a signed-in operator/admin). Unset → simulated/demo mode. |
+| `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` | browser | Live mode (data through `/api/data`; the anon key is only used for sign-in; writes need a signed-in operator/admin). Unset → simulated/demo mode. |
 | `VITE_VIDEO_SOURCE` | browser | `local` → `/videos-local/<slug>.mp4` (default in `npm run dev`), `supabase` → Storage `videos/mumbai/720p/<slug>.mp4` (default in builds). The player falls back to the other source once. |
 | `DETECTION_API_URL`, `DETECTION_API_KEY` | server only | Trained ANPR model API used by `/api/detect` and the batch pipeline. **Never** prefix with `VITE_`. |
 | `DETECTION_API_AUTH_HEADER`, `DETECTION_API_TIMEOUT_MS`, `DETECTION_API_REQUEST_FORMAT`, `DETECTION_API_IMAGE_FIELD`, `DETECTION_API_HEALTH_URL` | server only | Optional adapter settings (see `.env.example`, `pipeline/detect/README.md`). |
@@ -191,7 +191,7 @@ Schema, row level security, audit trail and retention are defined in `supabase/m
 * how to verify the setup
 * the pgTAP tests (`supabase test db`)
 
-**Access model today:** the dashboard uses the anon key **read-only**. Writes (acknowledging alerts, registering/editing cameras, editing the watchlist) **require a signed-in user whose `app_metadata.role` is `operator` or `admin`** — sign in at `/login`; guests who press a write button are asked to sign in. New alerts are pushed through Supabase Realtime (`alerts` table only). Production should also remove anon read access, because ANPR data is personal data under the DPDP Act.
+**Access model today:** the dashboard is public, the **database and Storage are private**. The anon key can read no table and no bucket; every read goes through the server routes `/api/data/*` (service-role key on Vercel, column-limited answers, per-IP rate limit, short CDN cache) and clips play from 1-hour signed URLs (`/api/media/sign`). Writes (acknowledging alerts, registering/editing cameras, editing the watchlist) **require a signed-in user whose `app_metadata.role` is `operator` or `admin`** — the API verifies the Supabase access token and records the operator in the audit trail; guests who press a write button are asked to sign in. New alerts arrive through a 10 s poll. Server env: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (never `VITE_*`). See [docs/DATABASE.md](docs/DATABASE.md).
 
 ### Detection JSON format (`detections_<camera_code>.json`)
 

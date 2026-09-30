@@ -74,30 +74,55 @@ them and backfills them from the old columns:
   * A partial index on open alerts
   * Indexes on the foreign-key columns
 
-## Access model (RLS)
+## Access model: private database behind the server API
 
-RLS is **enabled and forced** on every table in `public`. Any table added
-later without a policy is reachable only by `service_role`.
+The dashboard is public (no login to browse), but the **database and the
+Storage buckets are private** (`20261001000700_private_database.sql`). The
+anon key that ships in the browser bundle can read nothing; it is only used
+for Supabase Auth (sign-in).
 
-| | cameras | detections | alerts | blacklist_entries | audit_logs | vehicles / trajectories |
-| --- | --- | --- | --- | --- | --- | --- |
-| `anon` | read | read | read | read | – | read |
-| `authenticated` | read | read | read | read | – | read |
-| `authenticated` + `app_metadata.role` = `operator` | read, insert, update | read | read, update of `status`/`acknowledged*` only | read, insert, update | read | read |
-| `authenticated` + `app_metadata.role` = `admin` | above + delete | read | same as operator | above + delete | read | read |
-| `service_role` (pipeline) | all (bypasses RLS) | all | all | all | all | all |
+```
+Browser ─► /api/data/*     Vercel function (api/_lib/dataRoutes.ts), service-role key,
+                           column-limited answers, per-IP rate limit, s-maxage CDN cache
+        ─► /api/media/sign 1-hour signed URLs for allowlisted objects (videos, golden)
+        ─► Supabase Auth   sign-in only
+```
 
-* `audit_logs` is append-only. Only the `write_audit_log()` SECURITY DEFINER
-  trigger writes to it. It records:
-  * alert status changes, such as an acknowledgement
-  * watchlist insert, update and delete
-  * camera changes
-  * retention purges
+RLS stays **enabled and forced** on every table in `public`, and no policy
+targets `anon` or `authenticated`:
 
-  Each row records `auth.uid()` and the JWT email.
-* When an alert is acknowledged, `acknowledged_by` and `acknowledged_at` are
-  stamped **on the server** from the JWT. A name sent by the client is
-  ignored.
+| role | tables / views in `public` | Storage (`videos`, `golden`) | Realtime |
+| --- | --- | --- | --- |
+| `anon` | none (401 / 42501) | none (buckets private) | nothing published |
+| `authenticated` | none: all reads and writes go through `/api/data` | none | nothing published |
+| `service_role` (pipeline, `/api/data`, `/api/media/sign`) | all (bypasses RLS) | all | – |
+
+Routes (`GET` unless noted):
+
+| route | returns | auth |
+| --- | --- | --- |
+| `cameras[?id=]`, `POST cameras`, `PATCH cameras?id=` | camera registry | writes: operator |
+| `alerts[?id=]`, `POST alerts/acknowledge {id}` | alerts joined with detection → camera and watchlist entry | ack: operator |
+| `watchlist`, `POST watchlist`, `PATCH watchlist?id=` | watchlist entries | writes: operator |
+| `detections?camera_id=` | one clip's plate reads (paged past PostgREST's 1000-row cap) | – |
+| `vehicles[?q=]`, `trajectory?plate=` | vehicles view; trajectories row or the plate's reads | – |
+| `model-status` | AI engine heartbeat row | – |
+| `audit-log[?limit=]` | audit trail | operator |
+
+* **Writes** need `Authorization: Bearer <Supabase access token>`. The route
+  checks the token with GoTrue (`/auth/v1/user`, same as
+  `supabase.auth.getUser(token)`) and requires `app_metadata.role` `operator`
+  or `admin`, then writes with the service key.
+* **Audit trail.** `audit_logs` is append-only and written only by the
+  `write_audit_log()` SECURITY DEFINER trigger (alert status changes,
+  watchlist and camera changes, retention purges). Under the service role
+  `auth.uid()` is null, so the API sends the verified operator as
+  `X-Argus-Actor-Id` / `X-Argus-Actor-Email`; `public.request_actor()` reads
+  them from `request.headers` **only when the JWT role is `service_role`**
+  (`20261001000600_audit_actor_headers.sql`), and the triggers record that id
+  and email. `acknowledged_by` is set by the API from the verified session.
+* **Realtime** is off for `public` tables; the dashboard polls the API
+  (alerts every 10 s, model status every 5 s).
 * Roles come from `app_metadata`, which only the service role can change. To
   grant a role, run this in the SQL editor:
 
@@ -108,18 +133,8 @@ later without a policy is reachable only by `service_role`.
   ```
 
   The user must sign in again to get a token with the new claim.
-
-> **Prototype vs production.** The dashboard currently uses the **anon key for
-> read-only access**, so the SIH demo works without a login. Every write from
-> the Admin or Alerts pages (acknowledge, register/edit camera, watchlist add /
-> pause) **requires a signed-in operator or admin**. The dashboard has an
-> operator sign-in page (`/login`, Supabase Auth email + password) and asks a
-> guest to sign in when they press a write button, instead of letting the
-> write fail. Create operator accounts in Dashboard → Authentication → Users,
-> then grant the role with the SQL above.
-> ANPR reads are personal data under the DPDP Act 2023. For production, drop
-> the `anon` read policies and require login. The statements are at the end of
-> `20261001000100_rls.sql`.
+* Emergency rollback of the lockdown (re-open anon reads for a demo): see the
+  header of `20261001000700_private_database.sql`.
 
 ## Applying to the hosted project
 
@@ -191,18 +206,17 @@ select relname, reloptions from pg_class where relname in ('vehicles', 'trajecto
 select tablename, policyname, roles, cmd from pg_policies where schemaname = 'public' order by 1, 2;
 ```
 
-### As `anon`, over the REST API
+### As `anon`, over the REST API (everything is denied)
 
 ```bash
 URL=https://<project-ref>.supabase.co; ANON=<anon key>
-H=(-H "apikey: $ANON" -H "Authorization: Bearer $ANON" -H "Content-Type: application/json")
+H=(-H "apikey: $ANON" -H "Authorization: Bearer $ANON")
 
-curl -s "$URL/rest/v1/cameras?select=id,code&limit=2" "${H[@]}"                   # 200, rows
-curl -s "$URL/rest/v1/trajectories?select=plate_text,camera_count&limit=1" "${H[@]}"  # 200
-curl -s -X POST "$URL/rest/v1/detections" "${H[@]}" -d '{"event_id":"x"}'           # 401/403, code 42501
-curl -s -X PATCH "$URL/rest/v1/alerts?id=eq.x" "${H[@]}" -d '{"status":"acknowledged"}'  # 401, 42501
-curl -s -X DELETE "$URL/rest/v1/blacklist_entries?id=eq.x" "${H[@]}"                # 401, 42501
-curl -s -X POST "$URL/rest/v1/rpc/purge_old_detections" "${H[@]}" -d '{"retention_days":1}'  # 401/404
+for t in cameras detections alerts blacklist_entries vehicles trajectories model_status audit_logs; do
+  curl -s -o /dev/null -w "$t %{http_code}\n" "$URL/rest/v1/$t?select=*&limit=1" "${H[@]}"   # 401 (42501)
+done
+curl -s -o /dev/null -w "%{http_code}\n" "$URL/storage/v1/object/public/videos/mumbai/720p/<clip>.mp4"  # 400
+curl -s "https://<site>/api/data/cameras" | head -c 200                                   # 200, via the API
 ```
 
 ### pgTAP tests (local stack, needs Docker)
