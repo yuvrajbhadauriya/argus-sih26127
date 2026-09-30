@@ -96,9 +96,9 @@ export function CamerasPage() {
             </button>
           </div>
 
-          <CameraVideoPlayer
-            camera={selectedCamera}
-          />
+          {/* key: switching cameras remounts the player so the old stream and
+              detection request are torn down (and aborted) immediately */}
+          <CameraVideoPlayer key={selectedCamera.id} camera={selectedCamera} />
         </div>
       )}
 
