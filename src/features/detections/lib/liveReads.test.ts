@@ -72,4 +72,11 @@ describe('live reads', () => {
       expect(pos).toBeCloseTo(r.event.time_sec, 3);
     }
   });
+
+  it('keys stay unique when one track has several reads', () => {
+    const c = cam('DD-01', [ev(10, { tracked_vehicle_id: 'trk_0018' }), ev(12, { tracked_vehicle_id: 'trk_0018' })], 20);
+    const reads = recentCameraReads(c, nowAt('DD-01', 15, 20), { limit: 6 });
+    expect(reads.length).toBe(6);
+    expect(new Set(reads.map((r) => r.key)).size).toBe(6);
+  });
 });

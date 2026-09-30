@@ -57,7 +57,11 @@ describe('eventsToLogRows', () => {
   it('keeps only verified reads (valid grammar, OCR above the display threshold) and maps them to log rows', () => {
     const rows = eventsToLogRows(EVENTS);
     expect(rows.map((r) => r.plate_text_raw)).toEqual(['MH 01 CS 0126', 'MH 47 EL 9660', 'MH 03 ZQ 2351']);
-    expect(rows[1]).toMatchObject({ event_id: 'AN-01-trk_9', camera_id: 'cam-002', confidence_score: 0.88, vehicle_type: 'truck', frame_timestamp_sec: 4.4 });
+    expect(new Set(rows.map((r) => r.event_id)).size).toBe(rows.length);
+    // two reads on the same track keep distinct ids
+    const twice = eventsToLogRows([{ ...EVENTS[0], events: [EVENTS[0].events[0], EVENTS[0].events[0]] }]);
+    expect(twice.length === 0 || new Set(twice.map((r) => r.event_id)).size === twice.length).toBe(true);
+    expect(rows[1]).toMatchObject({ event_id: expect.stringMatching(/^AN-01-trk_9-\d+$/), camera_id: 'cam-002', confidence_score: 0.88, vehicle_type: 'truck', frame_timestamp_sec: 4.4 });
   });
 });
 

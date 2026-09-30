@@ -29,10 +29,11 @@ export function eventsToLogRows(all: CameraEvents[]): Detection[] {
   const rows: Detection[] = [];
   for (const cam of all) {
     const cameraId = CAMERA_ID_BY_CODE.get(cam.camera_code) ?? cam.camera_code;
-    for (const e of cam.events) {
-      if (!isDisplayableRead(e)) continue;
+    cam.events.forEach((e, i) => {
+      if (!isDisplayableRead(e)) return;
       rows.push({
-        event_id: `${cam.camera_code}-${e.tracked_vehicle_id}`,
+        // A track can carry several reads: the event index keeps ids unique.
+        event_id: `${cam.camera_code}-${e.tracked_vehicle_id}-${i}`,
         camera_id: cameraId,
         tracked_vehicle_id: e.tracked_vehicle_id,
         plate_text_raw: e.plate_text!,
@@ -43,7 +44,7 @@ export function eventsToLogRows(all: CameraEvents[]): Detection[] {
         frame_timestamp_sec: e.time_sec,
         bbox: e.bbox,
       });
-    }
+    });
   }
   return rows;
 }

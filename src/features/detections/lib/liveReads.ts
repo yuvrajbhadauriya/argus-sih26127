@@ -13,7 +13,7 @@ import { liveClockSeconds } from '@/features/cameras/lib/liveClock';
 import { isDisplayableRead, type CameraEvents, type PlateEvent } from '../api';
 
 export interface LiveRead {
-  /** Unique per occurrence: camera · loop number · track. */
+  /** Unique per occurrence: camera · loop number · event index (a track can have several reads). */
   key: string;
   camera_code: string;
   event: PlateEvent;
@@ -64,7 +64,7 @@ export function recentCameraReads(cam: CameraEvents, nowMs: number, opts: LiveRe
       if (occ > T) continue;
       const age = T - occ;
       if (age > maxAgeSec) return out;
-      out.push({ key: `${cam.camera_code}-${loop}-${e.tracked_vehicle_id}`, camera_code: cam.camera_code, event: e, at: nowMs - age * 1000 });
+      out.push({ key: `${cam.camera_code}-${loop}-${i}-${e.tracked_vehicle_id}`, camera_code: cam.camera_code, event: e, at: nowMs - age * 1000 });
     }
   }
   return out;
