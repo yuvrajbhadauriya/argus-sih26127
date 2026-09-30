@@ -34,7 +34,7 @@ import { DataTable, type Column } from '@/shared/ui/DataTable';
 import { EmptyState } from '@/shared/ui/EmptyState';
 import { ErrorState } from '@/shared/ui/ErrorState';
 import { SkeletonPanel } from '@/shared/ui/Skeleton';
-import { fetchEvalResults, fetchModelHealth, fetchVideoConsistency, type ModelHealth } from '../api';
+import { fetchEvalResults, fetchVideoConsistency } from '../api';
 import { fmtMs, fmtPct, verdict, type DatasetRow, type EvalResults, type Verdict, type VideoCamera, type VideoConsistency } from '../lib/results';
 import { ConditionChart } from '../components/ConditionChart';
 import { SampleGallery } from '../components/SampleGallery';
@@ -69,23 +69,21 @@ function useReadRates(): { stats: ReadRateStats | null; loading: boolean } {
 interface State {
   results: EvalResults | null;
   video: VideoConsistency | null;
-  health: ModelHealth | null;
   error: string | null;
   loading: boolean;
 }
 
 function useEval() {
-  const [state, setState] = useState<State>({ results: null, video: null, health: null, error: null, loading: true });
+  const [state, setState] = useState<State>({ results: null, video: null, error: null, loading: true });
   const [nonce, setNonce] = useState(0);
   useEffect(() => {
     let alive = true;
-    Promise.all([fetchEvalResults().then((r) => ({ r, e: null }), (e: unknown) => ({ r: null, e })), fetchVideoConsistency(), fetchModelHealth()]).then(
-      ([{ r, e }, video, health]) => {
+    Promise.all([fetchEvalResults().then((r) => ({ r, e: null }), (e: unknown) => ({ r: null, e })), fetchVideoConsistency()]).then(
+      ([{ r, e }, video]) => {
         if (!alive) return;
         setState({
           results: r,
           video,
-          health,
           error: e ? (e instanceof Error ? e.message : 'Failed to load evaluation results') : null,
           loading: false,
         });
@@ -168,7 +166,7 @@ const videoColumns: Column<VideoCamera>[] = [
   { key: 'stable', header: 'Stable tracks', align: 'right', hideBelow: 'md', cell: (c) => fmtPct(c.stable_track_share, 0) },
 ];
 
-function ModelCard({ r, health }: { r: EvalResults; health: ModelHealth | null }) {
+function ModelCard({ r }: { r: EvalResults }) {
   const card = r.model_card;
   // OCR figures are shown in the team-benchmark panel; end-to-end figures in
   // the card describe earlier model versions, so only the rest stays here.
@@ -180,18 +178,8 @@ function ModelCard({ r, health }: { r: EvalResults; health: ModelHealth | null }
     ['Images · plates', `${r.overall.images.toLocaleString('en-IN')} · ${r.overall.plates.toLocaleString('en-IN')}`],
     ['API errors', r.overall.api_errors],
     ['Model inference p50', r.overall.inference_ms.p50 == null ? '—' : `${fmtMs(r.overall.inference_ms.p50)} ms`],
-    [
-      'Live API',
-      health == null ? (
-        <span key="h" className="text-fg-subtle">health endpoint unavailable</span>
-      ) : !health.configured ? (
-        <Badge key="h" tone="warning">not configured</Badge>
-      ) : health.reachable ? (
-        <Badge key="h" tone="success">reachable{health.latency_ms != null ? ` · ${health.latency_ms} ms` : ''}</Badge>
-      ) : (
-        <Badge key="h" tone="danger">unreachable</Badge>
-      ),
-    ],
+    // The model API is LAN/VPN-only; its live state is the AI engine status in the top bar (model_status heartbeat).
+    ['Live API', <span key="h" className="text-fg-muted">Team GPU network · status in the top bar</span>],
   ];
   return (
     <div className="space-y-4">
@@ -232,7 +220,7 @@ function ModelCard({ r, health }: { r: EvalResults; health: ModelHealth | null }
 }
 
 export function ModelPerformancePage() {
-  const { results: r, video, health, error, loading, retry } = useEval();
+  const { results: r, video, error, loading, retry } = useEval();
   const rates = useReadRates();
   const v = r ? verdict(r) : 'not-measured';
   const sample = r?.status !== 'measured';
@@ -315,7 +303,7 @@ export function ModelPerformancePage() {
               </p>
             </Panel>
             <Panel title="Model card" icon={<CpuIcon />}>
-              <ModelCard r={r} health={health} />
+              <ModelCard r={r} />
               {r.confusions.length > 0 && (
                 <div className="mt-4 border-t border-line pt-3">
                   <h3 className="mb-2 text-2xs font-semibold uppercase tracking-[0.06em] text-fg-subtle">Most common character errors</h3>

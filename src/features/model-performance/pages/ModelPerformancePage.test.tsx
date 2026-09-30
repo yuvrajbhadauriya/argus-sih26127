@@ -59,7 +59,7 @@ describe('ModelPerformancePage', () => {
     expect(within(gallery).getAllByRole('listitem').length).toBe(SAMPLE.samples.length);
     expect(screen.getByText('Offline mock (noisy oracle)')).toBeInTheDocument();
     expect(screen.getByRole('table', { name: /read stability per camera/i })).toBeInTheDocument();
-    expect(screen.getByText('health endpoint unavailable')).toBeInTheDocument();
+    expect(screen.getByText(/status in the top bar/)).toBeInTheDocument();
   });
 
   it('shows a pass marker for measured results at or above 90%', async () => {
@@ -72,7 +72,6 @@ describe('ModelPerformancePage', () => {
     expect(screen.getByText('Trained Indian-plate ANPR model')).toBeInTheDocument();
     expect(screen.getByText('Live ANPR API (GPU)')).toBeInTheDocument();
     expect(screen.getAllByText(/not measured by this harness|not re-measured by this dashboard/).length).toBeGreaterThan(0);
-    expect(screen.getByText(/reachable · 42 ms/)).toBeInTheDocument();
     expect(screen.getByText('No video run yet')).toBeInTheDocument();
   });
 

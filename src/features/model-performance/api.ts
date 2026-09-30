@@ -1,5 +1,5 @@
 // Loads the evaluation outputs published under public/eval/ (static files) and
-// the live model-API health probe (/api/health, optional).
+// (the live model API's state is the AI engine status, not probed here).
 
 import { parseEvalResults, parseVideoConsistency, type EvalResults, type VideoConsistency } from './lib/results';
 
@@ -18,24 +18,6 @@ export async function fetchVideoConsistency(): Promise<VideoConsistency | null> 
     const res = await fetch(VIDEO_URL, { cache: 'no-cache' });
     if (!res.ok) return null;
     return parseVideoConsistency(await res.json());
-  } catch {
-    return null;
-  }
-}
-
-export interface ModelHealth {
-  configured: boolean;
-  reachable: boolean | null;
-  latency_ms: number | null;
-}
-
-/** Optional: null when /api/health is not deployed (e.g. `vite dev`). */
-export async function fetchModelHealth(): Promise<ModelHealth | null> {
-  try {
-    const res = await fetch('/api/health');
-    const body = (await res.json()) as Partial<ModelHealth> | null;
-    if (!body || typeof body.configured !== 'boolean') return null;
-    return { configured: body.configured, reachable: body.reachable ?? null, latency_ms: body.latency_ms ?? null };
   } catch {
     return null;
   }
