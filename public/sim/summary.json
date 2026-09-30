@@ -1,0 +1,209 @@
+{
+  "version": 1,
+  "simulated": true,
+  "seed": 26127,
+  "date": "2026-09-29",
+  "timezone": "+05:30",
+  "routes_source": "osrm",
+  "stats": {
+    "plates_in_detections": 2577,
+    "vehicles": 2577,
+    "journeys": 3763,
+    "sightings": 7753,
+    "multi_camera_journeys": 2725,
+    "avg_cameras_per_journey": 2.05,
+    "avg_sightings_per_journey": 2.06,
+    "total_distance_km": 41771.2,
+    "hop_speed_kmph": {
+      "mean": 22.3,
+      "p10": 14.3,
+      "p50": 20.6,
+      "p90": 33.1,
+      "min": 10.0,
+      "max": 55.0
+    },
+    "sightings_per_camera": {
+      "AI-01": 647,
+      "CC-01": 998,
+      "CP-01": 1086,
+      "DK-01": 893,
+      "DW-01": 1103,
+      "IG-01": 763,
+      "KB-01": 1254,
+      "LN-01": 588,
+      "NP-01": 421
+    },
+    "sightings_per_hour": [
+      171,
+      205,
+      212,
+      216,
+      233,
+      249,
+      306,
+      283,
+      453,
+      482,
+      443,
+      380,
+      352,
+      303,
+      298,
+      255,
+      332,
+      401,
+      444,
+      452,
+      438,
+      376,
+      248,
+      221
+    ]
+  },
+  "demo": {
+    "watchlist": [
+      {
+        "plate_text": "DL 04 RS 9598",
+        "vehicle_type": "car",
+        "category": "stolen",
+        "priority": "critical",
+        "reason": "Reported stolen from Dwarka Sector 21 (simulated FIR)",
+        "cameras": [
+          "AI-01",
+          "DK-01",
+          "DW-01",
+          "LN-01",
+          "NP-01"
+        ],
+        "sightings": 10
+      },
+      {
+        "plate_text": "DL 08 MN 8636",
+        "vehicle_type": "car",
+        "category": "wanted",
+        "priority": "high",
+        "reason": "Linked to chain-snatching cases in Old Delhi (simulated)",
+        "cameras": [
+          "AI-01",
+          "CC-01",
+          "CP-01",
+          "IG-01",
+          "LN-01",
+          "NP-01"
+        ],
+        "sightings": 10
+      },
+      {
+        "plate_text": "DL 05 MA 6069",
+        "vehicle_type": "car",
+        "category": "flagged",
+        "priority": "medium",
+        "reason": "Repeated red-light violations on Ring Road (simulated)",
+        "cameras": [
+          "CC-01",
+          "CP-01",
+          "DK-01",
+          "DW-01",
+          "KB-01"
+        ],
+        "sightings": 7
+      },
+      {
+        "plate_text": "DL 55 UJ 4753",
+        "vehicle_type": "car",
+        "category": "missing",
+        "priority": "high",
+        "reason": "Vehicle of a missing person report (simulated)",
+        "cameras": [
+          "AI-01",
+          "CP-01",
+          "DK-01",
+          "DW-01",
+          "IG-01",
+          "KB-01",
+          "LN-01"
+        ],
+        "sightings": 11
+      }
+    ],
+    "anomalies": [
+      {
+        "kind": "cloned_plate",
+        "plate_text": "DL 33 DV 8622",
+        "description": "DL 33 DV 8622 read at CP-01 and DW-01 3 min apart; 25.7 km by road needs ~51 min at city speeds",
+        "evidence": [
+          {
+            "camera_code": "CP-01",
+            "timestamp": "2026-09-29T09:03:48+05:30"
+          },
+          {
+            "camera_code": "DW-01",
+            "timestamp": "2026-09-29T09:06:52+05:30"
+          }
+        ],
+        "road_distance_m": 25731,
+        "gap_seconds": 184,
+        "implied_speed_kmph": 503.4
+      },
+      {
+        "kind": "circling",
+        "plate_text": "HR 98 CQ 5768",
+        "description": "HR 98 CQ 5768 looped Connaught Place ↔ India Gate 3 times in 45 min with no destination",
+        "evidence": [
+          {
+            "camera_code": "CP-01",
+            "timestamp": "2026-09-29T21:05:41+05:30"
+          },
+          {
+            "camera_code": "IG-01",
+            "timestamp": "2026-09-29T21:13:56+05:30"
+          },
+          {
+            "camera_code": "CP-01",
+            "timestamp": "2026-09-29T21:21:51+05:30"
+          },
+          {
+            "camera_code": "IG-01",
+            "timestamp": "2026-09-29T21:29:31+05:30"
+          },
+          {
+            "camera_code": "CP-01",
+            "timestamp": "2026-09-29T21:37:10+05:30"
+          },
+          {
+            "camera_code": "IG-01",
+            "timestamp": "2026-09-29T21:44:06+05:30"
+          },
+          {
+            "camera_code": "CP-01",
+            "timestamp": "2026-09-29T21:51:25+05:30"
+          }
+        ],
+        "visits": {
+          "CP-01": 4,
+          "IG-01": 3
+        }
+      }
+    ],
+    "suggested_plates": [
+      "DL 04 RS 9598",
+      "DL 08 MN 8636",
+      "DL 05 MA 6069",
+      "DL 55 UJ 4753",
+      "DL 33 DV 8622",
+      "HR 98 CQ 5768",
+      "MH 54 AY 4610",
+      "WB 49 MZ 1615",
+      "MH 09 FV 2608",
+      "WB 99 IP 7985",
+      "DL 04 VZ 5176",
+      "PB 52 QW 6945",
+      "TN 61 JQ 4881",
+      "HR 29 CY 3164",
+      "WB 77 HG 3751",
+      "PB 19 RW 8469",
+      "DL 80 IT 7386",
+      "HR 45 BP 4985"
+    ]
+  }
+}
