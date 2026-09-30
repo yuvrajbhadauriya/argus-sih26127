@@ -18,7 +18,7 @@ export default mergeConfig(
         provider: 'v8',
         reporter: ['text-summary', 'text'],
         include: ['src/**/*.{ts,tsx}'],
-        exclude: ['src/test/**', 'src/**/*.test.{ts,tsx}', 'src/data/**', 'src/main.tsx'],
+        exclude: ['src/test/**', 'src/**/*.test.{ts,tsx}', 'src/mocks/**', 'src/main.tsx'],
       },
     },
   }),
