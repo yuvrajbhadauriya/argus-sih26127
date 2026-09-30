@@ -3,11 +3,14 @@
 // ═══════════════════════════════════════════════════
 
 // ── Supabase Storage ──────────────────────────────
-// The camera videos live in the public `videos` bucket of this project.
-// Intentionally NOT derived from VITE_SUPABASE_URL: the deployed env is not
-// guaranteed to point at the same project as the video bucket.
-export const SUPABASE_PROJECT_REF = 'ngwrbxiaeressvmhfopb';
-export const SUPABASE_STORAGE_BASE = `https://${SUPABASE_PROJECT_REF}.supabase.co/storage/v1/object/public/videos/`;
+// The camera videos live in the public `videos` bucket of the project in
+// VITE_SUPABASE_URL. VITE_VIDEO_BASE_URL overrides it (e.g. a CDN in front).
+const FALLBACK_SUPABASE_URL = 'https://zkmtjqsljwwyjpgvgyyp.supabase.co';
+const SUPABASE_URL = String(import.meta.env.VITE_SUPABASE_URL || FALLBACK_SUPABASE_URL).replace(/\/+$/, '');
+export const SUPABASE_PROJECT_REF = new URL(SUPABASE_URL).hostname.split('.')[0];
+export const SUPABASE_STORAGE_BASE = String(
+  import.meta.env.VITE_VIDEO_BASE_URL || `${SUPABASE_URL}/storage/v1/object/public/videos/`,
+).replace(/\/?$/, '/');
 /** Folder of the Mumbai camera clips inside the bucket (<slug>.mp4 + <slug>.jpg poster). */
 export const SUPABASE_VIDEO_PREFIX = 'mumbai/720p/';
 /** Local dev copies of the same clips (public/videos-local/, gitignored). */
