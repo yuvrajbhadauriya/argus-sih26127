@@ -11,6 +11,10 @@ numpy>=1.24.0
 supabase>=2.0.0
 python-dotenv>=1.0.0
 
+# Remote GPU ANPR pipeline (pipeline/detect/) needs only opencv-python,
+# numpy and python-dotenv from this list — HTTP uses the stdlib.
+# torch/torchvision are only for the legacy local model (reference only).
+
 # Utilities
 requests>=2.31.0
 tqdm>=4.65.0

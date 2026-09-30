@@ -20,16 +20,27 @@ export const CODE_ALIAS_MAP: Record<string, string> = {
   'CAM-I': 'CC-01',
 };
 
+/** Options shared by the detection fetchers. */
+export interface FetchDetectionsOptions {
+  /** Aborts the underlying fetch / Supabase request (e.g. on unmount or camera switch). */
+  signal?: AbortSignal;
+}
+
 /**
  * Detections for a camera from the Supabase `detections` table.
  * Returns null when the query errors or yields no rows (caller should fall back).
  * Throws if a row cannot be mapped (e.g. malformed bbox JSON).
  */
-export async function fetchDetectionsFromSupabase(cameraId: string): Promise<Detection[] | null> {
-  const { data, error } = await supabase
+export async function fetchDetectionsFromSupabase(
+  cameraId: string,
+  options: FetchDetectionsOptions = {},
+): Promise<Detection[] | null> {
+  let query = supabase
     .from('detections')
     .select('*')
     .eq('camera_id', cameraId);
+  if (options.signal) query = query.abortSignal(options.signal);
+  const { data, error } = await query;
 
   if (error || !data || data.length === 0) return null;
 
@@ -49,10 +60,14 @@ export async function fetchDetectionsFromSupabase(cameraId: string): Promise<Det
 }
 
 /** Detections for a camera from the precomputed static file /detections/detections_<code>.json. */
-export async function fetchDetectionsFromStaticJson(cameraCode?: string): Promise<Detection[]> {
+export async function fetchDetectionsFromStaticJson(
+  cameraCode?: string,
+  options: FetchDetectionsOptions = {},
+): Promise<Detection[]> {
   const effectiveCode = CODE_ALIAS_MAP[cameraCode || ''] || cameraCode || 'IG-01';
   try {
-    const res = await fetch(`/detections/detections_${effectiveCode}.json`);
+    const url = `/detections/detections_${effectiveCode}.json`;
+    const res = options.signal ? await fetch(url, { signal: options.signal }) : await fetch(url);
     if (!res.ok) throw new Error(`HTTP error ${res.status}`);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const data: any[] = await res.json();
@@ -74,7 +89,7 @@ export async function fetchDetectionsFromStaticJson(cameraCode?: string): Promis
       },
     }));
   } catch (err) {
-    console.warn(`Could not load detections for camera ${effectiveCode}:`, err);
+    if (!options.signal?.aborted) console.warn(`Could not load detections for camera ${effectiveCode}:`, err);
     throw err;
   }
 }
@@ -83,14 +98,19 @@ export async function fetchDetectionsFromStaticJson(cameraCode?: string): Promis
  * Detections for a camera: Supabase first (when configured and a camera id is
  * known), falling back to the static JSON file. Throws if the fallback fails.
  */
-export async function fetchCameraDetections(cameraCode?: string, cameraId?: string): Promise<Detection[]> {
+export async function fetchCameraDetections(
+  cameraCode?: string,
+  cameraId?: string,
+  options?: FetchDetectionsOptions,
+): Promise<Detection[]> {
   if (isSupabaseConfigured() && cameraId) {
     try {
-      const rows = await fetchDetectionsFromSupabase(cameraId);
+      const rows = await fetchDetectionsFromSupabase(cameraId, options);
       if (rows) return rows;
     } catch (err) {
       console.warn('Supabase detection fetch failed, falling back to local JSON:', err);
     }
   }
-  return fetchDetectionsFromStaticJson(cameraCode);
+  options?.signal?.throwIfAborted();
+  return fetchDetectionsFromStaticJson(cameraCode, options);
 }
