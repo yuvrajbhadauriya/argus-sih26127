@@ -280,6 +280,60 @@ class TestMainIngestion:
         assert insert_detections.main(["--detections_dir", str(tmp_path / "none")]) == 1
 
 
+class TestPrune:
+    """--prune: the table mirrors each camera's file; nothing else is touched."""
+
+    START = ("--start_time", "2026-09-29T08:00:00")
+
+    @staticmethod
+    def seeded_client(*extra_rows):
+        return FakeClient({"cameras": CAMS, "detections": [
+            {"event_id": "stale-jg", "camera_id": "cam-001"},   # a read the pipeline dropped
+            {"event_id": "other-cam", "camera_id": "cam-002"},  # a camera without a file
+            *extra_rows,
+        ]})
+
+    def test_deletes_only_this_cameras_rows_missing_from_its_file(self, run_main, dets_dir, insert_detections):
+        write_dets(dets_dir, "JG-01", 2)
+        client = self.seeded_client()
+        code, _ = run_main(*self.START, "--prune", client=client)
+        assert code == 0
+        kept = sorted(r["event_id"] for r in client.tables["detections"])
+        file_ids = [insert_detections.make_event_id("JG-01", "", t, f"trk_{i:04d}") for i, t in enumerate((0.0, 0.2))]
+        assert kept == sorted(file_ids + ["other-cam"])
+        assert [q.filters for q in client.deletes("detections")] == [[("in", "event_id", ["stale-jg"])]]
+
+    def test_without_the_flag_nothing_is_deleted(self, run_main, dets_dir):
+        write_dets(dets_dir, "JG-01", 1)
+        client = self.seeded_client()
+        run_main(*self.START, client=client)
+        assert client.deletes("detections") == []
+        assert "stale-jg" in {r["event_id"] for r in client.tables["detections"]}
+
+    def test_a_camera_whose_upsert_failed_is_not_pruned(self, run_main, dets_dir):
+        write_dets(dets_dir, "JG-01", 1)
+        client = FakeClient({"cameras": CAMS, "detections": [{"event_id": "stale-jg", "camera_id": "cam-001"}]},
+                            fail=lambda q: RuntimeError("boom") if q.op == "upsert" else None)
+        code, _ = run_main(*self.START, "--prune", "--retries", "1", client=client)
+        assert code == 3
+        assert client.deletes("detections") == []
+
+    def test_dry_run_prunes_nothing(self, run_main, dets_dir, insert_detections, monkeypatch):
+        write_dets(dets_dir, "JG-01", 1)
+        monkeypatch.setattr(insert_detections, "get_supabase_client", lambda: pytest.fail("must not connect"))
+        cfg = dets_dir / "cfg.json"
+        cfg.write_text("[]")
+        assert insert_detections.main(["--detections_dir", str(dets_dir), "--config", str(cfg),
+                                       *self.START, "--prune", "--dry_run"]) == 0
+
+    def test_stale_ids_are_read_page_by_page(self, insert_detections):
+        client = FakeClient({"detections": [{"event_id": f"e{i}", "camera_id": "cam-001"} for i in range(5)]
+                             + [{"event_id": "x", "camera_id": "cam-002"}]})
+        stale = insert_detections.stale_event_ids(client, "cam-001", {"e1", "e3"}, page_size=2)
+        assert stale == ["e0", "e2", "e4"]
+        assert len([q for q in client.calls if q.op == "select"]) == 3  # 2 + 2 + 1 rows
+
+
 class TestSchemaContract:
     """Rows written by the pipeline must fit supabase/migrations."""
 

@@ -19,10 +19,14 @@ Guarantees
     codes abort before anything is written.
   * Each chunk is retried with exponential backoff; any chunk that still fails
     makes the script exit non-zero.
+  * ``--prune`` makes the table mirror the files exactly: after a camera's rows
+    are upserted without error, its rows whose event_id is no longer in its
+    file (a read the pipeline dropped, a renumbered track) are deleted. Cameras
+    without a file, or with an empty one, are never touched.
 
 Usage
     python pipeline/insert_detections.py --detections_dir ./public/detections \
-        [--start_time 2026-09-29T08:00:00] [--tz Asia/Kolkata] [--dry_run]
+        [--start_time 2026-09-29T08:00:00] [--tz Asia/Kolkata] [--prune] [--dry_run]
 
 Exit codes: 0 ok · 1 nothing to ingest · 2 configuration error · 3 some chunks failed
 """
@@ -192,6 +196,20 @@ def build_rows(
     return list(rows.values())
 
 
+def stale_event_ids(client, camera_id: str, keep: set[str], page_size: int = 1000) -> list[str]:
+    """event_ids stored for `camera_id` that are not in `keep` (read page by page)."""
+    stored: list[str] = []
+    start = 0
+    while True:
+        page = (client.table("detections").select("event_id").eq("camera_id", camera_id)
+                .order("event_id").range(start, start + page_size - 1).execute().data) or []
+        stored += [r["event_id"] for r in page]
+        if len(page) < page_size:
+            break
+        start += page_size
+    return sorted(set(stored) - keep)
+
+
 # ──────────────────────────────────────────────────────────────────────
 # Main
 # ──────────────────────────────────────────────────────────────────────
@@ -209,6 +227,8 @@ def parse_args(argv=None):
     p.add_argument("--batch_size", type=int, default=500, help="Rows per upsert (default 500)")
     p.add_argument("--retries", type=int, default=4, help="Attempts per chunk (default 4)")
     p.add_argument("--retry_base_delay", type=float, default=1.0, help="First backoff delay in seconds")
+    p.add_argument("--prune", action="store_true",
+                   help="After a camera's rows are upserted, delete its rows that are no longer in its file")
     p.add_argument("--dry_run", action="store_true", help="Build rows and print a summary; write nothing")
     return p.parse_args(argv)
 
@@ -260,7 +280,7 @@ def main(argv=None) -> int:
                 "Apply the camera-network migration (or fix the file names) and re-run."
             )
 
-    written = failed = 0
+    written = failed = pruned = 0
     failed_chunks: list[str] = []
     for code, dets in per_camera.items():
         if not dets:
@@ -272,6 +292,7 @@ def main(argv=None) -> int:
         print(f"  {code}: {len(rows)} rows (camera {cameras[code]['id']}, clip '{source_video or '?'}')")
         if args.dry_run:
             continue
+        camera_ok = True
         for n, chunk in enumerate(chunked(rows, args.batch_size), start=1):
             label = f"{code} chunk {n}"
             try:
@@ -281,12 +302,35 @@ def main(argv=None) -> int:
                 )
                 written += len(chunk)
             except Exception as exc:  # noqa: BLE001
+                camera_ok = False
                 failed += len(chunk)
                 failed_chunks.append(label)
                 print(f"  [!] {label}: giving up after {args.retries} attempts: {exc}")
+        if not args.prune:
+            continue
+        if not camera_ok:
+            print(f"  [!] {code}: not pruned (some rows failed to upsert)")
+            continue
+        label = f"{code} prune"
+        try:
+            stale = with_retries(
+                lambda code=code: stale_event_ids(client, cameras[code]["id"], {r["event_id"] for r in rows}),
+                attempts=args.retries, base_delay=args.retry_base_delay, label=label,
+            )
+            for chunk in chunked(stale, args.batch_size):
+                with_retries(
+                    lambda chunk=chunk: client.table("detections").delete().in_("event_id", chunk).execute(),
+                    attempts=args.retries, base_delay=args.retry_base_delay, label=label,
+                )
+                pruned += len(chunk)
+            print(f"  {code}: pruned {len(stale)} stale rows")
+        except Exception as exc:  # noqa: BLE001
+            failed_chunks.append(label)
+            print(f"  [!] {label}: giving up after {args.retries} attempts: {exc}")
 
     print("\n" + "=" * 60)
-    print(f"  Files: {len(files)} · rows upserted: {written} · rows failed: {failed}")
+    print(f"  Files: {len(files)} · rows upserted: {written} · rows failed: {failed}"
+          + (f" · stale rows pruned: {pruned}" if args.prune else ""))
     print(f"  Clip start time: {base_time.isoformat()}")
     print("=" * 60)
     if failed_chunks:

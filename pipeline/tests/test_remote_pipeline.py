@@ -142,6 +142,21 @@ def test_weak_reads_keep_boxes_but_not_text(tmp_path, fake_capture, stub_encode,
     assert all(e["plate_read"] for e in events)  # the raw read stays in the event log
 
 
+def test_one_vehicle_read_twice_keeps_the_more_confident_read():
+    def ev(plate, conf, t):
+        return {"plate_text": plate, "plate_confidence": conf, "time_sec": t, "good_read": True}
+
+    # KR-01: one pickup split into two server tracks, one OCR slip (D -> Q), 0.26 s apart.
+    events = [ev("MH 03 QV 6252", 0.75, 12.93), ev("MH 03 DV 6252", 0.919, 12.67),
+              ev("MH 03 DV 6257", 0.9, 30.0),     # one edit away but 17 s later: another vehicle
+              ev("MH 03 EL 7427", 0.94, 12.8)]    # same moment, different plate
+    assert R.drop_duplicate_event_reads(events) == 1
+    assert events[0] == {"plate_text": None, "plate_confidence": 0.75, "time_sec": 12.93, "good_read": False,
+                         "duplicate_of": "MH 03 DV 6252"}
+    assert [e["good_read"] for e in events[1:]] == [True, True, True]
+    assert "duplicate_of" not in events[1]
+
+
 def test_format_plate_and_overlay_transform():
     assert R.format_plate("MH02FG0919") == "MH 02 FG 0919"
     assert R.format_plate("24BH5283G") == "24 BH 5283 G"

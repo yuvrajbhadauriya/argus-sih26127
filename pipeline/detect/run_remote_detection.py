@@ -23,7 +23,8 @@ Two passes per clip, strictly one request in flight (the GPU is shared):
 Each overlay track gets the plate of the /v1/video event whose box and time
 match it, else its own best per-frame read. Only GOOD reads become plate text:
 OCR confidence >= 75 and grammar_valid; weaker reads keep the box but show
-"UNKNOWN". Tile-sized vehicle boxes (a tiling artefact of the detector) are
+"UNKNOWN". Two good event reads within 2 s whose plates differ by one
+character are one vehicle read twice: only the more confident one is kept. Tile-sized vehicle boxes (a tiling artefact of the detector) are
 dropped. Raw API responses are cached (``--cache_dir``) so the linking can be
 re-run without GPU time (``--from_cache``).
 
@@ -91,6 +92,9 @@ VIDEO_QUERY = "frame_step=1&tiles=2x3&roi_top=0.33&min_conf=0"
 MIN_VEHICLE_CONF = 0.5
 #: Plate-only boxes are padded to at least this size on the overlay canvas.
 MIN_OVERLAY_BOX = 26.0
+#: Two good /v1/video reads this close in time whose plates differ by at most
+#: one character are one vehicle read twice (see drop_duplicate_event_reads).
+EVENT_DUPLICATE_WINDOW_SEC = 2.0
 
 if sys.stdout and hasattr(sys.stdout, "reconfigure"):
     with contextlib.suppress(AttributeError, ValueError, OSError):  # captured / non-text stdout
@@ -200,6 +204,30 @@ def levenshtein(a: str, b: str) -> int:
             cur.append(min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (ca != cb)))
         prev = cur
     return prev[-1]
+
+
+def drop_duplicate_event_reads(events: list[dict], window_sec: float = EVENT_DUPLICATE_WINDOW_SEC) -> int:
+    """
+    /v1/video can split one vehicle into two tracks and read its plate twice with
+    one OCR slip (KR-01: MH 03 DV 6252 at 0.92 and MH 03 QV 6252 at 0.75, 0.26 s
+    apart). Of two good reads within `window_sec` whose plates differ by at most
+    one character, the more confident one stays; the other keeps its event but
+    loses the plate (``duplicate_of`` names the read it repeats). Returns the
+    number of reads dropped.
+    """
+    kept: list[dict] = []
+    dropped = 0
+    for e in sorted((e for e in events if e["good_read"]), key=lambda e: e["plate_confidence"], reverse=True):
+        compact = e["plate_text"].replace(" ", "")
+        dup = next((k for k in kept
+                    if abs(k["time_sec"] - e["time_sec"]) <= window_sec
+                    and levenshtein(k["plate_text"].replace(" ", ""), compact) <= 1), None)
+        if dup is None:
+            kept.append(e)
+            continue
+        e.update(plate_text=None, good_read=False, duplicate_of=dup["plate_text"])
+        dropped += 1
+    return dropped
 
 
 def dedupe_frame(dets: list[dict], iou: float = 0.7) -> list[dict]:
@@ -419,10 +447,6 @@ def build_camera_outputs(camera_code: str, frames_doc: dict, video_doc: dict | N
                 if cands:
                     link = min(cands, key=lambda c: (c[0], c[1]))[2]["tracked_vehicle_id"]
         plate = format_plate(det["plate_text"]) if good else None
-        if good and link:
-            prev = track_plate.get(link)
-            if prev is None or det["plate_confidence"] > prev[0]:
-                track_plate[link] = (det["plate_confidence"], plate, "event")
         events_out.append({
             "plate_text": plate,
             "plate_read": det["plate_text"] if det else (ev.get("plate") if ev.get("plate") != "Not Found" else None),
@@ -441,6 +465,13 @@ def build_camera_outputs(camera_code: str, frames_doc: dict, video_doc: dict | N
         model_version = model_version or video_doc.get("model_version")
         video_ms = float(video_doc.get("inference_ms") or 0)
         video_wall_ms = float(video_doc.get("client_latency_ms") or video_doc.get("latency_ms") or 0)
+    drop_duplicate_event_reads(events_out)
+    for e in events_out:
+        link = e["tracked_vehicle_id"]
+        if e["good_read"] and link:
+            prev = track_plate.get(link)
+            if prev is None or e["plate_confidence"] > prev[0]:
+                track_plate[link] = (e["plate_confidence"], e["plate_text"], "event")
 
     # ── per-track plate: linked event, else the track's own best good read ──
     # A frame read within one character of a nearby good event read is that
