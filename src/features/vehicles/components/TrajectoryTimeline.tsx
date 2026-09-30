@@ -38,6 +38,19 @@ export const TrajectoryTimeline = memo(function TrajectoryTimeline({ trajectory,
     }
   }, [activeIndex, reduced]);
 
+  const tripSpan = new Map<number, [number, number]>();
+  for (const x of w) {
+    const k = x.trip_index ?? 0;
+    const t = Date.parse(x.timestamp);
+    const span = tripSpan.get(k);
+    tripSpan.set(k, span ? [Math.min(span[0], t), Math.max(span[1], t)] : [t, t]);
+  }
+  /** Does another trip of this plate overlap waypoint i in time? (cloned plate) */
+  const conflicting = (i: number) => {
+    const k = w[i].trip_index ?? 0;
+    const t = Date.parse(w[i].timestamp);
+    return [...tripSpan.entries()].some(([other, [a, b]]) => other !== k && a <= t && t <= b);
+  };
   const showDate = w.map((wp, i) => i === 0 || formatIstDate(wp.timestamp) !== formatIstDate(w[i - 1].timestamp));
   return (
     <ol className="relative space-y-0" aria-label="Chronological camera sightings">
@@ -45,7 +58,7 @@ export const TrajectoryTimeline = memo(function TrajectoryTimeline({ trajectory,
         const trip = wp.trip_index ?? 0;
         const prev = i > 0 ? w[i - 1] : null;
         const newTrip = prev != null && (prev.trip_index ?? 0) !== trip;
-        const overlaps = newTrip && wp.distance_m_from_prev != null; // other trip still under way (e.g. cloned plate)
+        const overlaps = conflicting(i); // another trip of the same plate is under way (e.g. cloned plate)
         const color = colorFor(trip);
         const active = activeIndex === i;
         const deg = headingToDegrees(wp.heading);
@@ -53,6 +66,12 @@ export const TrajectoryTimeline = memo(function TrajectoryTimeline({ trajectory,
           <li key={`${wp.camera_id}-${wp.timestamp}-${i}`} ref={(el) => { itemRefs.current[i] = el; }}>
             {showDate[i] && (
               <div className="mb-2 mt-1 text-[10px] font-bold uppercase tracking-wider text-nero-text-muted">{formatIstDate(wp.timestamp)}</div>
+            )}
+            {newTrip && overlaps && wp.distance_m_from_prev == null && (
+              <div className="my-2 flex items-center gap-2 pl-1 text-[10px] font-semibold text-rose-400">
+                <CircleSlashIcon size={12} aria-hidden="true" />
+                Same plate read elsewhere while the previous trip was still under way
+              </div>
             )}
             {newTrip && !overlaps && (
               <div className="my-2 flex items-center gap-2 pl-1 text-[10px] text-nero-text-muted">
@@ -100,7 +119,7 @@ export const TrajectoryTimeline = memo(function TrajectoryTimeline({ trajectory,
                       {headingLabel(wp.heading)}
                     </span>
                   )}
-                  {overlaps && <span className="font-semibold text-rose-400">parallel sighting</span>}
+                  {overlaps && <span className="font-semibold text-rose-400">conflicting sighting</span>}
                 </span>
               </span>
             </button>

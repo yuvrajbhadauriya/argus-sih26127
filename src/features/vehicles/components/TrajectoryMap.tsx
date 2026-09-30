@@ -225,7 +225,8 @@ const HopLayer = memo(function HopLayer({ hops, colorFor, showLabels }: {
         )),
       )}
       {showLabels &&
-        hops.map((h) => (
+        // Repeated hops (e.g. a vehicle circling) share one label: the first pass.
+        hops.filter((h, i) => hops.findIndex((o) => o.from?.camera_code === h.from?.camera_code && o.to.camera_code === h.to.camera_code) === i).map((h) => (
           <Marker
             key={`lbl-${h.key}`}
             position={h.mid}
