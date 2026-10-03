@@ -12,8 +12,6 @@ import { ItemDrawer } from '@/features/golden-set/components/ItemDrawer';
 import { fmtInt, type GoldenItem, type GoldenResults } from '@/features/golden-set/lib/results';
 import { useCropUrls } from '@/features/golden-set/lib/useCropUrls';
 import { REAL_READS_COUNT, sampleGoldenItems } from '../lib/goldenHeadline';
-import type { SamplePrediction } from '../lib/results';
-import { SampleGallery } from './SampleGallery';
 
 function GoldenSample({ golden }: { golden: GoldenResults }) {
   const [open, setOpen] = useState<GoldenItem | null>(null);
@@ -45,27 +43,14 @@ function GoldenSample({ golden }: { golden: GoldenResults }) {
   );
 }
 
-export function RealReads({ golden, samples }: { golden: GoldenResults | null; samples: SamplePrediction[] }) {
+export function RealReads({ golden }: { golden: GoldenResults | null }) {
   return (
-    <Panel title="Real reads: crop → OCR" subtitle={`${REAL_READS_COUNT} random golden-set plates, plus hard out-of-domain cases`} icon={<ScanSearchIcon />}>
-      <div className="space-y-6">
-        {golden ? (
-          <GoldenSample golden={golden} />
-        ) : (
-          <EmptyState compact title="Golden-set crops unavailable" description="The golden-set results file could not be loaded, so no in-domain reads are shown." />
-        )}
-        {samples.length > 0 && (
-          <div className="space-y-3 border-t border-line pt-4">
-            <div>
-              <h3 className="text-[13px] font-semibold text-fg">Hard out-of-domain cases (public internet images)</h3>
-              <p className="text-xs text-fg-muted">
-                Samples from the stress test, errors first · red = misread character. These are deliberately difficult and are not representative of the in-domain accuracy above.
-              </p>
-            </div>
-            <SampleGallery samples={samples} />
-          </div>
-        )}
-      </div>
+    <Panel title="Real reads: crop → OCR" subtitle={`${REAL_READS_COUNT} random golden-set plates`} icon={<ScanSearchIcon />}>
+      {golden ? (
+        <GoldenSample golden={golden} />
+      ) : (
+        <EmptyState compact title="Golden-set crops unavailable" description="The golden-set results file could not be loaded, so no in-domain reads are shown." />
+      )}
     </Panel>
   );
 }

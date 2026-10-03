@@ -12,6 +12,9 @@ import { fmtInt, fmtMeasuredDate, pct, type GoldenResults } from '@/features/gol
 import { goldenHeadline, targetMargin } from '../lib/goldenHeadline';
 import type { EvalResults } from '../lib/results';
 
+/** Scope of every accuracy figure on the page. */
+export const SCOPE_NOTE = 'Accuracy is measured on readable plates only (plates the reviewers could read); vehicles whose plate is not legible are not scored.';
+
 export function GoldenHeadline({
   golden,
   target,
@@ -41,7 +44,7 @@ export function GoldenHeadline({
       title={title}
       icon={<AwardIcon />}
       actions={<Link to="/accuracy" className="text-xs font-medium text-primary hover:underline">Accuracy Proof</Link>}
-      footer="Task: plate crop in, plate text out (the OCR stage only). Exact whole-plate match, no partial credit, readable plates only. This is not an end-to-end measurement on camera video; that has not been measured."
+      footer="Task: plate crop in, plate text out (the OCR stage only). Exact whole-plate match, no partial credit. This is not an end-to-end measurement on camera video."
     >
       <section aria-label="In-domain plate OCR accuracy" className="space-y-3">
         <div className="flex flex-wrap items-end gap-x-4 gap-y-1">
@@ -72,6 +75,7 @@ export function GoldenHeadline({
           )}
         </div>
         {target && <p className="text-xs text-fg-muted">PS target: {target.source}</p>}
+        <p className="text-xs text-fg-muted" data-testid="mp-scope-note">{SCOPE_NOTE}</p>
         <dl className={cn('grid gap-x-6 gap-y-1.5 text-xs sm:grid-cols-2')}>
           <div className="flex justify-between gap-3 sm:block">
             <dt className="text-fg-subtle">Data set · n</dt>

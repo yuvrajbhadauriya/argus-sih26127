@@ -221,66 +221,8 @@ export function parseEvalResults(raw: unknown): EvalResults {
   };
 }
 
-// ── Video consistency (label-free proxy) ──────────────────────────────
-export interface VideoCamera {
-  camera_code: string;
-  camera_name: string | null;
-  frames: number;
-  tracks_total: number;
-  tracks_scored: number;
-  mean_stability: number | null;
-  lenient_mean_stability: number | null;
-  stable_track_share: number | null;
-}
-
-export interface VideoConsistency {
-  status: EvalStatus;
-  generated_at: string | null;
-  overall: Omit<VideoCamera, 'camera_code' | 'camera_name'> & { cameras: number };
-  per_camera: VideoCamera[];
-  stable_at: number;
-}
-
-function videoRow(o: Obj) {
-  return {
-    frames: int(o.frames),
-    tracks_total: int(o.tracks_total),
-    tracks_scored: int(o.tracks_scored),
-    mean_stability: rate(o.mean_stability),
-    lenient_mean_stability: rate(o.lenient_mean_stability),
-    stable_track_share: rate(o.stable_track_share),
-  };
-}
-
-export function parseVideoConsistency(raw: unknown): VideoConsistency {
-  if (!isObj(raw) || raw.schema_version !== SUPPORTED_SCHEMA || !isObj(raw.overall)) {
-    throw new EvalSchemaError('video_consistency.json is missing or has an unsupported schema');
-  }
-  const params = isObj(raw.params) ? raw.params : {};
-  return {
-    status: raw.status === 'measured' ? 'measured' : 'sample',
-    generated_at: str(raw.generated_at),
-    stable_at: rate(params.stable_at) ?? 0.8,
-    overall: { ...videoRow(raw.overall), cameras: int(raw.overall.cameras) },
-    per_camera: arr(raw.per_camera).filter(isObj).map((c) => ({
-      ...videoRow(c),
-      camera_code: str(c.camera_code) ?? '?',
-      camera_name: str(c.camera_name),
-    })),
-  };
-}
-
-// ── Formatting / verdict ──────────────────────────────────────────────
+// ── Formatting ────────────────────────────────────────────────────────
 export const fmtPct = (v: number | null, digits = 1) => (v == null ? '—' : `${(v * 100).toFixed(digits)}%`);
-export const fmtMs = (v: number | null) => (v == null ? '—' : `${Math.round(v)}`);
-
-export type Verdict = 'pass' | 'fail' | 'not-measured';
-
-/** Pass/fail against the PS target — only ever for measured results. */
-export function verdict(r: Pick<EvalResults, 'status' | 'overall' | 'target'>): Verdict {
-  if (r.status !== 'measured' || r.overall.plate_accuracy == null || r.overall.plates === 0) return 'not-measured';
-  return r.overall.plate_accuracy >= r.target.plate_accuracy ? 'pass' : 'fail';
-}
 
 /** Character-level diff for the gallery: ops aligned GT vs prediction. */
 export type DiffOp = { kind: 'eq' | 'sub' | 'del' | 'ins'; gt: string; pred: string };
@@ -313,16 +255,3 @@ export function plateDiff(gt: string, pred: string): DiffOp[] {
   return ops.reverse();
 }
 
-export const CONDITION_LABEL: Record<string, string> = {
-  day: 'Day',
-  night: 'Night / low light',
-  rain: 'Rain',
-  fog: 'Fog / haze',
-  blur: 'Motion blur',
-  sharp: 'Sharp',
-  angle: 'Angled',
-  occluded: 'Occluded',
-  damaged: 'Damaged plate',
-  dirty: 'Dirty plate',
-  low_res: 'Low resolution',
-};

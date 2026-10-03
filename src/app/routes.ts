@@ -32,11 +32,20 @@ export const routes = [
   { path: '/admin', page: pages.admin },
 ] as const;
 
+/**
+ * Developer-only pages: registered only in `vite` dev (import.meta.env.DEV is a
+ * build-time constant, so the page chunk is dropped from production builds) and
+ * never listed in the navigation or the idle prefetch.
+ */
+export const devRoutes = import.meta.env.DEV
+  ? [{ path: '/verify-reads', page: lazyPage(() => import('@/features/model-performance/pages/VerifyReadsPage'), 'VerifyReadsPage') }]
+  : [];
+
 /** Normalised pathname → route (matches the build-time preload map in vite.config.ts). */
 export function findRoute(pathname: string) {
   const p = pathname.replace(/\/+$/, '') || '/';
   if (p === loginRoute.path) return loginRoute;
-  return routes.find((r) => r.path === p);
+  return routes.find((r) => r.path === p) ?? devRoutes.find((r) => r.path === p);
 }
 
 /**
