@@ -29,6 +29,8 @@ vi.mock('@/features/detections/api', async (orig) => ({
 import { LiveMapPage } from './LiveMapPage';
 import { clearCamerasCache } from '@/features/cameras/hooks/useCameras';
 import { clearSimSummaryCache } from '../api';
+import { resetDetectionsManifest } from '@/features/detections/api';
+import { resetTrafficRows } from '../hooks/useTrafficIndex';
 import { resetReadCrops } from '@/features/detections/lib/readCrops';
 
 const cam = (over: Partial<Camera>): Camera => ({
@@ -42,10 +44,15 @@ const SUMMARY = { simulated: true, stats: { vehicles: 2577, journeys: 1, sightin
 const GOLDEN = { set: 'ocr_golden_v1', measured_at: '2026-09-30T22:17:01+05:30', overall: { n: 200, correct: 150, accuracy: 0.75 }, items: [{ key: 'a', gt: 'MH02AB1234', pred: 'MH02AB1234', correct: true, confidence: 99 }, { key: 'b', gt: 'MH03CD5678', pred: 'MH03CD5679', correct: false, confidence: 80 }] };
 const CROPS = { crops: { 'JG-01_trk_3_3000': { vehicle: 'JG-01/JG-01_trk_3_3000_vehicle.jpg', plate: 'JG-01/JG-01_trk_3_3000_plate.jpg' } } };
 
+// 5 fps overlay rows of the camera: 3 vehicles in view over the whole 30 s clip.
+const ROWS = ['v1', 'v2', 'v3'].flatMap((id) => Array.from({ length: 150 }, (_, i) => ({ tracked_vehicle_id: id, frame_timestamp_sec: i * 0.2 })));
+
 function stubFetch(over: Record<string, () => Response> = {}) {
   vi.stubGlobal('fetch', vi.fn((url: string) => {
     const hit = Object.entries(over).find(([k]) => String(url).includes(k));
     if (hit) return Promise.resolve(hit[1]());
+    if (String(url).endsWith('/detections/manifest.json')) return Promise.resolve(new Response(JSON.stringify({ cameras: ['JG-01'] })));
+    if (String(url).includes('/detections/detections_')) return Promise.resolve(new Response(JSON.stringify(ROWS)));
     if (String(url).includes('/golden/')) return Promise.resolve(new Response(JSON.stringify(GOLDEN)));
     if (String(url).includes('/detections/crops/')) return Promise.resolve(new Response(JSON.stringify(CROPS)));
     return Promise.resolve(new Response(JSON.stringify(SUMMARY)));
@@ -71,6 +78,11 @@ const renderAt = (url: string) =>
   );
 
 beforeEach(() => {
+  try {
+    localStorage.clear();
+  } catch { /* ignore */ }
+  resetTrafficRows();
+  resetDetectionsManifest();
   clearCamerasCache();
   clearSimSummaryCache();
   h.flyTo.mockReset();
@@ -239,6 +251,44 @@ describe('LiveMapPage', () => {
     const row = within(list).getAllByLabelText(/ground truth MH03CD5678, wrong/)[0];
     expect(within(row).getByRole('img', { name: 'Model read MH03CD5679' })).toBeInTheDocument();
     expect(within(row).getByRole('img', { name: 'Wrong' })).toBeInTheDocument();
+  });
+
+  it('Traffic toggle: off by default, aria-pressed, glow per camera with a name and Light/Moderate/Heavy word, legend ramp, state kept', async () => {
+    const view = renderAt('/');
+    await screen.findByText('1/2');
+    const btn = screen.getByRole('button', { name: 'Traffic' });
+    expect(btn).toHaveAttribute('aria-pressed', 'false');
+    expect(btn).toHaveAttribute('title', expect.stringMatching(/Traffic density from the camera feeds: vehicles in view, recorded clips replayed on a live clock/));
+    expect(screen.queryAllByRole('img', { name: /in view \(last 5 s\)/ })).toHaveLength(0);
+    expect(screen.queryByText('Heavy')).toBeNull();
+
+    btn.focus();
+    await userEvent.keyboard('{Enter}'); // keyboard accessible
+    expect(btn).toHaveAttribute('aria-pressed', 'true');
+    const glow = await screen.findAllByText(/JG-01 Jogeshwari JVLR Junction: 3 vehicles in view \(last 5 s\) · (Light|Moderate|Heavy) traffic/);
+    expect(glow.length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Traffic density from the camera feeds: vehicles in view, recorded clips replayed on a live clock/).length).toBeGreaterThan(0);
+    expect(screen.getByText('Light')).toBeInTheDocument(); // legend ramp ends
+    expect(screen.getByText('Heavy')).toBeInTheDocument();
+    expect(screen.queryAllByTestId('hotspot').length).toBeGreaterThan(0); // alert rings are a separate layer
+
+    view.unmount(); // navigating away and back keeps the choice
+    renderAt('/');
+    await screen.findByText('1/2');
+    expect(screen.getByRole('button', { name: 'Traffic' })).toHaveAttribute('aria-pressed', 'true');
+    await userEvent.click(screen.getByRole('button', { name: 'Traffic' }));
+    expect(screen.getByRole('button', { name: 'Traffic' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryAllByRole('img', { name: /in view \(last 5 s\)/ })).toHaveLength(0);
+  });
+
+  it('Traffic degrades quietly when a camera file is missing (no glow, no error)', async () => {
+    stubFetch({ '/detections/detections_': () => new Response('', { status: 404 }) });
+    renderAt('/');
+    await screen.findByText('1/2');
+    await userEvent.click(screen.getByRole('button', { name: 'Traffic' }));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.queryAllByRole('img', { name: /in view \(last 5 s\)/ })).toHaveLength(0);
+    expect(screen.getByRole('button', { name: 'Traffic' })).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('popup links open the feed', async () => {

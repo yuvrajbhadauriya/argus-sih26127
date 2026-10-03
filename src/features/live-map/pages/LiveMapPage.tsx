@@ -5,7 +5,7 @@
 
 import { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { CarIcon, CctvIcon, GaugeIcon, LocateFixedIcon, ScanLineIcon, ScanTextIcon, SirenIcon, TagIcon, TargetIcon } from 'lucide-react';
+import { CarIcon, CctvIcon, GaugeIcon, LocateFixedIcon, FlameIcon, ScanLineIcon, ScanTextIcon, SirenIcon, TagIcon, TargetIcon } from 'lucide-react';
 import type { Camera } from '@/types/camera';
 import { useCameras } from '@/features/cameras/hooks/useCameras';
 import type { CameraEvents } from '@/features/detections/api';
@@ -32,20 +32,23 @@ import { SkeletonPanel } from '@/shared/ui/Skeleton';
 import { MapView } from '../components/MapView';
 import { OperationsRail } from '../components/OperationsRail';
 import { useLiveMapData } from '../hooks/useLiveMapData';
+import { useTrafficIndex } from '../hooks/useTrafficIndex';
+import { TRAFFIC_LABEL, trafficAt } from '../lib/trafficDensity';
+import { clockDuration } from '@/features/detections/lib/liveReads';
 import { alertHotspots, topOpenAlerts } from '../lib/alerts';
 import { istHour } from '../lib/time';
 import { isGoldenEntry, reelRows, type FeedEntry, type FeedFilter } from '../lib/reel';
 
 const nf = new Intl.NumberFormat('en-IN');
 
-function LayerToggle({ label, pressed, onToggle, icon }: { label: string; pressed: boolean; onToggle: () => void; icon: React.ReactNode }) {
+function LayerToggle({ label, title, pressed, onToggle, icon }: { label: string; title?: string; pressed: boolean; onToggle: () => void; icon: React.ReactNode }) {
   return (
     <Button
       size="sm"
       variant={pressed ? 'secondary' : 'ghost'}
       aria-pressed={pressed}
       aria-label={label}
-      title={label}
+      title={title ?? label}
       icon={icon}
       onClick={onToggle}
       className={pressed ? 'text-fg' : 'text-fg-subtle'}
@@ -53,6 +56,29 @@ function LayerToggle({ label, pressed, onToggle, icon }: { label: string; presse
       <span className="hidden md:inline">{label}</span>
     </Button>
   );
+}
+
+const TRAFFIC_KEY = 'nero.livemap.traffic';
+
+/** On/off flag kept across navigation and reloads (localStorage; silently in-memory when unavailable). */
+function usePersistedFlag(key: string): [boolean, () => void] {
+  const [on, setOn] = useState(() => {
+    try {
+      return localStorage.getItem(key) === '1';
+    } catch {
+      return false;
+    }
+  });
+  const toggle = () =>
+    setOn((v) => {
+      try {
+        localStorage.setItem(key, v ? '0' : '1');
+      } catch {
+        /* ignore */
+      }
+      return !v;
+    });
+  return [on, toggle];
 }
 
 export function LiveMapPage() {
@@ -65,6 +91,7 @@ export function LiveMapPage() {
   const [showCameras, setShowCameras] = useState(true);
   const [showLabels, setShowLabels] = useState(true);
   const [showHotspots, setShowHotspots] = useState(true);
+  const [showTraffic, toggleTraffic] = usePersistedFlag(TRAFFIC_KEY);
   const [recenterNonce, setRecenterNonce] = useState(0);
   // Deep link (?cam=) flies to the camera on first render.
   const [focusNonce, setFocusNonce] = useState(() => (params.get('cam') ? 1 : 0));
@@ -120,6 +147,10 @@ export function LiveMapPage() {
     });
   }, [cropped, now, cameras, watch, crops, feedFilter, goldenItems]);
   const feed = replay.feed ?? realFeed;
+  // Traffic glow: vehicles in view over the last 5 s of each camera's replay clock, updated every second.
+  const durations = useMemo(() => new Map(docs.map((d) => [d.camera_code, clockDuration(d)])), [docs]);
+  const trafficIndex = useTrafficIndex(showTraffic, durations);
+  const traffic = useMemo(() => (showTraffic ? trafficAt(trafficIndex, now) : null), [showTraffic, trafficIndex, now]);
   // Marker popups: each camera's latest read (replay clock during a replay).
   const plates = useMemo(() => {
     const byCode = new Map(cameras.map((c) => [c.code, c.id]));
@@ -232,6 +263,7 @@ export function LiveMapPage() {
                 showCameras={showCameras}
                 showLabels={showLabels}
                 hotspots={hotspots}
+                traffic={traffic}
                 recenterNonce={recenterNonce}
                 focusNonce={focusNonce}
               />
@@ -248,6 +280,7 @@ export function LiveMapPage() {
                   <LayerToggle label="Cameras" pressed={showCameras} onToggle={() => setShowCameras((v) => !v)} icon={<CctvIcon size={14} strokeWidth={1.75} />} />
                   <LayerToggle label="Labels" pressed={showLabels} onToggle={() => setShowLabels((v) => !v)} icon={<TagIcon size={14} strokeWidth={1.75} />} />
                   <LayerToggle label="Alert hotspots" pressed={showHotspots} onToggle={() => setShowHotspots((v) => !v)} icon={<TargetIcon size={14} strokeWidth={1.75} />} />
+                  <LayerToggle label="Traffic" title={TRAFFIC_LABEL} pressed={showTraffic} onToggle={toggleTraffic} icon={<FlameIcon size={14} strokeWidth={1.75} />} />
                 </div>
                 <span className="mx-0.5 h-5 w-px bg-line" aria-hidden="true" />
                 <IconButton size="sm" label="Recenter" icon={<LocateFixedIcon size={16} strokeWidth={1.75} />} onClick={() => setRecenterNonce((n) => n + 1)} />
@@ -259,6 +292,7 @@ export function LiveMapPage() {
 
               <MapLegend
                 title="Legend"
+                ramp={showTraffic ? { label: TRAFFIC_LABEL, stops: ['hsl(120 90% 48% / 0.3)', 'hsl(60 90% 48% / 0.55)', 'hsl(0 90% 48% / 0.8)'], min: 'Light', max: 'Heavy' } : undefined}
                 position="bottom-left"
                 items={[
                   { label: 'Online', color: 'var(--map-cam-online)', shape: 'dot' },
