@@ -38,8 +38,7 @@ const CHANNEL_LABEL: Record<LiveChannelStatus, string> = {
   error: 'Unavailable — retrying',
 };
 
-/** `compact` (phone header): a status dot in a 40px button; the popover carries the detail. */
-export function SystemStatus({ className, compact = false }: { className?: string; compact?: boolean }) {
+export function SystemStatus({ className }: { className?: string }) {
   const { cameras, loading, error } = useCameras();
   const ds = useDataSource();
   const tag = SOURCE_TAG[ds.source];
@@ -56,15 +55,8 @@ export function SystemStatus({ className, compact = false }: { className?: strin
     <Popover
       className={className}
       triggerLabel={`System status: ${online} of ${total} cameras online, ${h.word}. Data source: ${ds.label}`}
-      triggerClassName={
-        compact
-          ? 'inline-flex h-10 w-10 items-center justify-center rounded-sm text-fg-muted transition-colors hover:bg-surface-2'
-          : 'inline-flex h-8 items-center gap-2 rounded-full border border-line px-3 text-xs font-medium text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg touch:h-10'
-      }
+      triggerClassName="inline-flex h-8 items-center gap-2 rounded-full border border-line px-3 text-xs font-medium text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
       trigger={
-        compact ? (
-          <span aria-hidden className={cn('h-3 w-3 rounded-full ring-4', h.dot, health === 'nominal' ? 'ring-success/20' : health === 'degraded' ? 'ring-warning/20' : health === 'offline' ? 'ring-danger/20' : 'ring-surface-3')} />
-        ) : (
         <>
           <span aria-hidden className={cn('h-1.5 w-1.5 rounded-full', h.dot)} />
           <span className="tabular-nums text-fg">
@@ -75,9 +67,8 @@ export function SystemStatus({ className, compact = false }: { className?: strin
           <span aria-hidden className="h-3.5 w-px bg-line" />
           <Badge tone={ds.liveError ? 'danger' : tag.tone} size="sm">{ds.liveError ? 'Live · degraded' : tag.short}</Badge>
         </>
-        )
       }
-      panelClassName="w-72 max-sm:fixed max-sm:inset-x-3 max-sm:top-[calc(env(safe-area-inset-top)+3.25rem)] max-sm:mt-0 max-sm:max-h-[calc(100dvh-8rem)] max-sm:w-auto max-sm:overflow-y-auto"
+      panelClassName="w-72"
     >
       <div className="border-b border-line px-3 py-2.5">
         <div className="text-2xs font-semibold uppercase tracking-[0.06em] text-fg-subtle">System status</div>
@@ -136,7 +127,7 @@ export function SystemStatus({ className, compact = false }: { className?: strin
         )}
       </div>
       <div className="border-t border-line px-3 py-2">
-        <Link to="/cameras" className="tap text-xs font-medium text-primary hover:underline">
+        <Link to="/cameras" className="text-xs font-medium text-primary hover:underline">
           Open camera network
         </Link>
       </div>

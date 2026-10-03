@@ -44,13 +44,11 @@ function HealthRow({ label, children }: { label: string; children: React.ReactNo
 
 const MIN_PCT = Math.round(DISPLAY_READ_MIN_CONFIDENCE * 100);
 
-/**
- * A line shown while the live GPU model is being reached. When it cannot be reached (the hosted site
- * is not on the model's LAN/VPN, by design) there is no notice: the panel's footer already says these
- * are the engine's real recorded reads, replayed on the camera's clock.
- */
+/** One line telling why the recorded reads are shown instead of the live GPU reads. */
 function liveNotice(live: LiveAnprState): string | null {
-  return live.status === 'connecting' ? 'Connecting to the live GPU model…' : null;
+  if (live.status === 'connecting') return 'Connecting to the live GPU model…';
+  if (live.status === 'unavailable') return 'Live GPU model not reachable from here — showing the recorded reads of this clip.';
+  return null;
 }
 
 export function LivePlateReads({ camera, notice }: { camera: Camera; notice?: string | null }) {

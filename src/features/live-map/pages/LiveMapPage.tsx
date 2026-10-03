@@ -169,7 +169,7 @@ export function LiveMapPage() {
 
   return (
     <Page fullBleed>
-      <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(360px,60dvh)_auto] gap-3 md:grid-rows-[auto_minmax(420px,1fr)] lg:grid-cols-[minmax(0,1fr)_360px] lg:grid-rows-[auto_minmax(0,1fr)]">
+      <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(420px,1fr)] gap-3 lg:grid-cols-[minmax(0,1fr)_360px] lg:grid-rows-[auto_minmax(0,1fr)]">
         <KpiStrip cols={6} className="lg:col-span-2">
           <KpiTile
             label="Cameras online"
@@ -195,7 +195,7 @@ export function LiveMapPage() {
             tone={critical > 0 ? 'danger' : openAlerts.length > 0 ? 'warning' : 'success'}
             hint={
               alerts.error ? 'Alerts unavailable' : alertsSimulated ? (
-                <span className="flex min-w-0 items-center gap-1.5 max-lg:flex-wrap">
+                <span className="flex min-w-0 items-center gap-1.5">
                   <span className="shrink-0">{critical} critical</span>
                   <SimulationBadge compact />
                 </span>
@@ -246,7 +246,7 @@ export function LiveMapPage() {
           </div>
         </KpiStrip>
 
-        <Panel flush className="min-h-[360px] md:min-h-[420px]" bodyClassName="relative">
+        <Panel flush className="min-h-[420px]" bodyClassName="relative">
           {loading ? (
             <SkeletonPanel height="100%" className="absolute inset-0 rounded-none border-0" />
           ) : error ? (
@@ -275,18 +275,18 @@ export function LiveMapPage() {
                 </p>
               </MapPanel>
 
-              <MapPanel position="top-right" className="flex flex-wrap items-center gap-1 p-1 max-md:left-0 max-md:justify-center">
+              <MapPanel position="top-right" className="flex items-center gap-1 p-1">
                 <div role="group" aria-label="Map layers" className="flex items-center gap-0.5">
                   <LayerToggle label="Cameras" pressed={showCameras} onToggle={() => setShowCameras((v) => !v)} icon={<CctvIcon size={14} strokeWidth={1.75} />} />
                   <LayerToggle label="Labels" pressed={showLabels} onToggle={() => setShowLabels((v) => !v)} icon={<TagIcon size={14} strokeWidth={1.75} />} />
                   <LayerToggle label="Alert hotspots" pressed={showHotspots} onToggle={() => setShowHotspots((v) => !v)} icon={<TargetIcon size={14} strokeWidth={1.75} />} />
                   <LayerToggle label="Traffic" title={TRAFFIC_LABEL} pressed={showTraffic} onToggle={toggleTraffic} icon={<FlameIcon size={14} strokeWidth={1.75} />} />
                 </div>
-                <span className="mx-0.5 h-5 w-px bg-line max-md:hidden" aria-hidden="true" />
+                <span className="mx-0.5 h-5 w-px bg-line" aria-hidden="true" />
                 <IconButton size="sm" label="Recenter" icon={<LocateFixedIcon size={16} strokeWidth={1.75} />} onClick={() => setRecenterNonce((n) => n + 1)} />
               </MapPanel>
 
-              <MapPanel position="bottom-center" className="w-max max-w-[calc(100%-24px)] border-0 bg-transparent shadow-none max-md:mb-[60px]">
+              <MapPanel position="bottom-center" className="w-max max-w-[calc(100%-24px)] border-0 bg-transparent shadow-none">
                 <ReplayControls className="shadow-pop" />
               </MapPanel>
 

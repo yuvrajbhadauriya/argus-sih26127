@@ -39,7 +39,7 @@ function StatusChip({ status }: { status: VideoTileStatus }) {
     <span className={CHIP} style={chipStyle} data-status={status}>
       {status === 'live' && <span aria-hidden className="h-1.5 w-1.5 rounded-full animate-live-pulse" style={{ backgroundColor: VIDEO_OVERLAY.liveDot }} />}
       {status === 'connecting' && <LoaderCircleIcon size={10} className="animate-spin" aria-hidden />}
-      <span className="text-[10px] max-lg:text-2xs font-bold tracking-[0.06em]">
+      <span className="text-[10px] font-bold tracking-[0.06em]">
         {status === 'live' ? 'LIVE' : status === 'connecting' ? 'CONNECTING' : 'PAUSED'}
       </span>
     </span>

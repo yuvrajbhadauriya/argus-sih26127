@@ -7,7 +7,7 @@ import { ChevronDownIcon } from 'lucide-react';
 import { cn } from '@/shared/lib/cn';
 
 const CONTROL =
-  'w-full rounded-sm border bg-surface text-[13px] touch:text-base text-fg placeholder:text-fg-subtle dark:bg-surface-2 ' +
+  'w-full rounded-sm border bg-surface text-[13px] text-fg placeholder:text-fg-subtle dark:bg-surface-2 ' +
   'transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-focus/25 ' +
   'disabled:cursor-not-allowed disabled:opacity-50';
 
@@ -33,7 +33,7 @@ export function Input({ icon, mono = false, uiSize = 'md', invalid = false, trai
         aria-invalid={invalid || undefined}
         className={cn(
           CONTROL,
-          uiSize === 'sm' ? 'h-7 touch:h-10' : 'h-8 touch:h-10',
+          uiSize === 'sm' ? 'h-7' : 'h-8',
           icon ? 'pl-8' : 'pl-2.5',
           trailing ? 'pr-16' : 'pr-2.5',
           mono && 'font-mono tabular-nums',
@@ -61,7 +61,7 @@ export function Select({ icon, uiSize = 'md', label, className, children, ...res
         'relative inline-flex min-w-0 items-center rounded-sm border border-line-strong bg-surface text-[13px] text-fg transition-colors dark:bg-surface-2',
         'focus-within:border-primary focus-within:ring-2 focus-within:ring-focus/25',
         'has-[select:disabled]:cursor-not-allowed has-[select:disabled]:opacity-50',
-        uiSize === 'sm' ? 'h-7 touch:h-10' : 'h-8 touch:h-10',
+        uiSize === 'sm' ? 'h-7' : 'h-8',
         className,
       )}
     >
@@ -74,7 +74,7 @@ export function Select({ icon, uiSize = 'md', label, className, children, ...res
       <select
         aria-label={rest['aria-label'] ?? label}
         className={cn(
-          'h-full min-w-0 flex-1 cursor-pointer appearance-none truncate rounded-sm bg-transparent pr-8 text-[13px] touch:text-base text-fg focus:outline-none disabled:cursor-not-allowed',
+          'h-full min-w-0 flex-1 cursor-pointer appearance-none truncate rounded-sm bg-transparent pr-8 text-[13px] text-fg focus:outline-none disabled:cursor-not-allowed',
           icon || label ? 'pl-1.5' : 'pl-2.5',
         )}
         {...rest}

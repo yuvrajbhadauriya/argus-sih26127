@@ -55,7 +55,7 @@ export function Button({
       className={cn(
         BASE,
         VARIANT[variant],
-        size === 'sm' ? 'h-7 px-2.5 text-xs touch:h-10' : 'h-8 px-3 text-[13px] touch:h-10',
+        size === 'sm' ? 'h-7 px-2.5 text-xs' : 'h-8 px-3 text-[13px]',
         fullWidth && 'w-full',
         className,
       )}
@@ -81,13 +81,13 @@ export function IconButton({ label, icon, badge, variant = 'ghost', size = 'md',
       size={size}
       aria-label={label}
       title={title ?? label}
-      className={cn(size === 'sm' ? 'h-7 w-7 px-0 touch:w-10' : 'h-8 w-8 px-0 touch:w-10', className)}
+      className={cn(size === 'sm' ? 'h-7 w-7 px-0' : 'h-8 w-8 px-0', className)}
       {...rest}
     >
       <span className="inline-flex" aria-hidden>{icon}</span>
       {badge != null && badge > 0 && (
         <span
-          className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger-solid px-1 text-[10px] max-lg:text-2xs font-semibold leading-none text-white tabular-nums ring-2 ring-surface"
+          className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger-solid px-1 text-[10px] font-semibold leading-none text-white tabular-nums ring-2 ring-surface"
           aria-hidden
         >
           {badge > 99 ? '99+' : badge}

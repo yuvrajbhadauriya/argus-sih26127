@@ -214,7 +214,7 @@ export function OperationsRail({
                   aria-label={`Feed: ${f.label}`}
                   aria-pressed={feedFilter === f.id}
                   onClick={() => onFeedFilter!(f.id)}
-                  className={cn('rounded-sm px-2 py-0.5 text-xs font-medium transition-colors touch:px-3', feedFilter === f.id ? 'bg-primary/12 text-primary' : 'text-fg-muted hover:bg-surface-2')}
+                  className={cn('rounded-sm px-2 py-0.5 text-xs font-medium transition-colors', feedFilter === f.id ? 'bg-primary/12 text-primary' : 'text-fg-muted hover:bg-surface-2')}
                 >
                   {f.label}
                 </button>
@@ -276,7 +276,7 @@ export function OperationsRail({
 
       {tab === 'alerts' && (
         <div className="shrink-0 border-t border-line px-4 py-2.5">
-          <Link to="/alerts" className="tap inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
+          <Link to="/alerts" className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
             View all alerts <ArrowRightIcon size={14} strokeWidth={1.75} aria-hidden="true" />
           </Link>
         </div>

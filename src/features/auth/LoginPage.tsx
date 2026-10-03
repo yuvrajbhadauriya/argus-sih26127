@@ -152,7 +152,7 @@ export function LoginPage() {
           </div>
 
           <div className="mt-4 flex items-center justify-between text-xs text-fg-muted">
-            <Link to={next} className="tap inline-flex items-center gap-1 font-medium text-primary hover:underline">
+            <Link to={next} className="inline-flex items-center gap-1 font-medium text-primary hover:underline">
               <ArrowLeftIcon size={14} aria-hidden /> Continue without signing in (read-only)
             </Link>
             <span title="Data source">{DATA_SOURCE_LABEL[getDataSource()]}</span>

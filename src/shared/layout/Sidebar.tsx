@@ -3,14 +3,60 @@
 // ═══════════════════════════════════════════════════
 
 import { NavLink } from 'react-router-dom';
-import { PanelLeftCloseIcon, PanelLeftOpenIcon } from 'lucide-react';
+import {
+  BadgeCheckIcon,
+  CctvIcon,
+  ChartColumnIcon,
+  MapIcon,
+  PanelLeftCloseIcon,
+  PanelLeftOpenIcon,
+  RouteIcon,
+  ScanLineIcon,
+  ScanTextIcon,
+  SettingsIcon,
+  SirenIcon,
+  type LucideIcon,
+} from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { cn } from '@/shared/lib/cn';
 import { Badge } from '@/shared/ui/Badge';
 import { IconButton } from '@/shared/ui/Button';
-import { NAV_GROUPS } from './navItems';
 import { NeroMark } from './NeroMark';
 import { useNavBadges } from './useNavBadges';
+
+interface NavItem {
+  path: string;
+  label: string;
+  Icon: LucideIcon;
+  badge?: 'alerts';
+}
+
+const NAV_GROUPS: { heading: string; items: NavItem[] }[] = [
+  {
+    heading: 'Operations',
+    items: [
+      { path: '/', label: 'Live Map', Icon: MapIcon },
+      { path: '/cameras', label: 'Cameras', Icon: CctvIcon },
+      { path: '/alerts', label: 'Alerts', Icon: SirenIcon, badge: 'alerts' },
+    ],
+  },
+  {
+    heading: 'Investigation',
+    items: [
+      { path: '/vehicles', label: 'Vehicle Trace', Icon: RouteIcon },
+      { path: '/detections', label: 'Detections', Icon: ScanLineIcon },
+    ],
+  },
+  {
+    heading: 'Intelligence',
+    items: [
+      { path: '/accuracy', label: 'Accuracy Proof', Icon: BadgeCheckIcon },
+      { path: '/analytics', label: 'Analytics', Icon: ChartColumnIcon },
+      { path: '/model', label: 'Model Performance', Icon: ScanTextIcon },
+    ],
+  },
+  { heading: 'System', items: [{ path: '/admin', label: 'Admin', Icon: SettingsIcon }] },
+];
 
 const STORAGE_KEY = 'nero.sidebar';
 const LG_QUERY = '(min-width: 1024px)';

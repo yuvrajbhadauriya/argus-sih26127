@@ -5,7 +5,6 @@
 import { useState, type ReactNode } from 'react';
 import { ChevronDownIcon, ChevronUpIcon } from 'lucide-react';
 import { cn } from '@/shared/lib/cn';
-import { useIsPhone } from '@/shared/lib/useMediaQuery';
 
 export type MapCorner = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
 
@@ -65,13 +64,11 @@ function Swatch({ color, shape = 'dot' }: { color: string; shape?: LegendItem['s
 
 const STORAGE_PREFIX = 'nero.legend.';
 
-/** Saved choice (true = collapsed), or null when the user never toggled it. */
-function readCollapsed(key: string): boolean | null {
+function readCollapsed(key: string): boolean {
   try {
-    const v = localStorage.getItem(STORAGE_PREFIX + key);
-    return v == null ? null : v === '1';
+    return localStorage.getItem(STORAGE_PREFIX + key) === '1';
   } catch {
-    return null;
+    return false;
   }
 }
 
@@ -90,9 +87,7 @@ export function MapLegend({
   collapsible?: boolean;
   className?: string;
 }) {
-  const phone = useIsPhone();
-  // On phones the legend starts collapsed so it never covers the map; a saved choice still wins.
-  const [collapsed, setCollapsed] = useState(() => (collapsible ? (readCollapsed(title) ?? phone) : false));
+  const [collapsed, setCollapsed] = useState(() => (collapsible ? readCollapsed(title) : false));
   const toggle = () => {
     setCollapsed((c) => {
       try {
@@ -106,7 +101,7 @@ export function MapLegend({
 
   return (
     <MapPanel position={position} className={cn('min-w-[140px] max-w-[240px]', className)}>
-      <div className="flex h-8 items-center justify-between gap-2 px-2.5 touch:h-10">
+      <div className="flex h-8 items-center justify-between gap-2 px-2.5">
         <span className="text-2xs font-semibold uppercase tracking-[0.06em] text-fg-subtle">{title}</span>
         {collapsible && (
           <button
@@ -114,7 +109,7 @@ export function MapLegend({
             onClick={toggle}
             aria-expanded={!collapsed}
             aria-label={collapsed ? `Show ${title.toLowerCase()}` : `Hide ${title.toLowerCase()}`}
-            className="-mr-1 inline-flex h-6 w-6 items-center justify-center rounded-sm text-fg-subtle hover:bg-surface-2 hover:text-fg touch:h-10 touch:w-10"
+            className="-mr-1 inline-flex h-6 w-6 items-center justify-center rounded-sm text-fg-subtle hover:bg-surface-2 hover:text-fg"
           >
             {collapsed ? <ChevronUpIcon size={14} aria-hidden /> : <ChevronDownIcon size={14} aria-hidden />}
           </button>

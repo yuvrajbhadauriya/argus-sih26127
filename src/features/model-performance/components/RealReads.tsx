@@ -26,7 +26,7 @@ function GoldenSample({ golden }: { golden: GoldenResults }) {
         <p className="text-xs text-fg-muted">
           A fixed random sample (same plates on every visit), not picked by result: {fmtInt(wrongShown)} of these {fmtInt(sample.length)} are wrong, against{' '}
           {fmtInt(wrongAll)} of {fmtInt(golden.items.length)} wrong in the whole set. Tap a plate for detail.{' '}
-          <Link to="/accuracy" className="font-medium text-primary hover:underline touch:inline-block touch:py-2.5 touch:-my-2.5">See every plate and every mistake on Accuracy Proof</Link>.
+          <Link to="/accuracy" className="font-medium text-primary hover:underline">See every plate and every mistake on Accuracy Proof</Link>.
         </p>
       </div>
       {sample.length ? (

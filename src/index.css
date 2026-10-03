@@ -10,14 +10,6 @@
 
 @custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
 
-/* `touch:` = a finger-driven or phone-sized screen (coarse pointer OR < 768px).
-   Never matches a desktop with a mouse, so desktop sizes stay untouched. */
-@custom-variant touch {
-  @media (pointer: coarse), (max-width: 767px) {
-    @slot;
-  }
-}
-
 :root {
   color-scheme: light;
   --canvas: #F4F6F9;
@@ -220,38 +212,6 @@ body {
 
 .tabular { font-variant-numeric: tabular-nums; }
 
-/* ── Touch / phone ergonomics ──
-   Interactive controls get a >= 40px hit area and inputs a 16px font (stops
-   iOS Safari zooming on focus). Scoped to coarse pointers / < 768px so the
-   desktop density is unchanged. min-* only: components keep their own sizing
-   and merely grow when they are smaller than a finger. */
-@media (pointer: coarse), (max-width: 767px) {
-  :where(button, [role='button'], [role='tab'], [role='menuitem'], [role='radio'], summary, select):not(.leaflet-container *) {
-    min-height: 40px;
-  }
-  :where(input:not([type='checkbox'], [type='radio'], [type='range'], [type='hidden']), textarea):not(.leaflet-container *) {
-    min-height: 40px;
-  }
-  input[type='range'] {
-    min-height: 40px;
-  }
-  input:not([type='checkbox'], [type='radio'], [type='range'], [type='hidden']),
-  select,
-  textarea {
-    font-size: 16px;
-  }
-  input[type='checkbox'],
-  input[type='radio'] {
-    width: 2rem;
-    height: 2rem;
-  }
-  /* Opt-in hit area for links and chips that are not buttons. */
-  .tap {
-    display: inline-flex;
-    align-items: center;
-    min-height: 40px;
-  }
-}
 
 @keyframes fade-in {
   from { opacity: 0; }

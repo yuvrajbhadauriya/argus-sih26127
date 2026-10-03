@@ -19,7 +19,7 @@ export function NotFoundPage() {
         action={
           <Link
             to="/"
-            className="inline-flex h-8 touch:h-10 items-center gap-1.5 rounded-md border border-transparent bg-primary-solid px-3 text-xs font-semibold text-on-primary hover:bg-primary-solid-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-transparent bg-primary-solid px-3 text-xs font-semibold text-on-primary hover:bg-primary-solid-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
           >
             <MapIcon size={14} strokeWidth={1.75} aria-hidden="true" />
             Back to Live Map

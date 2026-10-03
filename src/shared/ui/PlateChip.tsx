@@ -52,7 +52,7 @@ export function PlateChip({ plate, size = 'sm', variant = 'private', flag = null
       {strip && (
         <span
           aria-hidden
-          className={cn('touch:hidden flex shrink-0 items-center justify-center self-stretch font-sans font-bold leading-none', s.strip, s.stripText)}
+          className={cn('flex shrink-0 items-center justify-center self-stretch font-sans font-bold leading-none', s.strip, s.stripText)}
           style={{ backgroundColor: PLATE_COLORS.strip, color: PLATE_COLORS.stripFg }}
         >
           <span style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>IND</span>
@@ -64,7 +64,7 @@ export function PlateChip({ plate, size = 'sm', variant = 'private', flag = null
   );
 
   const cls = cn(
-    'relative inline-flex shrink-0 items-stretch overflow-hidden rounded-[3px] border align-middle font-mono font-bold uppercase leading-none tracking-[0.06em] tabular-nums',
+    'inline-flex shrink-0 items-stretch overflow-hidden rounded-[3px] border align-middle font-mono font-bold uppercase leading-none tracking-[0.06em] tabular-nums',
     'dark:ring-1 dark:ring-line-strong',
     flag && FLAG_RING[flag],
     (onClick || to) && 'cursor-pointer transition-opacity hover:opacity-85',

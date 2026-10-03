@@ -187,22 +187,6 @@ export function DetectionsPage() {
             rowKey={(d) => d.event_id}
             loading={loading}
             maxHeight="calc(100dvh - 300px)"
-            renderCard={(d) => ({
-              body: (
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between gap-3">
-                    <PlateChip plate={d.plate_text_raw} size="xs" flag={watchlist.has(plateKey(d.plate_text_raw)) ? 'watchlist' : null} />
-                    <ConfidenceBar value={d.confidence_score} />
-                  </div>
-                  <div className="flex min-w-0 items-center gap-2 text-xs text-fg-muted">
-                    <span className="shrink-0 font-mono tabular-nums">{formatFrameTime(d.timestamp)}</span>
-                    {cameraCode(d.camera_id) && <span className="shrink-0 font-mono font-medium">{cameraCode(d.camera_id)}</span>}
-                    <span className="truncate">{cameraName(d.camera_id)}</span>
-                  </div>
-                </div>
-              ),
-              actions: <IconButton size="sm" label={`Trace route of ${d.plate_text_raw}`} icon={<RouteIcon size={16} strokeWidth={1.75} />} onClick={() => trace(d.plate_text_raw)} />,
-            })}
             pageSize={50}
             onRowClick={setSelected}
             selectedKey={selected?.event_id ?? null}

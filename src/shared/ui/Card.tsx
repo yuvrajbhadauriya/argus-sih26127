@@ -94,13 +94,13 @@ export function Panel({ title, subtitle, icon, actions, children, footer, flush 
       className={cn('flex min-w-0 flex-col overflow-hidden rounded-md border border-line bg-surface', scroll && 'min-h-0', className)}
     >
       {hasHeader && (
-        <header className="flex min-h-11 shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-line px-4 max-md:py-1.5">
-          <div className="flex min-w-0 max-w-full items-center gap-2">
+        <header className="flex h-11 shrink-0 items-center justify-between gap-3 border-b border-line px-4">
+          <div className="flex min-w-0 items-center gap-2">
             {icon && <span className="inline-flex shrink-0 text-fg-subtle [&>svg]:h-4 [&>svg]:w-4" aria-hidden>{icon}</span>}
             {title != null && <h2 className="truncate text-[13px] font-semibold text-fg">{title}</h2>}
             {subtitle != null && <span className="truncate text-xs text-fg-muted">{subtitle}</span>}
           </div>
-          {actions && <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">{actions}</div>}
+          {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
         </header>
       )}
       <div className={cn(!flush && 'p-4', scroll ? 'min-h-0 flex-1 overflow-y-auto' : 'flex-1', bodyClassName)}>{children}</div>

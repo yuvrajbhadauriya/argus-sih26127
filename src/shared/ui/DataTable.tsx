@@ -5,10 +5,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { ArrowDownIcon, ArrowUpIcon, ChevronLeftIcon, ChevronRightIcon, ChevronsUpDownIcon } from 'lucide-react';
 import { cn } from '@/shared/lib/cn';
-import { useIsPhone } from '@/shared/lib/useMediaQuery';
-import { useScrollFade } from '@/shared/lib/useScrollFade';
 import { IconButton } from './Button';
-import { CardList, type CardRowContent } from './CardList';
 import { Skeleton } from './Skeleton';
 
 export interface Column<T> {
@@ -37,8 +34,6 @@ export interface DataTableProps<T> {
   initialSort?: { key: string; dir: 'asc' | 'desc' };
   pageSize?: number;
   rowTone?: (row: T) => 'danger' | 'warning' | null;
-  /** Phones (< 768px): render each row as a compact card instead of a table row. */
-  renderCard?: (row: T, index: number) => CardRowContent;
   className?: string;
 }
 
@@ -64,12 +59,8 @@ export function DataTable<T>({
   initialSort,
   pageSize,
   rowTone,
-  renderCard,
   className,
 }: DataTableProps<T>) {
-  const phone = useIsPhone();
-  const { attach: fadeRef, style: fadeStyle } = useScrollFade<HTMLDivElement>();
-  const asCards = phone && !!renderCard && !loading;
   const [sort, setSort] = useState<{ key: string; dir: 'asc' | 'desc' } | null>(initialSort ?? null);
   const [page, setPage] = useState(0);
 
@@ -100,19 +91,7 @@ export function DataTable<T>({
 
   return (
     <div className={cn('flex min-w-0 flex-col', className)}>
-      {asCards && visible.length > 0 ? (
-        <CardList
-          label={caption}
-          rows={visible}
-          rowKey={rowKey}
-          render={(row, i) => renderCard!(row, safePage * (pageSize ?? 0) + i)}
-          onRowClick={onRowClick}
-          selectedKey={selectedKey}
-          rowTone={rowTone}
-          style={maxHeight ? { maxHeight } : undefined}
-        />
-      ) : (
-      <div ref={fadeRef} className="min-w-0 overflow-auto" style={{ ...(maxHeight ? { maxHeight } : null), ...fadeStyle }}>
+      <div className="min-w-0 overflow-auto" style={maxHeight ? { maxHeight } : undefined}>
         <table className="w-full border-collapse text-[13px] text-fg">
           {caption && <caption className="sr-only">{caption}</caption>}
           <thead className={cn(stickyHeader && 'sticky top-0 z-[1]')}>
@@ -227,9 +206,8 @@ export function DataTable<T>({
           </tbody>
         </table>
       </div>
-      )}
       {pageSize && !loading && sorted.length > pageSize && (
-        <div className="flex min-h-10 shrink-0 items-center justify-end gap-2 border-t border-line px-3 text-xs text-fg-muted">
+        <div className="flex h-10 shrink-0 items-center justify-end gap-2 border-t border-line px-3 text-xs text-fg-muted">
           <span className="tabular-nums">
             {safePage * pageSize + 1}–{Math.min(sorted.length, (safePage + 1) * pageSize)} of {sorted.length}
           </span>

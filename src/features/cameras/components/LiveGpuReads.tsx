@@ -21,7 +21,7 @@ const MIN_PCT = Math.round(DISPLAY_READ_MIN_CONFIDENCE * 100);
 
 function Thumb({ src, alt, className }: { src: string | null | undefined; alt: string; className: string }) {
   if (!src) {
-    return <span aria-hidden="true" className={`${className} flex items-center justify-center bg-surface-2 text-[9px] max-lg:text-2xs text-fg-subtle`}>no crop</span>;
+    return <span aria-hidden="true" className={`${className} flex items-center justify-center bg-surface-2 text-[9px] text-fg-subtle`}>no crop</span>;
   }
   return <img src={src} alt={alt} className={`${className} bg-surface-2 object-contain`} draggable={false} />;
 }

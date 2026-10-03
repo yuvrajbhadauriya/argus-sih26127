@@ -112,7 +112,7 @@ export function CropImage({
           className={cn('max-h-full max-w-full object-contain', imgClassName)}
         />
       ) : src === null ? (
-        <span className="flex flex-col items-center gap-1 text-[10px] max-lg:text-2xs text-white/45" role="img" aria-label="Image unavailable">
+        <span className="flex flex-col items-center gap-1 text-[10px] text-white/45" role="img" aria-label="Image unavailable">
           <ImageOffIcon size={16} aria-hidden />
           <span aria-hidden>image unavailable</span>
         </span>
