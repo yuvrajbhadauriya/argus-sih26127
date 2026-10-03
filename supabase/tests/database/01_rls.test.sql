@@ -4,7 +4,7 @@ BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET LOCAL search_path = public, extensions;
 
-SELECT plan(29);
+SELECT plan(33);
 
 -- ── Fixtures (as the migration owner) ────────────────────────────────────
 INSERT INTO public.cameras (id, name, code, lat, lng, zone, direction, status, video_url)
@@ -115,6 +115,25 @@ RESET ROLE;
 -- ── service_role (pipeline) bypasses RLS ─────────────────────────────────
 SET LOCAL ROLE service_role;
 SELECT lives_ok($$SELECT public.purge_old_detections(36500)$$, 'service_role can run the retention purge');
+RESET ROLE;
+
+-- ── Live frame queue (20261003000200): only service_role touches it ──────
+SELECT ok(
+  NOT has_function_privilege('anon', 'public.enqueue_detect_job(text, text, integer, integer, text)', 'EXECUTE')
+  AND NOT has_function_privilege('authenticated', 'public.enqueue_detect_job(text, text, integer, integer, text)', 'EXECUTE'),
+  'anon/authenticated cannot enqueue a detect job');
+SELECT ok(
+  NOT has_function_privilege('anon', 'public.claim_detect_jobs(integer)', 'EXECUTE')
+  AND NOT has_function_privilege('authenticated', 'public.claim_detect_jobs(integer)', 'EXECUTE'),
+  'anon/authenticated cannot claim detect jobs');
+SELECT ok(
+  NOT has_table_privilege('anon', 'public.detect_jobs', 'SELECT')
+  AND NOT has_table_privilege('authenticated', 'public.detect_jobs', 'SELECT'),
+  'anon/authenticated cannot read detect_jobs');
+SET LOCAL ROLE service_role;
+SELECT throws_ok(
+  $$SELECT public.enqueue_detect_job('SC-01', 'tiles=2x3', 1, 1, 'x')$$,
+  'PT503', NULL, 'enqueue refuses while no GPU worker has checked in');
 RESET ROLE;
 
 SELECT * FROM finish();

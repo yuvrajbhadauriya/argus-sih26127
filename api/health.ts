@@ -7,10 +7,15 @@
 // sent). Any HTTP response counts as "reachable"; `model_ok` is true only for
 // a 2xx whose body does not say ok:false / model_loaded:false. engine,
 // model_version, model_loaded and gpu_busy are passed through when reported.
+//
+// Without DETECTION_API_* but with Supabase (the hosted site), `via: "queue"`:
+// healthy means the worker on the GPU box has checked in within 30 s.
 // ═══════════════════════════════════════════════════════════════════════
 
 import { buildHealthUrl, readModelApiConfig } from './_lib/modelAdapter.js';
 import { errorResponse, json } from './_lib/http.js';
+import { QueueError, readWorkerStatus } from './_lib/detectQueue.js';
+import { readAdminConfig, SupabaseAdmin } from './_lib/supabaseAdmin.js';
 
 type Env = Record<string, string | undefined>;
 const PROBE_TIMEOUT_MS = 5000;
@@ -26,6 +31,10 @@ export interface HealthBody {
   model_version?: string | null;
   model_loaded?: boolean | null;
   gpu_busy?: boolean | null;
+  /** 'queue' when the check is about the GPU worker behind the Supabase queue. */
+  via?: 'queue';
+  worker_version?: string | null;
+  worker_seen_seconds_ago?: number | null;
   error?: string;
 }
 
@@ -40,6 +49,8 @@ export async function handleHealth(
   const doFetch = deps.fetch ?? fetch;
   const cfg = readModelApiConfig(env);
   if (!cfg) {
+    const adminCfg = readAdminConfig(env);
+    if (adminCfg) return queueHealth(new SupabaseAdmin(adminCfg, doFetch));
     const body: HealthBody = {
       ok: false, configured: false, reachable: null, model_ok: null, upstream_status: null, latency_ms: null,
       error: 'Model API not configured here (DETECTION_API_URL / DETECTION_API_KEY unset) — it is LAN/VPN-only',
@@ -79,6 +90,27 @@ export async function handleHealth(
       error: timedOut ? `Model API did not answer within ${PROBE_TIMEOUT_MS} ms` : 'Model API is unreachable',
     };
     return json(body, timedOut ? 504 : 502);
+  }
+}
+
+/** Hosted site: is the GPU worker behind the queue alive? */
+async function queueHealth(admin: SupabaseAdmin): Promise<Response> {
+  const started = performance.now();
+  try {
+    const w = await readWorkerStatus(admin);
+    const body: HealthBody = {
+      ok: w.online, configured: true, reachable: w.online, model_ok: w.online, upstream_status: null,
+      latency_ms: Math.round(performance.now() - started),
+      via: 'queue', worker_version: w.version, worker_seen_seconds_ago: w.seenSecondsAgo,
+      ...(w.online ? {} : { error: 'The GPU worker has not checked in for 30 s' }),
+    };
+    return json(body, w.online ? 200 : 503);
+  } catch (err) {
+    const body: HealthBody = {
+      ok: false, configured: true, reachable: null, model_ok: null, upstream_status: null, latency_ms: null, via: 'queue',
+      error: err instanceof QueueError ? err.message : 'The detection queue is unreachable.',
+    };
+    return json(body, err instanceof QueueError && err.status === 503 ? 503 : 502);
   }
 }
 

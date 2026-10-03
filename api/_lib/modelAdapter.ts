@@ -99,6 +99,11 @@ export const DEFAULT_QUERY = 'tiles=2x3&roi_top=0.33&min_conf=60';
 
 type Env = Record<string, string | undefined>;
 
+/** The /v1/frame query: DETECTION_API_QUERY, else the tiled default. Shared by the direct and the queued path. */
+export function readFrameQuery(env: Env = process.env): string {
+  return env.DETECTION_API_QUERY === undefined ? DEFAULT_QUERY : env.DETECTION_API_QUERY.trim().replace(/^\?/, '');
+}
+
 /**
  * Reads the model API config from env. Returns null when URL or key is missing.
  * DETECTION_API_URL is the frame endpoint; with only ANPR_API_BASE set,
@@ -123,7 +128,7 @@ export function readModelApiConfig(env: Env = process.env): ModelApiConfig | nul
     timeoutMs: Number.isFinite(timeout) && timeout > 0 ? timeout : DEFAULT_TIMEOUT_MS,
     requestFormat: fmt === 'json' || fmt === 'multipart' ? fmt : 'raw',
     imageField: env.DETECTION_API_IMAGE_FIELD?.trim() || 'image',
-    query: env.DETECTION_API_QUERY === undefined ? DEFAULT_QUERY : env.DETECTION_API_QUERY.trim().replace(/^\?/, ''),
+    query: readFrameQuery(env),
   };
 }
 

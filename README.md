@@ -41,10 +41,11 @@ sign-in uses Supabase Auth and new alerts arrive through a 10 s poll of the serv
 * **Simulated:** the vehicles travelling *between* cameras (2,600 plates, 3,471 journeys, 8,523
   reads on 29 Sep 2026) and the watchlist/anomaly cases — marked with the *Simulated city network*
   badge and the top-bar data-source pill.
-* **Live ANPR (needs the model API reachable):** on the Cameras page the selected feed is analysed in
-  real time by the GPU model — frames go to `/api/detect`, and each read is shown with the real vehicle
-  and plate crops cut from the analysed frame plus the OCR text. Without a reachable model API (e.g. the
-  Vercel deployment) the panel shows the recorded reads of the clip and says so.
+* **Live ANPR (needs the GPU box):** on the Cameras page the selected feed is analysed in real time by
+  the GPU model — frames go to `/api/detect`, and each read is shown with the real vehicle and plate crops
+  cut from the analysed frame plus the OCR text. Locally that is a direct call to the model API; on the
+  hosted site the frames travel through a private Supabase queue to a worker on the GPU box (outbound
+  only, nothing exposed). Without a live GPU the panel shows the recorded reads of the clip.
 * **Needs the model API:** plate reads from the clips themselves and the > 90 % accuracy figure
   (Model Performance page shows a sample run until `pipeline/eval/evaluate.py` is run against the
   trained model).

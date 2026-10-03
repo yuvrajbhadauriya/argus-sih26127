@@ -20,6 +20,7 @@ is duplicated or not 14 digits.
 | `20261001000100_rls.sql` | **RLS, grants, audit triggers, `purge_old_detections()`.** |
 | `20261001000200_mumbai_camera_network.sql` | Mumbai camera registry (cam-001..cam-008, new clips); retires cam-009. Sorts after the Delhi seed, so it wins on a fresh reset. |
 | `20261001000300_alerts_realtime.sql` | Adds **`alerts` (only)** to the `supabase_realtime` publication, so the dashboard gets new alerts instantly. `detections` is deliberately not published (high volume). No-op on plain Postgres. |
+| `20261003000200_detect_jobs.sql` | **Live frame queue** for the hosted site: private tables `detect_jobs` (frames waiting for the GPU, cleared when read, purged after 2 min) and `detect_worker` (worker heartbeat) plus the functions `enqueue_detect_job`, `claim_detect_jobs`, `detect_worker_beat`, `purge_detect_jobs`, `detect_worker_status`. `service_role` only (the `/api/detect` function and the worker on the GPU box); `enqueue_detect_job` answers `PT503` when no worker checked in within 30 s and `PT429` when 8 frames are already waiting. See `pipeline/detect/README.md`. |
 
 The `20261001*` files are idempotent and don't depend on the camera-network
 files, so you can apply them to any project built from the older migrations.
@@ -86,6 +87,8 @@ Browser ─► /api/data/*     Vercel function (api/_lib/dataRoutes.ts), service
                            column-limited answers, per-IP rate limit, s-maxage CDN cache
         ─► /api/media/sign 1-hour signed URLs for allowlisted objects (videos, golden)
         ─► Supabase Auth   sign-in only
+        ─► /api/detect     live frames → private detect_jobs queue → worker on the GPU box
+                           (the worker dials out; the model API is never exposed)
 ```
 
 RLS stays **enabled and forced** on every table in `public`, and no policy
@@ -212,7 +215,7 @@ select tablename, policyname, roles, cmd from pg_policies where schemaname = 'pu
 URL=https://<project-ref>.supabase.co; ANON=<anon key>
 H=(-H "apikey: $ANON" -H "Authorization: Bearer $ANON")
 
-for t in cameras detections alerts blacklist_entries vehicles trajectories model_status audit_logs; do
+for t in cameras detections alerts blacklist_entries vehicles trajectories model_status audit_logs detect_jobs detect_worker; do
   curl -s -o /dev/null -w "$t %{http_code}\n" "$URL/rest/v1/$t?select=*&limit=1" "${H[@]}"   # 401 (42501)
 done
 curl -s -o /dev/null -w "%{http_code}\n" "$URL/storage/v1/object/public/videos/mumbai/720p/<clip>.mp4"  # 400

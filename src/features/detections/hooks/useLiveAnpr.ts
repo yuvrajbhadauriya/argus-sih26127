@@ -9,9 +9,10 @@
 //
 // The GPU is shared (one request at a time): requests never overlap, start at
 // most every `intervalMs`, and only run while the video is actually playing in
-// a visible tab. When the model API cannot be reached (e.g. the deployed site —
-// the API is LAN/VPN-only) the status is 'unavailable' and the hook keeps
-// retrying slowly, so it recovers by itself when the GPU box comes back.
+// a visible tab. When the GPU cannot be reached (the model API is LAN/VPN-only
+// and, on the hosted site, the GPU worker behind the Supabase queue is down) the
+// status is 'unavailable' and the hook keeps retrying slowly, so it recovers by
+// itself when the GPU box comes back.
 // ═══════════════════════════════════════════════════
 
 import { useEffect, useState } from 'react';

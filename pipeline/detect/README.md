@@ -11,7 +11,9 @@ README and the DPDP Act it must never be exposed publicly — no public tunnels.
 
 ```
 Browser ─POST /api/detect (JPEG)─▶ api/detect.ts ─raw JPEG + X-API-Key─▶ <base>/v1/frame?tiles=2x3…
-             (npm run dev: mounted by api/_lib/viteDevBridge.ts · Vercel: 503, model API is LAN/VPN-only)
+             (npm run dev: mounted by api/_lib/viteDevBridge.ts, direct to the model API on the team network)
+Hosted: api/detect.ts ─▶ Supabase detect_jobs ◀─ pipeline/gpu_box/detect_worker.py (GPU box, outbound only)
+             the worker posts the frame to the box's own /v1/frame and writes the raw answer back
 Batch:  run_remote_detection.py ─▶ <base>/v1/video (whole clip, one event per vehicle)
                                  ─▶ <base>/v1/frame (frames at ~5 fps, overlay boxes)
 ```
@@ -101,14 +103,14 @@ the confidence in the *Live plate reads* panel. Details:
   video is playing in a visible tab (`useLiveAnpr.ts`). Only the selected feed is analysed, not the wall.
 - One row per vehicle: repeat sightings of a plate (one character of OCR jitter allowed) within 20 s
   are merged and the most confident crop is kept (`liveAnpr.ts`).
-- When `/api/detect` cannot reach the model (503/502/network — e.g. the Vercel deployment) the panel
-  falls back to the **recorded reads** of the clip with a visible note, and retries slowly
-  (60 s when it is simply not configured), so it recovers by itself when the GPU box is reachable.
+- When `/api/detect` cannot reach the model (503/502/network — e.g. the GPU worker is down) the panel
+  falls back to the **recorded reads** of the clip (its footer says they are replayed recorded reads)
+  and retries slowly (60 s when it is simply not available), so it recovers by itself.
 - Crops are cut from the 720p stream the browser plays. Plates that are tiny in that frame stay
   small; the offline pipeline (below) analyses the 1080p originals.
 
-To demo it you must run the dashboard where the model API is reachable (`npm run dev` on the team
-network / Tailscale, see below) — a Vercel deployment cannot reach it.
+It runs in two places: `npm run dev` on the team network / Tailscale (direct to the model API, see
+below), and the **hosted site**, through the Supabase queue and the GPU worker (next section).
 
 ## Local dev: Live detect
 
@@ -126,9 +128,28 @@ curl -s localhost:5173/api/health     # {"ok":true,"engine":"lpu_on_gpu",…}
 ```
 
 **Vercel:** functions run in Vercel's cloud and cannot reach a Tailscale-only
-host, so the variables stay unset there; `/api/detect` answers 503 and the
-Live plate reads panel falls back to the recorded reads ("Live GPU model not reachable from here"). Only set them on
-Vercel if the team runs a private, authenticated tunnel it controls.
+host, so `DETECTION_API_*` stay unset there. `/api/detect` then uses the Supabase queue below.
+
+## Hosted site: live GPU reads through the Supabase queue
+
+Nothing is opened to the internet. The GPU box dials **out** to Supabase:
+
+```
+Browser ─▶ /api/detect (Vercel) ─ enqueue_detect_job() ─▶ public.detect_jobs (private, RLS forced)
+                  ▲ polls the row (~150 ms)                         ▲ claim_detect_jobs()
+                  └─ answer (same JSON as the direct path)          │
+GPU box:  detect_worker.py ── POST the frame to its own /v1/frame ──┘ then PATCH the row with the raw answer
+```
+
+- Needs `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` on Vercel (already set for `/api/data`), the migration
+  `20261003000200_detect_jobs.sql`, and the worker running on the GPU box (`pipeline/gpu_box/`).
+- `/api/health` reports `via: "queue"` and whether the worker has checked in within 30 s. No worker →
+  503 (the page keeps showing recorded reads and re-checks every 60 s).
+- Safety valves: one frame is at most 2 MB (JPEG only); at most 8 frames wait in the queue (429 beyond);
+  60 requests / 10 s per address; a frame older than 8 s is never read; the frame is cleared from the row
+  as soon as the model has answered and rows are deleted after 2 minutes.
+- Latency is about a second per frame (database round trips + ~0.2 s of GPU). Crops are still cut in the browser
+  from the very frame that was analysed.
 
 ## Batch pipeline → `public/detections`
 

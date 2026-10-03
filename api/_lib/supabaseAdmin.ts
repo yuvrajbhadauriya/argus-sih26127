@@ -102,11 +102,30 @@ export class SupabaseAdmin {
     return body;
   }
 
-  /** GET /rest/v1/<table>?<params>. Always an array. */
-  async select<T = Record<string, unknown>>(table: string, params: Record<string, string> | URLSearchParams): Promise<T[]> {
+  /** GET /rest/v1/<table>?<params>. Always an array. `timeoutMs` shortens the default 8 s. */
+  async select<T = Record<string, unknown>>(
+    table: string,
+    params: Record<string, string> | URLSearchParams,
+    opts: { timeoutMs?: number } = {},
+  ): Promise<T[]> {
     const qs = params instanceof URLSearchParams ? params : new URLSearchParams(params);
-    const body = await this.request(`/rest/v1/${encodeURIComponent(table)}?${qs.toString()}`, { method: 'GET', headers: this.headers() });
+    const body = await this.request(`/rest/v1/${encodeURIComponent(table)}?${qs.toString()}`, {
+      method: 'GET',
+      headers: this.headers(),
+      ...(opts.timeoutMs ? { signal: AbortSignal.timeout(opts.timeoutMs) } : {}),
+    });
     return Array.isArray(body) ? (body as T[]) : [];
+  }
+
+  /** POST /rest/v1/rpc/<fn> with named arguments; returns whatever the function returns. */
+  async rpc<T = unknown>(fn: string, args: Record<string, unknown> = {}, opts: { timeoutMs?: number } = {}): Promise<T> {
+    const body = await this.request(`/rest/v1/rpc/${encodeURIComponent(fn)}`, {
+      method: 'POST',
+      headers: this.headers({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(args),
+      ...(opts.timeoutMs ? { signal: AbortSignal.timeout(opts.timeoutMs) } : {}),
+    });
+    return body as T;
   }
 
   /** INSERT one row; returns the stored row. */
