@@ -8,8 +8,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CarIcon, CctvIcon, GaugeIcon, LocateFixedIcon, ScanLineIcon, ScanTextIcon, SirenIcon, TagIcon, TargetIcon } from 'lucide-react';
 import type { Camera } from '@/types/camera';
 import { useCameras } from '@/features/cameras/hooks/useCameras';
-import type { LiveFeedEntry } from '@/mocks/fixtures/mockLiveFeed';
-import { useLiveReads } from '@/features/detections/hooks/useLiveReads';
+import { useCameraEventsDocs, useNowSeconds } from '@/features/detections/hooks/useLiveReads';
 import { useWatchlistIndex } from '@/features/detections/hooks/useWatchlistKeys';
 import { plateKey } from '@/features/detections/lib/log';
 import { useGoldenResults } from '@/features/golden-set/api';
@@ -33,6 +32,7 @@ import { OperationsRail } from '../components/OperationsRail';
 import { useLiveMapData } from '../hooks/useLiveMapData';
 import { alertHotspots, topOpenAlerts } from '../lib/alerts';
 import { istHour } from '../lib/time';
+import { isGoldenEntry, reelRows, type FeedEntry, type FeedFilter } from '../lib/reel';
 
 const nf = new Intl.NumberFormat('en-IN');
 
@@ -88,13 +88,17 @@ export function LiveMapPage() {
   const alertsSimulated = (alerts.data ?? []).some((a) => (a as { simulated?: boolean }).simulated);
   const hotspots = useMemo(() => (showHotspots ? alertHotspots(alerts.data ?? []) : []), [alerts.data, showHotspots]);
   const replay = useReplayView(12);
-  // Real model reads on the camera clips, streaming on each camera's live clock.
-  const { reads: liveReads, now } = useLiveReads(null, { limit: 40 });
+  // The Live feed replays RECORDED reads of all cameras' clips (and golden-set plates) in a seeded, interleaved order.
+  const [feedFilter, setFeedFilter] = useState<FeedFilter>('all');
+  const { docs } = useCameraEventsDocs(null);
+  const now = useNowSeconds(true);
   const watch = useWatchlistIndex();
   const crops = useReadCrops();
-  const realFeed = useMemo<LiveFeedEntry[]>(() => {
+  const goldenItems = golden.data?.items;
+  const realFeed = useMemo<FeedEntry[]>(() => {
     const names = new Map(cameras.map((c) => [c.code, c.name]));
-    return liveReads.map((r) => {
+    return reelRows(docs, now, { filter: feedFilter, limit: 40, goldenCount: goldenItems?.length ?? 0 }).map((r): FeedEntry => {
+      if (r.kind === 'golden') return { kind: 'golden', id: r.key, item: goldenItems![r.itemIndex] };
       const crop = crops.get(eventKey(r.camera_code, r.event.tracked_vehicle_id, r.event.time_sec));
       return {
         id: r.key,
@@ -107,13 +111,14 @@ export function LiveMapPage() {
         ...(crop ? { vehicleCrop: crop.vehicle ?? undefined, plateCrop: crop.plate } : {}),
       };
     });
-  }, [liveReads, now, cameras, watch, crops]);
+  }, [docs, now, cameras, watch, crops, feedFilter, goldenItems]);
   const feed = replay.feed ?? realFeed;
   // Marker popups: each camera's latest read (replay clock during a replay).
   const plates = useMemo(() => {
     const byCode = new Map(cameras.map((c) => [c.code, c.id]));
     const out: Record<string, string | undefined> = {};
     for (const f of [...feed].reverse()) {
+      if (isGoldenEntry(f)) continue;
       const id = byCode.get(f.cameraCode);
       if (id) out[id] = f.plate;
     }
@@ -269,6 +274,9 @@ export function LiveMapPage() {
         <OperationsRail
           className="min-h-[420px] lg:min-h-0"
           feed={feed}
+          golden={golden.data}
+          feedFilter={feedFilter}
+          onFeedFilter={setFeedFilter}
           replaying={replay.active}
           alerts={openAlerts.slice(0, 8)}
           alertCount={openAlerts.length}

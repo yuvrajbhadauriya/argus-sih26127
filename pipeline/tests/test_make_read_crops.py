@@ -121,8 +121,12 @@ def test_encode_thumb_downscales_but_never_upscales(monkeypatch):
 
 # ── run() ────────────────────────────────────────────────────────────
 class Clip:
+    size = (1920, 1080)
+
     def __init__(self, path):
         self.closed = False
+        self.path = path
+        self.width, self.height = Clip.size
 
     def frame_at(self, t):
         return np.zeros((1080, 1920, 3), np.uint8), int(round(t * 30))
@@ -132,7 +136,7 @@ class Clip:
 
 
 def _setup(tmp_path):
-    ev_dir, vid_dir, out = tmp_path / "det", tmp_path / "vid", tmp_path / "out"
+    ev_dir, vid_dir, out = tmp_path / "det", tmp_path / "videos_1080p", tmp_path / "out"
     ev_dir.mkdir(), vid_dir.mkdir()
     (vid_dir / "clip.mp4").write_bytes(b"x")
     good = _event(t=1.0, trk="trk_1")
@@ -141,7 +145,7 @@ def _setup(tmp_path):
     doc = {"clip": {"file": "clip.mp4", "width": 1920, "height": 1080}, "events": [good, other, weak]}
     (ev_dir / "events_VP-01.json").write_text(json.dumps(doc))
     (ev_dir / "events_SC-01.json").write_text(json.dumps(doc))
-    ns = argparse.Namespace(events_dir=str(ev_dir), videos_dir=str(vid_dir), out_dir=str(out), camera=None,
+    ns = argparse.Namespace(events_dir=str(ev_dir), video_dir=str(vid_dir), video=None, out_dir=str(out), camera=None,
                             dry_run=False, force=False, retry_skipped=False, save_every=10)
     return ns, out
 
@@ -201,7 +205,7 @@ def test_dry_run_touches_nothing_and_needs_no_api(tmp_path):
 def test_missing_clip_and_unconfigured_api(tmp_path, fake_jpeg):
     ns, out = _setup(tmp_path)
     assert M.run(ns, lambda: None, Clip, Writer(), lambda s: None) == 2
-    os.remove(os.path.join(ns.videos_dir, "clip.mp4"))
+    os.remove(os.path.join(ns.video_dir, "clip.mp4"))
     logs = []
     assert M.run(ns, _detector([]), Clip, Writer(), logs.append) == 1
     assert any("not found" in line for line in logs)
@@ -212,3 +216,40 @@ def test_camera_filter(tmp_path):
     assert [c for c, _ in M.find_events_files(ns.events_dir, ["SC-01"])] == ["SC-01"]
     ns.camera = ["ZZ-99"]
     assert M.run(ns, None, Clip, Writer(), lambda s: None) == 1
+
+
+def test_video_resolution_never_falls_back_to_web_renditions(tmp_path):
+    assert M.is_web_rendition("/x/public/videos-local/a.mp4") and M.is_web_rendition("/x/pipeline/data/videos_720p/a.mp4")
+    assert not M.is_web_rendition("/x/pipeline/data/videos_1080p/a.mp4")
+    path, why = M.resolve_video("VP-01", "a.mp4", str(tmp_path / "public" / "videos-local"), {})
+    assert path is None and "720p" in why
+    path, why = M.resolve_video("VP-01", "a.mp4", str(tmp_path), {})
+    assert path is None and "not found" in why
+    big = tmp_path / "kurla4k.mp4"
+    big.write_bytes(b"x")
+    assert M.resolve_video("KR-01", "a.mp4", str(tmp_path), {"KR-01": str(big)}) == (str(big), None)
+    assert M.parse_video_overrides(["KR-01=/a/b.mp4"]) == {"KR-01": "/a/b.mp4"}
+    with pytest.raises(SystemExit):
+        M.parse_video_overrides(["nonsense"])
+
+
+def test_run_refuses_a_rendition_smaller_than_the_analysis_one(tmp_path, fake_jpeg, monkeypatch):
+    ns, out = _setup(tmp_path)
+    ns.camera = ["VP-01"]
+    monkeypatch.setattr(Clip, "size", (1280, 720))
+    logs, calls = [], []
+    assert M.run(ns, _detector(calls), Clip, Writer(), logs.append) == 1
+    assert calls == [] and any("refused" in line for line in logs)
+    monkeypatch.setattr(Clip, "size", (3840, 2160))  # a 4K source is fine (boxes are rescaled)
+    assert M.run(ns, _detector(calls), Clip, Writer(), logs.append) == 0 and calls
+
+
+def test_run_refuses_a_web_rendition_directory(tmp_path, fake_jpeg):
+    ns, _ = _setup(tmp_path)
+    web = tmp_path / "videos-local"
+    web.mkdir()
+    (web / "clip.mp4").write_bytes(b"x")
+    ns.video_dir = str(web)
+    logs = []
+    assert M.run(ns, _detector([]), Clip, Writer(), logs.append) == 1
+    assert any("web (720p) rendition" in line for line in logs)

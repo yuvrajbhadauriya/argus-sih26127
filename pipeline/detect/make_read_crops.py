@@ -6,7 +6,10 @@ The Live Map feed replays the good reads of public/detections/events_<CAM>.json.
 Those events carry no crops and no plate box, so this script produces them:
 
   for every good-read event of every events_<CAM>.json
-    1. decode the clip frame at the event time (local clip, never a stock image),
+    1. decode the clip frame at the event time from the HIGHEST-resolution
+       rendition (pipeline/data/videos_1080p/<clip.file>, or a 4K source given
+       with --video CAM=PATH). Never the 720p web file: a rendition smaller than
+       the analysis rendition (events clip.width x clip.height) is refused,
     2. send that frame to the model API (/v1/frame, same query as the
        detection run) to get the plate box,
     3. cut the vehicle crop and the plate crop out of THAT frame with the same
@@ -41,12 +44,20 @@ remembered in the manifest (--retry-skipped asks the GPU again). The manifest
 is rewritten after every camera and every --save-every events.
 
 Config: DETECTION_API_URL / DETECTION_API_KEY ... exactly like run_remote_detection.py
-(env or repo-root .env). The clips: public/videos-local/<clip.file> (see
-pipeline/tools/link_local_videos.py), override with --videos-dir.
+(env or repo-root .env).
+
+Clips: --video-dir (default pipeline/data/videos_1080p) holds <clip.file> of each
+events file; --video CAM=PATH points one camera at another file (e.g. the 4K
+source in ~/Downloads). Event boxes refer to clip.width x clip.height; they are
+rescaled to the frame actually decoded, so a 4K source gives sharper crops.
+There is NO fallback: a missing file, a file under videos-local/ or videos_720p/,
+or a frame smaller than clip.width x clip.height is reported and its events are
+not processed.
 
 Usage:
     python3 pipeline/detect/make_read_crops.py --dry-run             # what would run, no GPU
     python3 pipeline/detect/make_read_crops.py --camera VP-01 --camera SC-01
+    python3 pipeline/detect/make_read_crops.py --camera KR-01 --video KR-01=~/Downloads/kurla.mp4
     python3 pipeline/detect/make_read_crops.py                       # everything
 """
 
@@ -70,16 +81,18 @@ if _PIPELINE not in sys.path:  # allow `python pipeline/detect/make_read_crops.p
 
 DEFAULT_EVENTS_DIR = os.path.join(_ROOT, "public", "detections")
 DEFAULT_OUT_DIR = os.path.join(DEFAULT_EVENTS_DIR, "crops")
-DEFAULT_VIDEOS = os.path.join(_ROOT, "public", "videos-local")
+DEFAULT_VIDEOS = os.path.join(_PIPELINE, "data", "videos_1080p")
+#: Web renditions: never a source for crops.
+WEB_RENDITION_DIRS = ("videos-local", "videos_720p", "720p")
 
 #: Same query as the detection run's per-frame pass (run_remote_detection.FRAME_QUERY).
 FRAME_QUERY = "tiles=2x3&roi_top=0.33&min_conf=0"
 #: Frames wider than this are downscaled before they are sent (the crops are cut from the full frame).
-SEND_MAX_WIDTH = 1280
+SEND_MAX_WIDTH = 1920
 SEND_JPEG_QUALITY = 85
 #: Thumbnails: at most this wide, never upscaled.
-CROP_MAX_WIDTH = 160
-CROP_JPEG_QUALITY = 80
+CROP_MAX_WIDTH = 256
+CROP_JPEG_QUALITY = 85
 #: A fallback match (plate text not equal) needs at least this overlap with the stored event box.
 MIN_IOU = 0.3
 MANIFEST_SCHEMA = 1
@@ -185,6 +198,8 @@ class ClipReader:
             raise FileNotFoundError(f"Cannot open video: {path}")
         self.fps = float(self.cap.get(cv2.CAP_PROP_FPS) or 30.0)
         self.frames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+        self.width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
+        self.height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
 
     def frame_at(self, time_sec: float) -> tuple[Any, int] | None:
         """(BGR frame, frame index) at ``time_sec``, or None when it cannot be decoded."""
@@ -197,6 +212,31 @@ class ClipReader:
 
     def close(self) -> None:
         self.cap.release()
+
+
+def is_web_rendition(path: str) -> bool:
+    parts = {p.lower() for p in os.path.normpath(os.path.abspath(path)).split(os.sep)}
+    return any(d in parts for d in WEB_RENDITION_DIRS)
+
+
+def resolve_video(cam: str, clip_file: str, video_dir: str, overrides: dict[str, str]) -> tuple[str | None, str | None]:
+    """(path, None) or (None, reason). Never falls back to another directory."""
+    path = os.path.expanduser(overrides[cam]) if cam in overrides else os.path.join(video_dir, clip_file)
+    if is_web_rendition(path):
+        return None, f"{path} is a web (720p) rendition - crops are cut from the 1080p/4K file only"
+    if not os.path.isfile(path):
+        return None, f"{path} not found (expected the high-resolution file; use --video-dir or --video {cam}=PATH)"
+    return path, None
+
+
+def parse_video_overrides(items: list[str] | None) -> dict[str, str]:
+    out = {}
+    for it in items or []:
+        cam, sep, path = it.partition("=")
+        if not sep or not cam or not path:
+            raise SystemExit(f"--video expects CAM=PATH, got '{it}'")
+        out[cam] = path
+    return out
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -254,6 +294,7 @@ def process_event(
     entry["plate_bbox"] = {k: round(v, 1) for k, v in pb.items()}
     entry["frame_time_sec"] = event["time_sec"]
     entry["frame_index"] = frame_index
+    entry["source_size"] = [fw, fh]  # resolution the crops were cut from
     return {"status": "ok", "entry": entry}
 
 
@@ -317,6 +358,7 @@ def run(
 ) -> int:
     """Returns 0 ok, 1 nothing found / nothing could be done, 2 model API not configured or unreachable."""
     files = find_events_files(args.events_dir, args.camera)
+    overrides = parse_video_overrides(getattr(args, "video", None))
     if not files:
         log(f"[!] No events_<CAM>.json found in {args.events_dir}" + (f" for {args.camera}" if args.camera else ""))
         return 1
@@ -358,12 +400,19 @@ def run(
             continue
         clip = doc.get("clip") or {}
         clip_size = (int(clip.get("width") or 0), int(clip.get("height") or 0))
-        video = os.path.join(args.videos_dir, clip.get("file", ""))
-        if not clip.get("file") or not os.path.exists(video) or min(clip_size) <= 0:
-            log(f"[!] {cam}: clip '{clip.get('file')}' not found in {args.videos_dir} - skipped (run pipeline/tools/link_local_videos.py)")
+        video, why = (None, "events file has no clip.file / clip size") if not clip.get("file") or min(clip_size) <= 0 \
+            else resolve_video(cam, clip["file"], args.video_dir, overrides)
+        if video is None:
+            log(f"[!] {cam}: {why} - skipped")
             failed += len(todo)
             continue
         reader = open_clip(video)
+        if reader.width < clip_size[0] or reader.height < clip_size[1]:
+            log(f"[!] {cam}: {video} is {reader.width}x{reader.height}, smaller than the analysis rendition "
+                f"{clip_size[0]}x{clip_size[1]} - refused (no crops from a downscaled file)")
+            reader.close()
+            failed += len(todo)
+            continue
         cam_dir = os.path.join(args.out_dir, cam)
         try:
             for i, (event, key) in enumerate(todo, 1):
@@ -430,7 +479,8 @@ def _make_remote_detect() -> Callable[[Any], dict] | None:
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description="Cut real vehicle + plate crops for the recorded ANPR reads (see module docstring).")
     ap.add_argument("--events-dir", default=DEFAULT_EVENTS_DIR, help="folder with events_<CAM>.json")
-    ap.add_argument("--videos-dir", default=DEFAULT_VIDEOS, help="folder with the clips (events' clip.file)")
+    ap.add_argument("--video-dir", default=DEFAULT_VIDEOS, help="folder with the 1080p renditions (events' clip.file); never the 720p files")
+    ap.add_argument("--video", action="append", metavar="CAM=PATH", help="use this file for one camera (e.g. a 4K source); repeatable")
     ap.add_argument("--out-dir", default=DEFAULT_OUT_DIR, help="where <CAM>/ and manifest.json go")
     ap.add_argument("--camera", action="append", help="only this camera code (repeatable)")
     ap.add_argument("--dry-run", action="store_true", help="list what would be done; no GPU, no clips, no writes")

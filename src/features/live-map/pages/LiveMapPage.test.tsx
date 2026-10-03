@@ -39,7 +39,7 @@ const cam = (over: Partial<Camera>): Camera => ({
 const SUMMARY = { simulated: true, stats: { vehicles: 2577, journeys: 1, sightings: 1, hop_speed_kmph: { mean: 22.3 }, sightings_per_hour: new Array(24).fill(321) } };
 
 // Fixture figures, deliberately not the real ones: the tile must show whatever the file says.
-const GOLDEN = { set: 'ocr_golden_v1', measured_at: '2026-09-30T22:17:01+05:30', overall: { n: 200, correct: 150, accuracy: 0.75 }, items: [{ key: 'a', gt: 'MH02AB1234', pred: 'MH02AB1234' }] };
+const GOLDEN = { set: 'ocr_golden_v1', measured_at: '2026-09-30T22:17:01+05:30', overall: { n: 200, correct: 150, accuracy: 0.75 }, items: [{ key: 'a', gt: 'MH02AB1234', pred: 'MH02AB1234', correct: true, confidence: 99 }, { key: 'b', gt: 'MH03CD5678', pred: 'MH03CD5679', correct: false, confidence: 80 }] };
 const CROPS = { crops: { 'JG-01_trk_3_3000': { vehicle: 'JG-01/JG-01_trk_3_3000_vehicle.jpg', plate: 'JG-01/JG-01_trk_3_3000_plate.jpg' } } };
 
 function stubFetch(over: Record<string, () => Response> = {}) {
@@ -194,6 +194,41 @@ describe('LiveMapPage', () => {
     renderAt('/');
     expect(await screen.findByText('Golden-set results unavailable')).toBeInTheDocument();
     expect(screen.queryByText('75.00%')).toBeNull();
+  });
+
+  it('mixes clearly separate golden-set rows into the feed and filters All / Cameras / Golden set', async () => {
+    renderAt('/');
+    await screen.findByText('1/2');
+    const list = await screen.findByRole('list', { name: 'Latest plate reads' });
+    const goldenRows = () => within(list).queryAllByLabelText(/^Golden set plate:/);
+    await waitFor(() => expect(goldenRows().length).toBeGreaterThan(0));
+    const row = goldenRows()[0];
+    expect(within(row).getByText('Golden set')).toBeInTheDocument();
+    expect(within(row).getByText('Read')).toBeInTheDocument();
+    expect(within(row).getByText('Truth')).toBeInTheDocument();
+    expect(within(row).getByRole('img', { name: /^(Correct|Wrong)$/ })).toBeInTheDocument();
+    expect(row.textContent).not.toMatch(/JG-01|Jogeshwari|ago|live/i);   // no camera, no live wording
+    expect(within(list).getAllByText('MH 02 GB 4920').length).toBeGreaterThan(0); // camera reads still there
+
+    await userEvent.click(screen.getByRole('button', { name: 'Feed: Cameras' }));
+    expect(goldenRows()).toHaveLength(0);
+    expect(within(list).getAllByText('MH 02 GB 4920').length).toBeGreaterThan(0);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Feed: Golden set' }));
+    await waitFor(() => expect(goldenRows().length).toBeGreaterThan(0));
+    expect(within(list).queryByText('MH 02 GB 4920')).toBeNull();
+    expect(screen.queryByText('Real ANPR reads')).toBeNull();
+  });
+
+  it('marks a wrong golden-set read, highlighting the ground truth next to it', async () => {
+    renderAt('/');
+    await screen.findByText('1/2');
+    await userEvent.click(await screen.findByRole('button', { name: 'Feed: Golden set' }));
+    const list = await screen.findByRole('list', { name: 'Latest plate reads' });
+    await waitFor(() => expect(within(list).queryAllByLabelText(/ground truth MH03CD5678, wrong/).length).toBeGreaterThan(0));
+    const row = within(list).getAllByLabelText(/ground truth MH03CD5678, wrong/)[0];
+    expect(within(row).getByRole('img', { name: 'Model read MH03CD5679' })).toBeInTheDocument();
+    expect(within(row).getByRole('img', { name: 'Wrong' })).toBeInTheDocument();
   });
 
   it('popup links open the feed', async () => {
