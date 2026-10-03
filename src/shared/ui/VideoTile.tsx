@@ -20,6 +20,8 @@ export interface VideoTileProps {
   selected?: boolean;
   onSelect?: () => void;
   onRetry?: () => void;
+  /** Second line of the offline state (default: "<code> stream unavailable"). */
+  offlineDetail?: string;
   clock?: boolean;
   topRight?: ReactNode;
   footer?: ReactNode;
@@ -52,6 +54,7 @@ export function VideoTile({
   selected = false,
   onSelect,
   onRetry,
+  offlineDetail,
   clock = false,
   topRight,
   footer,
@@ -84,7 +87,7 @@ export function VideoTile({
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-1 bg-surface-2 px-3 text-center">
           <VideoOffIcon size={24} className="text-danger" aria-hidden />
           <p className="mt-1 text-[13px] font-semibold text-fg">Feed offline</p>
-          <p className="text-xs text-fg-muted">{code} stream unavailable</p>
+          <p className="text-xs text-fg-muted">{offlineDetail ?? `${code} stream unavailable`}</p>
           {onRetry && (
             <Button
               size="sm"

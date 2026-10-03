@@ -14,6 +14,7 @@ import { isSupabaseConfigured } from '@/lib/supabase/client';
 import { apiRows } from '@/lib/dataApi';
 import { reportLiveError } from '@/lib/dataSource';
 import { mockCameras } from '@/mocks/fixtures/mockCameras';
+import { clipSlugFor } from '@/config/cameraClips';
 
 /**
  * Legacy CAM-X codes → camera codes, in registry order (CAM-A = first camera
@@ -39,18 +40,33 @@ export const DETECTION_FILE_FETCH: RequestInit = { cache: 'no-cache' };
 export interface DetectionsManifest {
   /** Camera codes with a detections_<code>.json file for their current clip. */
   cameras: string[];
+  /** Per-camera run summary; `video_filename` is the clip the files were made from. */
+  stats?: { camera_code: string; video_filename?: string }[];
+}
+
+/**
+ * Whether a camera's published detections were made on the clip the camera
+ * plays now (src/config/cameraClips.json). Files made on another clip would
+ * draw boxes and plates that are not in the video, so they are not used.
+ * Unknown (no recorded clip name) counts as matching.
+ */
+export function detectionsMatchClip(code: string, recordedClip: string | null | undefined): boolean {
+  const slug = clipSlugFor(code);
+  return !slug || !recordedClip || recordedClip === `${slug}.mp4`;
 }
 
 let manifestPromise: Promise<Set<string>> | null = null;
 
-/** Camera codes that have static detections (memoised; empty when the manifest is missing). */
+/** Camera codes with static detections for the clip they play now (memoised; empty when the manifest is missing). */
 export function loadDetectionsManifest(): Promise<Set<string>> {
   if (!manifestPromise) {
     manifestPromise = fetch(DETECTIONS_MANIFEST_URL, DETECTION_FILE_FETCH)
       .then(async (res) => {
         if (!res.ok) return new Set<string>();
         const doc = (await res.json()) as Partial<DetectionsManifest>;
-        return new Set(Array.isArray(doc.cameras) ? doc.cameras : []);
+        const recorded = new Map((Array.isArray(doc.stats) ? doc.stats : []).map((s) => [s.camera_code, s.video_filename]));
+        const codes = Array.isArray(doc.cameras) ? doc.cameras : [];
+        return new Set(codes.filter((c) => detectionsMatchClip(c, recorded.get(c))));
       })
       .catch(() => new Set<string>());
   }
@@ -245,7 +261,10 @@ export function fetchCameraEvents(cameraCode: string): Promise<CameraEvents | nu
         if (!codes.has(code)) return null;
         const res = await fetch(`/detections/events_${code}.json`, DETECTION_FILE_FETCH);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return parseCameraEvents(code, await res.json());
+        const doc = await res.json();
+        // Events made on a different clip than the one playing are not shown.
+        if (!detectionsMatchClip(code, doc?.clip?.file)) return null;
+        return parseCameraEvents(code, doc);
       })
       .catch((err: unknown) => {
         eventsCache.delete(code);

@@ -86,6 +86,8 @@ describe('CameraVideoPlayer', () => {
     expect(screen.queryByText('Feed offline')).toBeNull();
     fireEvent.error(video()); // fallback failed → offline
     expect(screen.getByText('Feed offline')).toBeInTheDocument();
+    // says which clip is missing instead of a bare "unavailable"
+    expect(screen.getByText(/Clip .*\.mp4 could not be loaded from either video source/)).toBeInTheDocument();
     expect(document.querySelector('video')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /retry/i }));
     expect(screen.queryByText('Feed offline')).toBeNull();

@@ -5,11 +5,13 @@
 // plausibly shot at. Keep in sync with pipeline/camera_config.json and
 // supabase/migrations/20261001000200_mumbai_camera_network.sql (checked by
 // pipeline/tests/test_simulation_registry.py).
-// `video_slug` names the clip; the playable URL (local dev copy or Supabase
+// `video_slug` comes from src/config/cameraClips.json (the one place a clip is
+// named); the playable URL (local dev copy or Supabase
 // Storage mumbai/720p/<slug>.mp4) is resolved in features/cameras/api.ts.
 // ═══════════════════════════════════════════════════
 
 import type { CameraFeed } from '@/types';
+import { requireClipSlug, supabaseClipUrl } from '@/config/cameraClips';
 
 export const mockCameras: CameraFeed[] = [
   {
@@ -22,8 +24,8 @@ export const mockCameras: CameraFeed[] = [
     direction: 'Northbound',
     road: 'Western Express Highway at the JVLR interchange',
     status: 'online',
-    video_slug: 'mumbai_overhead-jam-6lane_pexels31046764',
-    video_url: 'https://zkmtjqsljwwyjpgvgyyp.supabase.co/storage/v1/object/public/videos/mumbai/720p/mumbai_overhead-jam-6lane_pexels31046764.mp4',
+    video_slug: requireClipSlug('JG-01'),
+    video_url: supabaseClipUrl(requireClipSlug('JG-01')),
     created_at: '2026-09-30T08:00:00Z',
     updated_at: '2026-09-30T08:00:00Z',
   },
@@ -37,8 +39,8 @@ export const mockCameras: CameraFeed[] = [
     direction: 'Southbound',
     road: 'Western Express Highway at Andheri–Kurla Road (Andheri Flyover)',
     status: 'online',
-    video_slug: 'mumbai_overhead-flyover-receding_pexels31048580',
-    video_url: 'https://zkmtjqsljwwyjpgvgyyp.supabase.co/storage/v1/object/public/videos/mumbai/720p/mumbai_overhead-flyover-receding_pexels31048580.mp4',
+    video_slug: requireClipSlug('AN-01'),
+    video_url: supabaseClipUrl(requireClipSlug('AN-01')),
     created_at: '2026-09-30T08:00:00Z',
     updated_at: '2026-09-30T08:00:00Z',
   },
@@ -52,8 +54,8 @@ export const mockCameras: CameraFeed[] = [
     direction: 'Northbound',
     road: 'Western Express Highway at Vile Parle Flyover',
     status: 'online',
-    video_slug: 'mumbai_overhead-dense-jam-plates_pexels31048534',
-    video_url: 'https://zkmtjqsljwwyjpgvgyyp.supabase.co/storage/v1/object/public/videos/mumbai/720p/mumbai_overhead-dense-jam-plates_pexels31048534.mp4',
+    video_slug: requireClipSlug('VP-01'),
+    video_url: supabaseClipUrl(requireClipSlug('VP-01')),
     created_at: '2026-09-30T08:00:00Z',
     updated_at: '2026-09-30T08:00:00Z',
   },
@@ -67,8 +69,8 @@ export const mockCameras: CameraFeed[] = [
     direction: 'Southbound',
     road: 'Western Express Highway near Airport Terminal 1 (Santacruz)',
     status: 'online',
-    video_slug: 'mumbai_flyover-roadside-front-plates_pexels30381474',
-    video_url: 'https://zkmtjqsljwwyjpgvgyyp.supabase.co/storage/v1/object/public/videos/mumbai/720p/mumbai_flyover-roadside-front-plates_pexels30381474.mp4',
+    video_slug: requireClipSlug('SC-01'),
+    video_url: supabaseClipUrl(requireClipSlug('SC-01')),
     created_at: '2026-09-30T08:00:00Z',
     updated_at: '2026-09-30T08:00:00Z',
   },
@@ -82,8 +84,8 @@ export const mockCameras: CameraFeed[] = [
     direction: 'Southbound',
     road: 'Dr Babasaheb Ambedkar Road beside Dadar TT Flyover',
     status: 'online',
-    video_slug: 'mumbai_flyover-closeup-rear-plates_pexels30169858',
-    video_url: 'https://zkmtjqsljwwyjpgvgyyp.supabase.co/storage/v1/object/public/videos/mumbai/720p/mumbai_flyover-closeup-rear-plates_pexels30169858.mp4',
+    video_slug: requireClipSlug('DD-01'),
+    video_url: supabaseClipUrl(requireClipSlug('DD-01')),
     created_at: '2026-09-30T08:00:00Z',
     updated_at: '2026-09-30T08:00:00Z',
   },
@@ -97,8 +99,8 @@ export const mockCameras: CameraFeed[] = [
     direction: 'Eastbound',
     road: 'Sion Circle at Sion–Panvel Highway (Sion Flyover)',
     status: 'online',
-    video_slug: 'mumbai_overhead-signal-multilane_pexels30609021',
-    video_url: 'https://zkmtjqsljwwyjpgvgyyp.supabase.co/storage/v1/object/public/videos/mumbai/720p/mumbai_overhead-signal-multilane_pexels30609021.mp4',
+    video_slug: requireClipSlug('SN-01'),
+    video_url: supabaseClipUrl(requireClipSlug('SN-01')),
     created_at: '2026-09-30T08:00:00Z',
     updated_at: '2026-09-30T08:00:00Z',
   },
@@ -112,8 +114,8 @@ export const mockCameras: CameraFeed[] = [
     direction: 'Northbound',
     road: 'LBS Marg at Kurla Depot, Kurla West',
     status: 'online',
-    video_slug: 'mumbai_flyover-roadside-approach-taxis_pexels31048404',
-    video_url: 'https://zkmtjqsljwwyjpgvgyyp.supabase.co/storage/v1/object/public/videos/mumbai/720p/mumbai_flyover-roadside-approach-taxis_pexels31048404.mp4',
+    video_slug: requireClipSlug('KR-01'),
+    video_url: supabaseClipUrl(requireClipSlug('KR-01')),
     created_at: '2026-09-30T08:00:00Z',
     updated_at: '2026-09-30T08:00:00Z',
   },
@@ -127,8 +129,8 @@ export const mockCameras: CameraFeed[] = [
     direction: 'Southbound',
     road: 'LBS Marg at Bhandup West (Metro Line 4)',
     status: 'online',
-    video_slug: 'mumbai_roadside-best-bus-front_pexels30249348',
-    video_url: 'https://zkmtjqsljwwyjpgvgyyp.supabase.co/storage/v1/object/public/videos/mumbai/720p/mumbai_roadside-best-bus-front_pexels30249348.mp4',
+    video_slug: requireClipSlug('BH-01'),
+    video_url: supabaseClipUrl(requireClipSlug('BH-01')),
     created_at: '2026-09-30T08:00:00Z',
     updated_at: '2026-09-30T08:00:00Z',
   },

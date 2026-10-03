@@ -14,7 +14,9 @@ MIGRATIONS = ROOT_DIR / "supabase" / "migrations"
 SQL = "\n".join((MIGRATIONS / f).read_text() for f in (
     "20261001000200_mumbai_camera_network.sql",
     "20261001000800_camera_clip_upgrade.sql",
+    "20261003000100_kr01_an01_new_clips.sql",
 ))
+CLIPS = json.loads((ROOT_DIR / "src" / "config" / "cameraClips.json").read_text())
 SLUG = re.compile(r"^[a-z0-9]+_[a-z0-9-]+_(pexels|pixabay)\d+$")
 ROUTES = ROOT_DIR / "public" / "sim" / "road_routes.json"
 
@@ -77,7 +79,9 @@ def test_every_camera_has_its_own_clip_in_both_sources():
         assert c["video_filename"] == f"{slug}.mp4"
         assert c["video_url"].endswith(f"/videos/mumbai/720p/{slug}.mp4")
         assert c["poster_url"].endswith(f"/videos/mumbai/720p/{slug}.jpg")
-        assert f"video_slug: '{slug}'" in MOCK_TS
+        # the dashboard names the clip in exactly one place
+        assert CLIPS[c["camera_code"]] == slug
+        assert slug not in MOCK_TS, "mockCameras must read the slug from src/config/cameraClips.json"
         # host = whichever Supabase project is deployed; the bucket path must match
         assert c["video_url"].split("/storage/", 1)[1] in SQL
         # The clip exists in the candidate set the network was built from.

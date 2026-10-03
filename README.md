@@ -133,7 +133,29 @@ clip gave a single good read at 1080p, so all eight feeds are daytime; night acc
 
 The registry lives in `pipeline/camera_config.json`, `src/mocks/fixtures/mockCameras.ts` and
 `supabase/migrations/20261001000200_mumbai_camera_network.sql`; `pipeline/tests/test_simulation_registry.py`
-keeps them identical.
+keeps them identical. **Which clip a camera plays is named in exactly one place,
+`src/config/cameraClips.json`** (camera code → clip slug; the dashboard, the mock registry and
+`pipeline/tools/replace_camera_clip.py` all read it). The dashboard only draws detections whose
+`manifest.json` entry says they were made on that same clip file, so a camera that gets a new clip
+shows "No detections yet" until the model has been run on it, never the old clip's plates. A missing
+clip file shows "Feed offline" naming the file.
+
+**Replacing a camera's clip** (validate, transcode to H.264/yuv420p/faststart, run the model, switch
+the mapping, keep backups of everything it replaces) is one command per camera, see
+[`pipeline/tools/README.md`](pipeline/tools/README.md#4-replace_camera_clippy-give-one-camera-a-new-clip):
+
+```bash
+python3 pipeline/tools/replace_camera_clip.py --camera KR-01 --source ~/Downloads/12974288_3840_2160_30fps.mp4
+python3 pipeline/tools/replace_camera_clip.py --camera AN-01 --source ~/Downloads/13270133_3840_2160_30fps.mp4
+```
+
+Clip credits for the clips swapped in so far (all Pexels, [Pexels License](https://www.pexels.com/license/);
+the Pexels id is the last part of every clip slug):
+
+| Camera | Clip | Pexels video |
+| --- | --- | --- |
+| KR-01 | `mumbai_kurla-depot-junction_pexels12974288` | [pexels.com/video/12974288](https://www.pexels.com/video/12974288/) |
+| AN-01 | `mumbai_andheri-flyover-gundavali_pexels13270133` | [pexels.com/video/13270133](https://www.pexels.com/video/13270133/) |
 
 Cross-camera journeys are simulated (the clips have no shared vehicles):
 

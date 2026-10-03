@@ -98,6 +98,7 @@ function PlayerInner({
 
   const media = resolveCameraMedia(camera.video_url, camera.code, camera.id);
   const fallbackSrc = media.fallback;
+  const clipFile = media.video.split('?')[0].split('/').pop();
   // Private bucket → signed URL (undefined while signing, null if it failed).
   const signedVideo = useSignedMediaUrl(media.video);
   const videoSrc = signedVideo === null ? fallbackSrc || undefined : signedVideo;
@@ -234,6 +235,7 @@ function PlayerInner({
       zone={camera.zone}
       status={tileStatus}
       onRetry={onRetry}
+      offlineDetail={`Clip ${clipFile} could not be loaded from either video source`}
       clock={!tile && status === 'playing'}
       selected={selected}
       onSelect={onSelect}
