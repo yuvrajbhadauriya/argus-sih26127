@@ -1,0 +1,1268 @@
+{
+ "crops": {
+  "AN-01_evt_0001_1130": {
+   "frame_index": 34,
+   "frame_time_sec": 1.13,
+   "plate": "AN-01/AN-01_evt_0001_1130_plate.jpg",
+   "plate_bbox": {
+    "height": 4.3,
+    "width": 16.0,
+    "x": 18.7,
+    "y": 330.3
+   },
+   "source_size": [
+    3840,
+    2160
+   ],
+   "vehicle": null
+  },
+  "AN-01_trk_0048_21470": {
+   "frame_index": 644,
+   "frame_time_sec": 21.47,
+   "plate": "AN-01/AN-01_trk_0048_21470_plate.jpg",
+   "plate_bbox": {
+    "height": 4.3,
+    "width": 17.7,
+    "x": 528.0,
+    "y": 333.0
+   },
+   "source_size": [
+    3840,
+    2160
+   ],
+   "vehicle": "AN-01/AN-01_trk_0048_21470_vehicle.jpg"
+  },
+  "AN-01_trk_0058_24930": {
+   "frame_index": 748,
+   "frame_time_sec": 24.93,
+   "plate": "AN-01/AN-01_trk_0058_24930_plate.jpg",
+   "plate_bbox": {
+    "height": 4.7,
+    "width": 17.3,
+    "x": 276.0,
+    "y": 345.7
+   },
+   "source_size": [
+    3840,
+    2160
+   ],
+   "vehicle": "AN-01/AN-01_trk_0058_24930_vehicle.jpg"
+  },
+  "AN-01_trk_0088_31130": {
+   "frame_index": 934,
+   "frame_time_sec": 31.13,
+   "plate": "AN-01/AN-01_trk_0088_31130_plate.jpg",
+   "plate_bbox": {
+    "height": 4.3,
+    "width": 17.3,
+    "x": 526.3,
+    "y": 323.0
+   },
+   "source_size": [
+    3840,
+    2160
+   ],
+   "vehicle": "AN-01/AN-01_trk_0088_31130_vehicle.jpg"
+  },
+  "AN-01_trk_0091_31600": {
+   "frame_index": 948,
+   "frame_time_sec": 31.6,
+   "plate": "AN-01/AN-01_trk_0091_31600_plate.jpg",
+   "plate_bbox": {
+    "height": 4.0,
+    "width": 16.0,
+    "x": 258.7,
+    "y": 327.3
+   },
+   "source_size": [
+    3840,
+    2160
+   ],
+   "vehicle": "AN-01/AN-01_trk_0091_31600_vehicle.jpg"
+  },
+  "AN-01_trk_0142_38800": {
+   "frame_index": 1164,
+   "frame_time_sec": 38.8,
+   "plate": "AN-01/AN-01_trk_0142_38800_plate.jpg",
+   "plate_bbox": {
+    "height": 3.7,
+    "width": 14.7,
+    "x": 322.0,
+    "y": 307.7
+   },
+   "source_size": [
+    3840,
+    2160
+   ],
+   "vehicle": "AN-01/AN-01_trk_0142_38800_vehicle.jpg"
+  },
+  "BH-01_evt_0001_31270": {
+   "frame_index": 938,
+   "frame_time_sec": 31.27,
+   "plate": "BH-01/BH-01_evt_0001_31270_plate.jpg",
+   "plate_bbox": {
+    "height": 5.3,
+    "width": 19.0,
+    "x": 160.0,
+    "y": 227.7
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": null
+  },
+  "BH-01_evt_0003_36930": {
+   "frame_index": 1108,
+   "frame_time_sec": 36.93,
+   "plate": "BH-01/BH-01_evt_0003_36930_plate.jpg",
+   "plate_bbox": {
+    "height": 5.3,
+    "width": 19.0,
+    "x": 27.3,
+    "y": 241.7
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": null
+  },
+  "BH-01_trk_0003_530": {
+   "frame_index": 16,
+   "frame_time_sec": 0.53,
+   "plate": "BH-01/BH-01_trk_0003_530_plate.jpg",
+   "plate_bbox": {
+    "height": 7.3,
+    "width": 29.3,
+    "x": 206.3,
+    "y": 341.7
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": null
+  },
+  "BH-01_trk_0007_4930": {
+   "frame_index": 148,
+   "frame_time_sec": 4.93,
+   "plate": "BH-01/BH-01_trk_0007_4930_plate.jpg",
+   "plate_bbox": {
+    "height": 8.3,
+    "width": 32.0,
+    "x": 169.0,
+    "y": 341.0
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": "BH-01/BH-01_trk_0007_4930_vehicle.jpg"
+  },
+  "BH-01_trk_0008_5470": {
+   "frame_index": 164,
+   "frame_time_sec": 5.47,
+   "plate": "BH-01/BH-01_trk_0008_5470_plate.jpg",
+   "plate_bbox": {
+    "height": 5.7,
+    "width": 23.3,
+    "x": 425.3,
+    "y": 315.0
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": "BH-01/BH-01_trk_0008_5470_vehicle.jpg"
+  },
+  "BH-01_trk_0024_19200": {
+   "frame_index": 576,
+   "frame_time_sec": 19.2,
+   "plate": "BH-01/BH-01_trk_0024_19200_plate.jpg",
+   "plate_bbox": {
+    "height": 9.7,
+    "width": 17.3,
+    "x": 497.0,
+    "y": 281.0
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": "BH-01/BH-01_trk_0024_19200_vehicle.jpg"
+  },
+  "BH-01_trk_0029_13400": {
+   "frame_index": 402,
+   "frame_time_sec": 13.4,
+   "plate": "BH-01/BH-01_trk_0029_13400_plate.jpg",
+   "plate_bbox": {
+    "height": 6.3,
+    "width": 19.3,
+    "x": 180.7,
+    "y": 331.0
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": null
+  },
+  "BH-01_trk_0055_26330": {
+   "frame_index": 790,
+   "frame_time_sec": 26.33,
+   "plate": "BH-01/BH-01_trk_0055_26330_plate.jpg",
+   "plate_bbox": {
+    "height": 5.0,
+    "width": 20.7,
+    "x": 244.0,
+    "y": 280.3
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": "BH-01/BH-01_trk_0055_26330_vehicle.jpg"
+  },
+  "BH-01_trk_0056_28200": {
+   "frame_index": 846,
+   "frame_time_sec": 28.2,
+   "plate": "BH-01/BH-01_trk_0056_28200_plate.jpg",
+   "plate_bbox": {
+    "height": 6.7,
+    "width": 17.3,
+    "x": 408.3,
+    "y": 229.7
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": "BH-01/BH-01_trk_0056_28200_vehicle.jpg"
+  },
+  "BH-01_trk_0070_38000": {
+   "frame_index": 1140,
+   "frame_time_sec": 38.0,
+   "plate": "BH-01/BH-01_trk_0070_38000_plate.jpg",
+   "plate_bbox": {
+    "height": 6.0,
+    "width": 24.3,
+    "x": 307.3,
+    "y": 246.7
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": "BH-01/BH-01_trk_0070_38000_vehicle.jpg"
+  },
+  "BH-01_trk_0073_39230": {
+   "frame_index": 1177,
+   "frame_time_sec": 39.23,
+   "plate": "BH-01/BH-01_trk_0073_39230_plate.jpg",
+   "plate_bbox": {
+    "height": 6.3,
+    "width": 28.0,
+    "x": 411.7,
+    "y": 248.7
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": "BH-01/BH-01_trk_0073_39230_vehicle.jpg"
+  },
+  "DD-01_evt_0001_5370": {
+   "frame_index": 161,
+   "frame_time_sec": 5.37,
+   "plate": "DD-01/DD-01_evt_0001_5370_plate.jpg",
+   "plate_bbox": {
+    "height": 11.0,
+    "width": 43.7,
+    "x": 589.3,
+    "y": 300.0
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": null
+  },
+  "DD-01_evt_0002_9300": {
+   "frame_index": 279,
+   "frame_time_sec": 9.3,
+   "plate": "DD-01/DD-01_evt_0002_9300_plate.jpg",
+   "plate_bbox": {
+    "height": 7.7,
+    "width": 17.0,
+    "x": 408.0,
+    "y": 314.0
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": "DD-01/DD-01_evt_0002_9300_vehicle.jpg"
+  },
+  "DD-01_trk_0008_9070": {
+   "frame_index": 272,
+   "frame_time_sec": 9.07,
+   "plate": "DD-01/DD-01_trk_0008_9070_plate.jpg",
+   "plate_bbox": {
+    "height": 5.7,
+    "width": 23.3,
+    "x": 87.7,
+    "y": 300.0
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": "DD-01/DD-01_trk_0008_9070_vehicle.jpg"
+  },
+  "DD-01_trk_0013_9430": {
+   "frame_index": 283,
+   "frame_time_sec": 9.43,
+   "plate": "DD-01/DD-01_trk_0013_9430_plate.jpg",
+   "plate_bbox": {
+    "height": 6.3,
+    "width": 26.7,
+    "x": 197.7,
+    "y": 290.0
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": "DD-01/DD-01_trk_0013_9430_vehicle.jpg"
+  },
+  "DD-01_trk_0018_10130": {
+   "frame_index": 304,
+   "frame_time_sec": 10.13,
+   "plate": "DD-01/DD-01_trk_0018_10130_plate.jpg",
+   "plate_bbox": {
+    "height": 8.0,
+    "width": 18.3,
+    "x": 247.7,
+    "y": 320.0
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": "DD-01/DD-01_trk_0018_10130_vehicle.jpg"
+  },
+  "DD-01_trk_0018_12530": {
+   "frame_index": 376,
+   "frame_time_sec": 12.53,
+   "plate": "DD-01/DD-01_trk_0018_12530_plate.jpg",
+   "plate_bbox": {
+    "height": 8.7,
+    "width": 19.7,
+    "x": 206.3,
+    "y": 319.3
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": "DD-01/DD-01_trk_0018_12530_vehicle.jpg"
+  },
+  "DD-01_trk_0019_10800": {
+   "frame_index": 324,
+   "frame_time_sec": 10.8,
+   "plate": "DD-01/DD-01_trk_0019_10800_plate.jpg",
+   "plate_bbox": {
+    "height": 11.7,
+    "width": 22.3,
+    "x": 450.0,
+    "y": 334.7
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": "DD-01/DD-01_trk_0019_10800_vehicle.jpg"
+  },
+  "DD-01_trk_0032_14670": {
+   "frame_index": 440,
+   "frame_time_sec": 14.67,
+   "plate": "DD-01/DD-01_trk_0032_14670_plate.jpg",
+   "plate_bbox": {
+    "height": 7.0,
+    "width": 16.7,
+    "x": 333.3,
+    "y": 296.7
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": "DD-01/DD-01_trk_0032_14670_vehicle.jpg"
+  },
+  "DD-01_trk_0046_21370": {
+   "frame_index": 641,
+   "frame_time_sec": 21.37,
+   "plate": "DD-01/DD-01_trk_0046_21370_plate.jpg",
+   "plate_bbox": {
+    "height": 8.0,
+    "width": 16.0,
+    "x": 305.0,
+    "y": 298.7
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": "DD-01/DD-01_trk_0046_21370_vehicle.jpg"
+  },
+  "JG-01_trk_0008_4400": {
+   "frame_index": 132,
+   "frame_time_sec": 4.4,
+   "plate": "JG-01/JG-01_trk_0008_4400_plate.jpg",
+   "plate_bbox": {
+    "height": 5.0,
+    "width": 19.7,
+    "x": 342.7,
+    "y": 327.7
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": null
+  },
+  "JG-01_trk_0016_5870": {
+   "frame_index": 176,
+   "frame_time_sec": 5.87,
+   "plate": "JG-01/JG-01_trk_0016_5870_plate.jpg",
+   "plate_bbox": {
+    "height": 5.7,
+    "width": 21.7,
+    "x": 559.7,
+    "y": 332.0
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": "JG-01/JG-01_trk_0016_5870_vehicle.jpg"
+  },
+  "JG-01_trk_0019_6400": {
+   "frame_index": 192,
+   "frame_time_sec": 6.4,
+   "plate": "JG-01/JG-01_trk_0019_6400_plate.jpg",
+   "plate_bbox": {
+    "height": 5.0,
+    "width": 18.7,
+    "x": 49.0,
+    "y": 323.3
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": null
+  },
+  "JG-01_trk_0034_9870": {
+   "frame_index": 296,
+   "frame_time_sec": 9.87,
+   "plate": "JG-01/JG-01_trk_0034_9870_plate.jpg",
+   "plate_bbox": {
+    "height": 5.3,
+    "width": 21.3,
+    "x": 332.3,
+    "y": 334.7
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": "JG-01/JG-01_trk_0034_9870_vehicle.jpg"
+  },
+  "KR-01_trk_0001_1530": {
+   "frame_index": 46,
+   "frame_time_sec": 1.53,
+   "plate": "KR-01/KR-01_trk_0001_1530_plate.jpg",
+   "plate_bbox": {
+    "height": 10.0,
+    "width": 40.0,
+    "x": 190.3,
+    "y": 315.0
+   },
+   "source_size": [
+    3840,
+    2160
+   ],
+   "vehicle": "KR-01/KR-01_trk_0001_1530_vehicle.jpg"
+  },
+  "KR-01_trk_0017_13470": {
+   "frame_index": 404,
+   "frame_time_sec": 13.47,
+   "plate": "KR-01/KR-01_trk_0017_13470_plate.jpg",
+   "plate_bbox": {
+    "height": 8.3,
+    "width": 32.0,
+    "x": 48.0,
+    "y": 292.0
+   },
+   "source_size": [
+    3840,
+    2160
+   ],
+   "vehicle": null
+  },
+  "SC-01_evt_0001_3700": {
+   "frame_index": 111,
+   "frame_time_sec": 3.7,
+   "plate": "SC-01/SC-01_evt_0001_3700_plate.jpg",
+   "plate_bbox": {
+    "height": 5.7,
+    "width": 23.0,
+    "x": 203.3,
+    "y": 223.7
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": null
+  },
+  "SC-01_evt_0002_4900": {
+   "frame_index": 147,
+   "frame_time_sec": 4.9,
+   "plate": "SC-01/SC-01_evt_0002_4900_plate.jpg",
+   "plate_bbox": {
+    "height": 4.3,
+    "width": 18.3,
+    "x": 340.0,
+    "y": 219.0
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": null
+  },
+  "SC-01_evt_0003_8330": {
+   "frame_index": 250,
+   "frame_time_sec": 8.33,
+   "plate": "SC-01/SC-01_evt_0003_8330_plate.jpg",
+   "plate_bbox": {
+    "height": 5.7,
+    "width": 22.7,
+    "x": 205.3,
+    "y": 243.3
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": "SC-01/SC-01_evt_0003_8330_vehicle.jpg"
+  },
+  "SC-01_evt_0004_19870": {
+   "frame_index": 596,
+   "frame_time_sec": 19.87,
+   "plate": "SC-01/SC-01_evt_0004_19870_plate.jpg",
+   "plate_bbox": {
+    "height": 9.0,
+    "width": 37.3,
+    "x": 201.0,
+    "y": 300.3
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": "SC-01/SC-01_evt_0004_19870_vehicle.jpg"
+  },
+  "SC-01_evt_0005_25270": {
+   "frame_index": 758,
+   "frame_time_sec": 25.27,
+   "plate": "SC-01/SC-01_evt_0005_25270_plate.jpg",
+   "plate_bbox": {
+    "height": 4.3,
+    "width": 18.3,
+    "x": 296.3,
+    "y": 272.3
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": "SC-01/SC-01_evt_0005_25270_vehicle.jpg"
+  },
+  "SC-01_evt_0006_35730": {
+   "frame_index": 1072,
+   "frame_time_sec": 35.73,
+   "plate": "SC-01/SC-01_evt_0006_35730_plate.jpg",
+   "plate_bbox": {
+    "height": 4.3,
+    "width": 18.3,
+    "x": 220.0,
+    "y": 279.0
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": "SC-01/SC-01_evt_0006_35730_vehicle.jpg"
+  },
+  "SC-01_trk_0001_400": {
+   "frame_index": 12,
+   "frame_time_sec": 0.4,
+   "plate": "SC-01/SC-01_trk_0001_400_plate.jpg",
+   "plate_bbox": {
+    "height": 7.3,
+    "width": 27.0,
+    "x": 281.3,
+    "y": 228.0
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": null
+  },
+  "SC-01_trk_0002_0": {
+   "frame_index": 0,
+   "frame_time_sec": 0.0,
+   "plate": "SC-01/SC-01_trk_0002_0_plate.jpg",
+   "plate_bbox": {
+    "height": 6.0,
+    "width": 23.3,
+    "x": 20.3,
+    "y": 220.0
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": null
+  },
+  "SC-01_trk_0007_1970": {
+   "frame_index": 59,
+   "frame_time_sec": 1.97,
+   "plate": "SC-01/SC-01_trk_0007_1970_plate.jpg",
+   "plate_bbox": {
+    "height": 4.3,
+    "width": 18.0,
+    "x": 221.7,
+    "y": 207.3
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": null
+  },
+  "SC-01_trk_0024_6770": {
+   "frame_index": 203,
+   "frame_time_sec": 6.77,
+   "plate": "SC-01/SC-01_trk_0024_6770_plate.jpg",
+   "plate_bbox": {
+    "height": 5.0,
+    "width": 20.0,
+    "x": 275.7,
+    "y": 235.7
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": null
+  },
+  "SC-01_trk_0029_9270": {
+   "frame_index": 278,
+   "frame_time_sec": 9.27,
+   "plate": "SC-01/SC-01_trk_0029_9270_plate.jpg",
+   "plate_bbox": {
+    "height": 8.0,
+    "width": 31.7,
+    "x": 201.7,
+    "y": 270.7
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": "SC-01/SC-01_trk_0029_9270_vehicle.jpg"
+  },
+  "SC-01_trk_0034_12200": {
+   "frame_index": 366,
+   "frame_time_sec": 12.2,
+   "plate": "SC-01/SC-01_trk_0034_12200_plate.jpg",
+   "plate_bbox": {
+    "height": 5.7,
+    "width": 26.7,
+    "x": 108.7,
+    "y": 266.3
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": "SC-01/SC-01_trk_0034_12200_vehicle.jpg"
+  },
+  "SC-01_trk_0034_15930": {
+   "frame_index": 478,
+   "frame_time_sec": 15.93,
+   "plate": "SC-01/SC-01_trk_0034_15930_plate.jpg",
+   "plate_bbox": {
+    "height": 5.7,
+    "width": 24.0,
+    "x": 185.0,
+    "y": 258.7
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": "SC-01/SC-01_trk_0034_15930_vehicle.jpg"
+  },
+  "SC-01_trk_0038_11130": {
+   "frame_index": 334,
+   "frame_time_sec": 11.13,
+   "plate": "SC-01/SC-01_trk_0038_11130_plate.jpg",
+   "plate_bbox": {
+    "height": 8.3,
+    "width": 31.7,
+    "x": 205.0,
+    "y": 268.3
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": "SC-01/SC-01_trk_0038_11130_vehicle.jpg"
+  },
+  "SC-01_trk_0050_18530": {
+   "frame_index": 556,
+   "frame_time_sec": 18.53,
+   "plate": "SC-01/SC-01_trk_0050_18530_plate.jpg",
+   "plate_bbox": {
+    "height": 4.3,
+    "width": 18.7,
+    "x": 320.7,
+    "y": 250.0
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": "SC-01/SC-01_trk_0050_18530_vehicle.jpg"
+  },
+  "SC-01_trk_0050_22930": {
+   "frame_index": 688,
+   "frame_time_sec": 22.93,
+   "plate": "SC-01/SC-01_trk_0050_22930_plate.jpg",
+   "plate_bbox": {
+    "height": 7.3,
+    "width": 26.7,
+    "x": 8.3,
+    "y": 276.0
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": "SC-01/SC-01_trk_0050_22930_vehicle.jpg"
+  },
+  "SC-01_trk_0050_24100": {
+   "frame_index": 723,
+   "frame_time_sec": 24.1,
+   "plate": "SC-01/SC-01_trk_0050_24100_plate.jpg",
+   "plate_bbox": {
+    "height": 5.7,
+    "width": 22.0,
+    "x": 81.7,
+    "y": 276.3
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": "SC-01/SC-01_trk_0050_24100_vehicle.jpg"
+  },
+  "SC-01_trk_0050_25000": {
+   "frame_index": 750,
+   "frame_time_sec": 25.0,
+   "plate": "SC-01/SC-01_trk_0050_25000_plate.jpg",
+   "plate_bbox": {
+    "height": 8.3,
+    "width": 31.7,
+    "x": 203.0,
+    "y": 290.7
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": "SC-01/SC-01_trk_0050_25000_vehicle.jpg"
+  },
+  "SC-01_trk_0050_30300": {
+   "frame_index": 909,
+   "frame_time_sec": 30.3,
+   "plate": "SC-01/SC-01_trk_0050_30300_plate.jpg",
+   "plate_bbox": {
+    "height": 5.7,
+    "width": 21.7,
+    "x": 89.0,
+    "y": 267.7
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": "SC-01/SC-01_trk_0050_30300_vehicle.jpg"
+  },
+  "SC-01_trk_0052_16330": {
+   "frame_index": 490,
+   "frame_time_sec": 16.33,
+   "plate": "SC-01/SC-01_trk_0052_16330_plate.jpg",
+   "plate_bbox": {
+    "height": 6.0,
+    "width": 31.0,
+    "x": 413.7,
+    "y": 237.0
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": "SC-01/SC-01_trk_0052_16330_vehicle.jpg"
+  },
+  "SC-01_trk_0056_18800": {
+   "frame_index": 564,
+   "frame_time_sec": 18.8,
+   "plate": "SC-01/SC-01_trk_0056_18800_plate.jpg",
+   "plate_bbox": {
+    "height": 6.3,
+    "width": 25.0,
+    "x": 551.7,
+    "y": 262.0
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": "SC-01/SC-01_trk_0056_18800_vehicle.jpg"
+  },
+  "SC-01_trk_0060_21300": {
+   "frame_index": 639,
+   "frame_time_sec": 21.3,
+   "plate": "SC-01/SC-01_trk_0060_21300_plate.jpg",
+   "plate_bbox": {
+    "height": 5.0,
+    "width": 21.3,
+    "x": 266.0,
+    "y": 259.7
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": "SC-01/SC-01_trk_0060_21300_vehicle.jpg"
+  },
+  "SC-01_trk_0064_20570": {
+   "frame_index": 617,
+   "frame_time_sec": 20.57,
+   "plate": "SC-01/SC-01_trk_0064_20570_plate.jpg",
+   "plate_bbox": {
+    "height": 6.0,
+    "width": 24.0,
+    "x": 3.0,
+    "y": 262.3
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": "SC-01/SC-01_trk_0064_20570_vehicle.jpg"
+  },
+  "SC-01_trk_0092_31870": {
+   "frame_index": 956,
+   "frame_time_sec": 31.87,
+   "plate": "SC-01/SC-01_trk_0092_31870_plate.jpg",
+   "plate_bbox": {
+    "height": 6.7,
+    "width": 27.3,
+    "x": 506.3,
+    "y": 290.0
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": "SC-01/SC-01_trk_0092_31870_vehicle.jpg"
+  },
+  "SC-01_trk_0105_36670": {
+   "frame_index": 1100,
+   "frame_time_sec": 36.67,
+   "plate": "SC-01/SC-01_trk_0105_36670_plate.jpg",
+   "plate_bbox": {
+    "height": 4.0,
+    "width": 17.3,
+    "x": 304.3,
+    "y": 271.3
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": "SC-01/SC-01_trk_0105_36670_vehicle.jpg"
+  },
+  "SN-01_evt_0001_28870": {
+   "frame_index": 866,
+   "frame_time_sec": 28.87,
+   "plate": "SN-01/SN-01_evt_0001_28870_plate.jpg",
+   "plate_bbox": {
+    "height": 5.0,
+    "width": 18.7,
+    "x": 403.7,
+    "y": 326.0
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": null
+  },
+  "SN-01_trk_0014_10230": {
+   "frame_index": 307,
+   "frame_time_sec": 10.23,
+   "plate": "SN-01/SN-01_trk_0014_10230_plate.jpg",
+   "plate_bbox": {
+    "height": 4.0,
+    "width": 15.3,
+    "x": 243.3,
+    "y": 278.0
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": "SN-01/SN-01_trk_0014_10230_vehicle.jpg"
+  },
+  "SN-01_trk_0082_19600": {
+   "frame_index": 588,
+   "frame_time_sec": 19.6,
+   "plate": "SN-01/SN-01_trk_0082_19600_plate.jpg",
+   "plate_bbox": {
+    "height": 5.0,
+    "width": 19.7,
+    "x": 420.0,
+    "y": 326.7
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": "SN-01/SN-01_trk_0082_19600_vehicle.jpg"
+  },
+  "SN-01_trk_0086_22130": {
+   "frame_index": 664,
+   "frame_time_sec": 22.13,
+   "plate": "SN-01/SN-01_trk_0086_22130_plate.jpg",
+   "plate_bbox": {
+    "height": 5.7,
+    "width": 20.3,
+    "x": 321.3,
+    "y": 337.7
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": "SN-01/SN-01_trk_0086_22130_vehicle.jpg"
+  },
+  "SN-01_trk_0111_26330": {
+   "frame_index": 790,
+   "frame_time_sec": 26.33,
+   "plate": "SN-01/SN-01_trk_0111_26330_plate.jpg",
+   "plate_bbox": {
+    "height": 5.3,
+    "width": 20.0,
+    "x": 416.0,
+    "y": 337.7
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": null
+  },
+  "SN-01_trk_0133_30900": {
+   "frame_index": 927,
+   "frame_time_sec": 30.9,
+   "plate": "SN-01/SN-01_trk_0133_30900_plate.jpg",
+   "plate_bbox": {
+    "height": 4.7,
+    "width": 18.3,
+    "x": 404.3,
+    "y": 334.0
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": "SN-01/SN-01_trk_0133_30900_vehicle.jpg"
+  },
+  "SN-01_trk_0165_38230": {
+   "frame_index": 1147,
+   "frame_time_sec": 38.23,
+   "plate": "SN-01/SN-01_trk_0165_38230_plate.jpg",
+   "plate_bbox": {
+    "height": 5.0,
+    "width": 19.3,
+    "x": 403.0,
+    "y": 335.7
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": "SN-01/SN-01_trk_0165_38230_vehicle.jpg"
+  },
+  "SN-01_trk_0179_42700": {
+   "frame_index": 1281,
+   "frame_time_sec": 42.7,
+   "plate": "SN-01/SN-01_trk_0179_42700_plate.jpg",
+   "plate_bbox": {
+    "height": 7.7,
+    "width": 13.0,
+    "x": 258.0,
+    "y": 317.7
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": null
+  },
+  "SN-01_trk_0219_55370": {
+   "frame_index": 1661,
+   "frame_time_sec": 55.37,
+   "plate": "SN-01/SN-01_trk_0219_55370_plate.jpg",
+   "plate_bbox": {
+    "height": 4.3,
+    "width": 16.7,
+    "x": 209.7,
+    "y": 295.3
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": "SN-01/SN-01_trk_0219_55370_vehicle.jpg"
+  },
+  "SN-01_trk_0245_58730": {
+   "frame_index": 1762,
+   "frame_time_sec": 58.73,
+   "plate": "SN-01/SN-01_trk_0245_58730_plate.jpg",
+   "plate_bbox": {
+    "height": 4.0,
+    "width": 16.7,
+    "x": 250.3,
+    "y": 297.7
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": "SN-01/SN-01_trk_0245_58730_vehicle.jpg"
+  },
+  "VP-01_evt_0001_9300": {
+   "frame_index": 279,
+   "frame_time_sec": 9.3,
+   "plate": "VP-01/VP-01_evt_0001_9300_plate.jpg",
+   "plate_bbox": {
+    "height": 4.3,
+    "width": 16.0,
+    "x": 16.7,
+    "y": 330.0
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": null
+  },
+  "VP-01_trk_0008_400": {
+   "frame_index": 12,
+   "frame_time_sec": 0.4,
+   "plate": "VP-01/VP-01_trk_0008_400_plate.jpg",
+   "plate_bbox": {
+    "height": 5.0,
+    "width": 19.3,
+    "x": 557.7,
+    "y": 351.3
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": null
+  },
+  "VP-01_trk_0010_1470": {
+   "frame_index": 44,
+   "frame_time_sec": 1.47,
+   "plate": "VP-01/VP-01_trk_0010_1470_plate.jpg",
+   "plate_bbox": {
+    "height": 4.0,
+    "width": 15.7,
+    "x": 33.3,
+    "y": 319.7
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": null
+  },
+  "VP-01_trk_0086_28270": {
+   "frame_index": 848,
+   "frame_time_sec": 28.27,
+   "plate": "VP-01/VP-01_trk_0086_28270_plate.jpg",
+   "plate_bbox": {
+    "height": 4.3,
+    "width": 18.0,
+    "x": 518.3,
+    "y": 328.0
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": "VP-01/VP-01_trk_0086_28270_vehicle.jpg"
+  },
+  "VP-01_trk_0092_30130": {
+   "frame_index": 904,
+   "frame_time_sec": 30.13,
+   "plate": "VP-01/VP-01_trk_0092_30130_plate.jpg",
+   "plate_bbox": {
+    "height": 4.0,
+    "width": 15.0,
+    "x": 264.0,
+    "y": 313.3
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": "VP-01/VP-01_trk_0092_30130_vehicle.jpg"
+  },
+  "VP-01_trk_0097_31730": {
+   "frame_index": 952,
+   "frame_time_sec": 31.73,
+   "plate": "VP-01/VP-01_trk_0097_31730_plate.jpg",
+   "plate_bbox": {
+    "height": 4.0,
+    "width": 15.0,
+    "x": 505.7,
+    "y": 291.3
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": "VP-01/VP-01_trk_0097_31730_vehicle.jpg"
+  },
+  "VP-01_trk_0123_35170": {
+   "frame_index": 1055,
+   "frame_time_sec": 35.17,
+   "plate": "VP-01/VP-01_trk_0123_35170_plate.jpg",
+   "plate_bbox": {
+    "height": 3.7,
+    "width": 14.7,
+    "x": 305.0,
+    "y": 309.3
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": "VP-01/VP-01_trk_0123_35170_vehicle.jpg"
+  },
+  "VP-01_trk_0179_44000": {
+   "frame_index": 1320,
+   "frame_time_sec": 44.0,
+   "plate": "VP-01/VP-01_trk_0179_44000_plate.jpg",
+   "plate_bbox": {
+    "height": 3.7,
+    "width": 15.0,
+    "x": 505.0,
+    "y": 280.7
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": "VP-01/VP-01_trk_0179_44000_vehicle.jpg"
+  },
+  "VP-01_trk_0248_53070": {
+   "frame_index": 1592,
+   "frame_time_sec": 53.07,
+   "plate": "VP-01/VP-01_trk_0248_53070_plate.jpg",
+   "plate_bbox": {
+    "height": 4.3,
+    "width": 18.3,
+    "x": 514.7,
+    "y": 334.7
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": "VP-01/VP-01_trk_0248_53070_vehicle.jpg"
+  },
+  "VP-01_trk_0252_53970": {
+   "frame_index": 1619,
+   "frame_time_sec": 53.97,
+   "plate": "VP-01/VP-01_trk_0252_53970_plate.jpg",
+   "plate_bbox": {
+    "height": 3.7,
+    "width": 15.0,
+    "x": 410.3,
+    "y": 284.7
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": "VP-01/VP-01_trk_0252_53970_vehicle.jpg"
+  },
+  "VP-01_trk_0263_54670": {
+   "frame_index": 1640,
+   "frame_time_sec": 54.67,
+   "plate": "VP-01/VP-01_trk_0263_54670_plate.jpg",
+   "plate_bbox": {
+    "height": 4.0,
+    "width": 16.3,
+    "x": 472.0,
+    "y": 313.3
+   },
+   "source_size": [
+    1920,
+    1080
+   ],
+   "vehicle": "VP-01/VP-01_trk_0263_54670_vehicle.jpg"
+  }
+ },
+ "generated_at": "2026-10-03T13:52:24Z",
+ "schema": 1,
+ "skipped": {
+  "AN-01_trk_0002_21430": "no confident match in the model answer",
+  "AN-01_trk_0009_3570": "no confident match in the model answer",
+  "AN-01_trk_0112_35500": "no confident match in the model answer",
+  "BH-01_evt_0002_32700": "no confident match in the model answer",
+  "JG-01_trk_0002_2930": "no confident match in the model answer",
+  "JG-01_trk_0011_5870": "no confident match in the model answer",
+  "SC-01_trk_0050_27530": "no confident match in the model answer",
+  "VP-01_evt_0002_23970": "no confident match in the model answer",
+  "VP-01_trk_0058_22530": "no confident match in the model answer",
+  "VP-01_trk_0067_24930": "no confident match in the model answer",
+  "VP-01_trk_0153_38730": "no confident match in the model answer",
+  "VP-01_trk_0219_49530": "no confident match in the model answer"
+ }
+}

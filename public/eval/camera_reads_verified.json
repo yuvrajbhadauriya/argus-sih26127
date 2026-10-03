@@ -1,0 +1,242 @@
+{
+  "schema": 1,
+  "verified_by": "YUVRAJ BHADAURIYA",
+  "verified_at": "2026-10-03T15:47:22.485Z",
+  "labels": {
+    "AN-01_trk_0091_31600": {
+      "verdict": "correct"
+    },
+    "AN-01_trk_0088_31130": {
+      "verdict": "correct"
+    },
+    "AN-01_trk_0142_38800": {
+      "verdict": "correct"
+    },
+    "AN-01_trk_0048_21470": {
+      "verdict": "correct"
+    },
+    "AN-01_trk_0058_24930": {
+      "verdict": "correct"
+    },
+    "AN-01_evt_0001_1130": {
+      "verdict": "correct"
+    },
+    "BH-01_trk_0007_4930": {
+      "verdict": "correct"
+    },
+    "BH-01_trk_0073_39230": {
+      "verdict": "correct"
+    },
+    "BH-01_trk_0003_530": {
+      "verdict": "correct"
+    },
+    "BH-01_trk_0070_38000": {
+      "verdict": "correct"
+    },
+    "BH-01_trk_0008_5470": {
+      "verdict": "correct"
+    },
+    "BH-01_trk_0056_28200": {
+      "verdict": "correct"
+    },
+    "BH-01_evt_0001_31270": {
+      "verdict": "correct"
+    },
+    "BH-01_trk_0024_19200": {
+      "verdict": "wrong",
+      "truth": "MH01AP0716"
+    },
+    "BH-01_trk_0055_26330": {
+      "verdict": "correct"
+    },
+    "BH-01_evt_0003_36930": {
+      "verdict": "correct"
+    },
+    "BH-01_trk_0029_13400": {
+      "verdict": "correct"
+    },
+    "DD-01_trk_0013_9430": {
+      "verdict": "correct"
+    },
+    "DD-01_evt_0002_9300": {
+      "verdict": "correct"
+    },
+    "DD-01_evt_0001_5370": {
+      "verdict": "correct"
+    },
+    "DD-01_trk_0018_10130": {
+      "verdict": "correct"
+    },
+    "DD-01_trk_0032_14670": {
+      "verdict": "correct"
+    },
+    "DD-01_trk_0008_9070": {
+      "verdict": "correct"
+    },
+    "DD-01_trk_0018_12530": {
+      "verdict": "correct"
+    },
+    "DD-01_trk_0046_21370": {
+      "verdict": "correct"
+    },
+    "DD-01_trk_0019_10800": {
+      "verdict": "correct"
+    },
+    "JG-01_trk_0016_5870": {
+      "verdict": "correct"
+    },
+    "JG-01_trk_0034_9870": {
+      "verdict": "correct"
+    },
+    "JG-01_trk_0008_4400": {
+      "verdict": "correct"
+    },
+    "JG-01_trk_0019_6400": {
+      "verdict": "correct"
+    },
+    "KR-01_trk_0001_1530": {
+      "verdict": "correct"
+    },
+    "KR-01_trk_0017_13470": {
+      "verdict": "correct"
+    },
+    "SC-01_trk_0050_22930": {
+      "verdict": "correct"
+    },
+    "SC-01_trk_0092_31870": {
+      "verdict": "correct"
+    },
+    "SC-01_trk_0029_9270": {
+      "verdict": "correct"
+    },
+    "SC-01_evt_0003_8330": {
+      "verdict": "correct"
+    },
+    "SC-01_evt_0004_19870": {
+      "verdict": "correct"
+    },
+    "SC-01_trk_0064_20570": {
+      "verdict": "correct"
+    },
+    "SC-01_evt_0002_4900": {
+      "verdict": "correct"
+    },
+    "SC-01_trk_0007_1970": {
+      "verdict": "correct"
+    },
+    "SC-01_trk_0024_6770": {
+      "verdict": "correct"
+    },
+    "SC-01_trk_0050_25000": {
+      "verdict": "correct"
+    },
+    "SC-01_trk_0001_400": {
+      "verdict": "correct"
+    },
+    "SC-01_evt_0006_35730": {
+      "verdict": "correct"
+    },
+    "SC-01_evt_0005_25270": {
+      "verdict": "correct"
+    },
+    "SC-01_trk_0038_11130": {
+      "verdict": "correct"
+    },
+    "SC-01_evt_0001_3700": {
+      "verdict": "correct"
+    },
+    "SC-01_trk_0105_36670": {
+      "verdict": "correct"
+    },
+    "SC-01_trk_0034_15930": {
+      "verdict": "correct"
+    },
+    "SC-01_trk_0050_30300": {
+      "verdict": "correct"
+    },
+    "SC-01_trk_0050_18530": {
+      "verdict": "correct"
+    },
+    "SC-01_trk_0050_24100": {
+      "verdict": "correct"
+    },
+    "SC-01_trk_0056_18800": {
+      "verdict": "correct"
+    },
+    "SC-01_trk_0034_12200": {
+      "verdict": "correct"
+    },
+    "SC-01_trk_0060_21300": {
+      "verdict": "correct"
+    },
+    "SC-01_trk_0002_0": {
+      "verdict": "correct"
+    },
+    "SC-01_trk_0052_16330": {
+      "verdict": "correct"
+    },
+    "SN-01_trk_0133_30900": {
+      "verdict": "correct"
+    },
+    "SN-01_trk_0111_26330": {
+      "verdict": "correct"
+    },
+    "SN-01_trk_0082_19600": {
+      "verdict": "correct"
+    },
+    "SN-01_evt_0001_28870": {
+      "verdict": "correct"
+    },
+    "SN-01_trk_0219_55370": {
+      "verdict": "correct"
+    },
+    "SN-01_trk_0245_58730": {
+      "verdict": "correct"
+    },
+    "SN-01_trk_0014_10230": {
+      "verdict": "correct"
+    },
+    "SN-01_trk_0179_42700": {
+      "verdict": "correct"
+    },
+    "SN-01_trk_0086_22130": {
+      "verdict": "correct"
+    },
+    "SN-01_trk_0165_38230": {
+      "verdict": "correct"
+    },
+    "VP-01_trk_0086_28270": {
+      "verdict": "correct"
+    },
+    "VP-01_trk_0263_54670": {
+      "verdict": "correct"
+    },
+    "VP-01_trk_0008_400": {
+      "verdict": "correct"
+    },
+    "VP-01_trk_0010_1470": {
+      "verdict": "correct"
+    },
+    "VP-01_trk_0248_53070": {
+      "verdict": "correct"
+    },
+    "VP-01_evt_0001_9300": {
+      "verdict": "correct"
+    },
+    "VP-01_trk_0123_35170": {
+      "verdict": "correct"
+    },
+    "VP-01_trk_0179_44000": {
+      "verdict": "correct"
+    },
+    "VP-01_trk_0092_30130": {
+      "verdict": "correct"
+    },
+    "VP-01_trk_0097_31730": {
+      "verdict": "correct"
+    },
+    "VP-01_trk_0252_53970": {
+      "verdict": "correct"
+    }
+  }
+}
