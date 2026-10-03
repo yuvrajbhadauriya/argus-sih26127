@@ -11,8 +11,10 @@ message and leaves the dashboard config untouched):
   2. Transcode to the same renditions the other clips use (H.264, yuv420p,
      +faststart, no audio), see pipeline/tools/prepare_videos.py:
        pipeline/data/videos_720p/<slug>.mp4 + .jpg   web rendition + poster
-       pipeline/data/videos_1080p/<slug>.mp4          analysis rendition (detection input)
-       public/videos-local/<slug>.mp4 + .jpg          what `npm run dev` plays
+       pipeline/data/videos_1080p/<slug>.mp4          HD rendition (1080p, CRF 20): the selected feed
+                                                      plays it AND it is the detection input
+       public/videos-local/<slug>.mp4 + .jpg          what `npm run dev` plays on the wall tiles
+       public/videos-local/<slug>.hd.mp4              copy of the HD file, played by the main player
      ffmpeg is used when present (FFMPEG_BINARY, PATH, imageio-ffmpeg); on a
      Mac without it the built-in `avconvert` H.264 preset is the fallback;
      with neither, the script says `brew install ffmpeg`.
@@ -30,8 +32,9 @@ message and leaves the dashboard config untouched):
      ones installed in public/detections/, manifest.json updated, and the
      camera -> clip mapping (src/config/cameraClips.json, which the dashboard
      reads, and pipeline/camera_config.json) switched to the new slug.
-  4. With --upload only: upload the clip + poster to the private Supabase
-     `videos` bucket (mumbai/720p/) the way upload_videos.py does, and PRINT
+  4. With --upload only: upload the 720p clip + poster (mumbai/720p/) and the
+     HD file (mumbai/1080p/) to the private Supabase
+     `videos` bucket the way upload_videos.py does, and PRINT
      the insert_detections.py command for the production database. Nothing
      writes to the database from here.
   5. Print a summary and the next commands.
@@ -65,6 +68,7 @@ for _p in (str(TOOLS), str(PIPELINE)):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
+import link_local_videos as llv  # noqa: E402  (HD file naming shared with the dev linker)
 import prepare_videos as pv  # noqa: E402  (sibling module: encode profile + command builders)
 
 #: Default length cap. The other clips run 10-71 s (median ~44 s).
@@ -77,6 +81,8 @@ H264_FOURCCS = {"avc1", "h264", "x264", "avc3"}
 AVCONVERT_WEB_PRESET = "Preset1280x720"
 AVCONVERT_ANALYSIS_PRESET = "Preset1920x1080"
 UPLOAD_PREFIX = "mumbai/720p"
+#: HD (1920x1080) rendition for the selected feed; the dashboard signs and plays <prefix>/<slug>.mp4.
+UPLOAD_HD_PREFIX = "mumbai/1080p"
 UPLOAD_BUCKET = "videos"
 
 
@@ -405,13 +411,15 @@ def poster_from_clip(web: Path, poster: Path, cv2) -> None:
     os.replace(tmp, poster)
 
 
-def place_local(paths: Paths, slug: str) -> list[Path]:
-    """Copy the web mp4 + poster into public/videos-local/ (replacing a stale link/copy of the same name)."""
+def place_local(paths: Paths, slug: str, hd: bool = False) -> list[Path]:
+    """Copy the 720p mp4 + poster, and with ``hd`` the 1080p rendition as <slug>.hd.mp4, into public/videos-local/
+    (replacing a stale link/copy of the same name)."""
     paths.local_dir.mkdir(parents=True, exist_ok=True)
+    pairs = [(paths.web_dir / f"{slug}{ext}", paths.local_dir / f"{slug}{ext}") for ext in (".mp4", ".jpg")]
+    if hd:
+        pairs.append((paths.analysis_dir / f"{slug}.mp4", paths.local_dir / llv.hd_name(slug)))
     placed = []
-    for ext in (".mp4", ".jpg"):
-        src = paths.web_dir / f"{slug}{ext}"
-        dst = paths.local_dir / f"{slug}{ext}"
+    for src, dst in pairs:
         if dst.is_symlink() or dst.exists():
             dst.unlink()
         shutil.copy2(src, dst)
@@ -472,16 +480,20 @@ def transcode(paths: Paths, slug: str, source: Path, probe: dict, plan: dict, en
         raise StepError(f"poster {poster} was not written")
     analysis_probe = None
     if needs_analysis:
-        analysis_probe = verify_clip(analysis, expect_duration=plan["length"], cv2=cv2)
+        # The same file is the analysis input and the HD the main feed plays, so the overlay boxes match the pixels shown.
+        analysis_probe = verify_clip(analysis, min_short_side=pv.ANALYSIS_HEIGHT, max_short_side=pv.ANALYSIS_HEIGHT,
+                                     expect_duration=plan["length"], cv2=cv2)
     say(f"  web      {web_probe['width']}x{web_probe['height']} {web_probe['fps']:g} fps {web_probe['duration_s']:.1f} s "
         f"{human(web_probe['bytes'])}  H.264 faststart: OK")
     if analysis_probe:
-        say(f"  analysis {analysis_probe['width']}x{analysis_probe['height']} {analysis_probe['fps']:g} fps "
-            f"{analysis_probe['duration_s']:.1f} s {human(analysis_probe['bytes'])}  H.264 faststart: OK")
+        say(f"  HD/analysis {analysis_probe['width']}x{analysis_probe['height']} {analysis_probe['fps']:g} fps "
+            f"{analysis_probe['duration_s']:.1f} s {human(analysis_probe['bytes'])}  H.264 faststart: OK "
+            f"(plays as the selected feed, is what the model analyses)")
     else:
-        say("  analysis: source is below 1080p, no analysis rendition made")
+        say("  HD/analysis: source is below 1080p, no 1080p rendition made (the selected feed stays 720p)")
     update_prepare_manifest(paths, slug, source, probe, web_probe, analysis_probe, poster, analysis)
-    placed = place_local(paths, slug)
+    placed = place_local(paths, slug, hd=analysis_probe is not None)
+    sync_local_manifest(paths)
     say("  dev copies: " + ", ".join(str(p.relative_to(paths.repo)) for p in placed))
     return {"web": web_probe, "analysis": analysis_probe}
 
@@ -501,10 +513,18 @@ def update_prepare_manifest(paths: Paths, slug: str, source: Path, probe: dict, 
     entries[slug] = pv.manifest_entry(
         slug, source, src_info, paths.web_dir / f"{slug}.mp4", mk(web_probe), poster,
         analysis if analysis_probe else None, mk(analysis_probe) if analysis_probe else None, paths.repo)
+    if analysis_probe:
+        entries[slug]["hd"] = {"file": llv.hd_name(slug), "object": f"{UPLOAD_HD_PREFIX}/{slug}.mp4",
+                               "width": analysis_probe["width"], "height": analysis_probe["height"],
+                               "bytes": analysis_probe["bytes"]}
     pv.write_manifest(path, entries)
+
+
+def sync_local_manifest(paths: Paths) -> None:
+    """Keep public/videos-local/manifest.json equal to the 720p manifest (a symlink from link_local_videos.py already is)."""
     local = paths.local_dir / "manifest.json"
-    if paths.local_dir.exists() and not local.is_symlink():
-        shutil.copy2(path, local)
+    if not local.is_symlink() and (paths.web_dir / "manifest.json").exists():
+        shutil.copy2(paths.web_dir / "manifest.json", local)
 
 
 # ── step 3: detection + switching the mapping ────────────────────────────
@@ -651,16 +671,21 @@ def leftover_references(paths: Paths, old_slug: str) -> list[str]:
 # ── step 4: upload (private bucket) ──────────────────────────────────────
 
 
-def upload_clip(paths: Paths, slug: str, dry_run: bool, uploader=None, creds=None) -> list[str]:
-    """Upload <slug>.mp4/.jpg to the private `videos` bucket like upload_videos.py. No bucket is created."""
+def upload_clip(paths: Paths, slug: str, dry_run: bool, uploader=None, creds=None, hd: bool = True) -> list[str]:
+    """Upload <slug>.mp4/.jpg (mumbai/720p/) and, with ``hd``, the 1080p <slug>.mp4 (mumbai/1080p/) to the private
+    `videos` bucket like upload_videos.py. No bucket is created."""
     import upload_videos as uv
 
     files = [paths.web_dir / f"{slug}.mp4", paths.web_dir / f"{slug}.jpg"]
+    prefixes = [UPLOAD_PREFIX, UPLOAD_PREFIX]
+    if hd:
+        files.append(paths.analysis_dir / f"{slug}.mp4")
+        prefixes.append(UPLOAD_HD_PREFIX)
     missing = [f for f in files if not f.is_file()]
     if missing and not dry_run:
         raise StepError(f"cannot upload, missing {', '.join(str(m) for m in missing)}")
     base, key = (creds or uv.credentials)(paths.env_file)
-    objs = [uv.object_path(f, UPLOAD_PREFIX) for f in files]
+    objs = [uv.object_path(f, pre) for f, pre in zip(files, prefixes)]
     if dry_run:
         for o in objs:
             say(f"  would upload {o} to bucket '{UPLOAD_BUCKET}'")
@@ -769,8 +794,10 @@ def _run(args, paths: Paths, cv2, runner, detect_main, uploader, creds, rrd) -> 
             for preset, dst in ((AVCONVERT_WEB_PRESET, paths.web_dir / f"{slug}.mp4"),
                                 (AVCONVERT_ANALYSIS_PRESET, paths.analysis_dir / f"{slug}.mp4")):
                 say(f"  would run: {shlex.join(avconvert_command(encoder[1], source, dst, preset, plan))}")
+        hd = min(probe["width"], probe["height"]) >= pv.ANALYSIS_HEIGHT
         for p in (paths.web_dir / f"{slug}.mp4", paths.web_dir / f"{slug}.jpg", paths.analysis_dir / f"{slug}.mp4",
-                  paths.local_dir / f"{slug}.mp4", paths.local_dir / f"{slug}.jpg"):
+                  paths.local_dir / f"{slug}.mp4", paths.local_dir / f"{slug}.jpg",
+                  *([paths.local_dir / llv.hd_name(slug)] if hd else [])):
             say(f"  would write {p.relative_to(paths.repo)}")
     else:
         facts = transcode(paths, slug, source, probe, plan, encoder, args.force, cv2, runner)  # noqa: F841
@@ -808,7 +835,7 @@ def _run(args, paths: Paths, cv2, runner, detect_main, uploader, creds, rrd) -> 
 
     step(4, "upload to the private Supabase bucket" if args.upload else "upload (skipped, pass --upload)")
     if args.upload:
-        upload_clip(paths, slug, dry, uploader, creds)
+        upload_clip(paths, slug, dry, uploader, creds, hd=min(probe["width"], probe["height"]) >= pv.ANALYSIS_HEIGHT)
         say("  production database is NOT touched. To ingest the new reads run these yourself")
         say("  (needs SUPABASE_SERVICE_ROLE_KEY; --prune mirrors the files, so this camera's old-clip rows are removed):")
         say(f"    {INSERT_CMD} --dry_run     # look first")
@@ -818,6 +845,7 @@ def _run(args, paths: Paths, cv2, runner, detect_main, uploader, creds, rrd) -> 
 
     step(5, "summary")
     say(f"  slug      {old_slug}  ->  {slug}")
+    say(f"  renditions 720p (wall tiles) + {'1080p HD (selected feed, public/videos-local/' + llv.hd_name(slug) + ')' if min(probe['width'], probe['height']) >= pv.ANALYSIS_HEIGHT else 'no HD (source below 1080p)'}")
     say(f"  clip      {plan['length']:.1f} s ({round(plan['length'] * probe['fps'])} frames at {probe['fps']:g} fps) of {probe['width']}x{probe['height']} source")
     if dry:
         say("  detection (not run in a dry run)")
@@ -825,6 +853,7 @@ def _run(args, paths: Paths, cv2, runner, detect_main, uploader, creds, rrd) -> 
         stats = read_stats(paths, code)
         say(f"  detection {stats['vehicles']} vehicles, {stats['reads']} plate reads found, {stats['good']} good reads (OCR >= 75 and grammar-valid)")
     say("\nNext commands:")
+    say("  python3 pipeline/tools/link_local_videos.py --hd   # also play the other cameras' existing 1080p renditions as HD (no detection run)")
     say(f"  npm run dev      # open http://localhost:5173/cameras and pick {code} (needs VITE_VIDEO_SOURCE=local, the dev default)")
     say("  python3 pipeline/simulation/simulate_city_network.py --plates-from public/detections && "
         "python3 pipeline/simulation/export_demo_fixtures.py   # re-seed the demo data so the camera shows only new reads")

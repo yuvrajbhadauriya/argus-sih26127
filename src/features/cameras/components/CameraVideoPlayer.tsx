@@ -2,8 +2,9 @@
 // CameraVideoPlayer Component
 // Pure CCTV Video Feed with robust CORS & Supabase Storage video playback
 //
-// Clips are the 720p Mumbai renditions (local dev copy or the private Supabase
-// Storage bucket, see VITE_VIDEO_SOURCE). Storage clips play from 1-hour signed
+// Clips are the Mumbai renditions (local dev copy or the private Supabase
+// Storage bucket, see VITE_VIDEO_SOURCE): 720p for wall tiles, and 1080p (HD)
+// for the selected feed when it exists, with a silent fall back to 720p. Storage clips play from 1-hour signed
 // URLs (../lib/signedMedia.ts) that are refreshed before they expire; the swap
 // re-syncs to the live clock, so the feed never restarts. A failing signed URL
 // is re-signed once; then the other source is tried once before the tile goes
@@ -101,7 +102,17 @@ function PlayerInner({
   const clipFile = media.video.split('?')[0].split('/').pop();
   // Private bucket → signed URL (undefined while signing, null if it failed).
   const signedVideo = useSignedMediaUrl(media.video);
-  const videoSrc = signedVideo === null ? fallbackSrc || undefined : signedVideo;
+  // The selected (main) feed plays the 1080p rendition when there is one: plates are unreadable at
+  // 720p, and the live ANPR frames are grabbed from this element. Wall tiles stay on 720p (8 clips
+  // play at once). A missing/unsignable/undecodable HD file silently drops back to the 720p clip.
+  const wantHd = !tile && !!media.hd;
+  const signedHd = useSignedMediaUrl(wantHd ? media.hd : undefined);
+  const [hdFailed, setHdFailed] = useState(false);
+  const hdResignedRef = useRef(false);
+  // Latch: once signing says the HD object is unavailable, never swap sources again when signing is retried.
+  if (wantHd && signedHd === null && !hdFailed) setHdFailed(true);
+  const hdActive = wantHd && !hdFailed && signedHd !== null;
+  const videoSrc = hdActive ? signedHd || undefined : signedVideo === null ? fallbackSrc || undefined : signedVideo;
   const poster = useSignedMediaUrl(camera.poster_url || media.poster || undefined) || undefined;
 
   // Fetch real pipeline detections only once the feed is actually on screen.
@@ -206,6 +217,15 @@ function PlayerInner({
 
   const handleError = (e: React.SyntheticEvent<HTMLVideoElement>) => {
     const target = e.currentTarget;
+    if (hdActive) {
+      // HD is optional: re-sign an expired URL once, then use the 720p clip. Never an "offline" state.
+      if (!hdResignedRef.current && target.src === signedHd && invalidateSignedMedia(media.hd)) {
+        hdResignedRef.current = true;
+        return;
+      }
+      setHdFailed(true);
+      return;
+    }
     // An expired / revoked signed URL: sign it again once (new src re-renders).
     if (!resignedRef.current && target.src === signedVideo && invalidateSignedMedia(media.video)) {
       resignedRef.current = true;
@@ -262,6 +282,7 @@ function PlayerInner({
           <video
             ref={videoRef}
             src={videoSrc}
+            data-quality={hdActive ? 'hd' : 'sd'}
             poster={poster}
             // Nothing until first visible, then metadata; upgraded to 'auto' when it starts playing.
             preload={hasBeenVisible ? 'metadata' : 'none'}

@@ -11,7 +11,13 @@ import { isSupabaseConfigured } from '@/lib/supabase/client';
 import { apiRow, apiRows, apiSend } from '@/lib/dataApi';
 import { reportLiveError, reportLiveOk } from '@/lib/dataSource';
 import { mockCameras } from '@/mocks/fixtures/mockCameras';
-import { LOCAL_VIDEO_BASE, SUPABASE_STORAGE_BASE, SUPABASE_VIDEO_PREFIX } from '@/config/constants';
+import {
+  LOCAL_HD_SUFFIX,
+  LOCAL_VIDEO_BASE,
+  SUPABASE_HD_VIDEO_PREFIX,
+  SUPABASE_STORAGE_BASE,
+  SUPABASE_VIDEO_PREFIX,
+} from '@/config/constants';
 import { env, type VideoSource } from '@/config/env';
 
 // Re-exported for existing callers/tests.
@@ -33,8 +39,14 @@ export const CAMERA_VIDEOS: CameraVideo[] = mockCameras.map((c, i) => ({
 }));
 
 export interface CameraMedia {
-  /** Stream URL for the configured source. */
+  /** Stream URL (720p) for the configured source: the video-wall tiles and the fallback of the main player. */
   video: string;
+  /**
+   * 1920x1080 rendition of the same clip in the configured source, for the selected (main) feed.
+   * It may not exist (not made yet / not uploaded): the player tries it and falls back to `video`.
+   * '' for a camera with no registry clip.
+   */
+  hd: string;
   /** Poster frame for the same clip. */
   poster: string;
   /** Alternative stream to try once if `video` fails (the other source), or '' when none. */
@@ -42,9 +54,10 @@ export interface CameraMedia {
 }
 
 /** URLs of one clip in a given source. */
-export function clipUrls(slug: string, source: VideoSource = env.videoSource): { video: string; poster: string } {
+export function clipUrls(slug: string, source: VideoSource = env.videoSource): { video: string; poster: string; hd: string } {
   const base = source === 'local' ? LOCAL_VIDEO_BASE : `${SUPABASE_STORAGE_BASE}${SUPABASE_VIDEO_PREFIX}`;
-  return { video: `${base}${slug}.mp4`, poster: `${base}${slug}.jpg` };
+  const hd = source === 'local' ? `${LOCAL_VIDEO_BASE}${slug}${LOCAL_HD_SUFFIX}` : `${SUPABASE_STORAGE_BASE}${SUPABASE_HD_VIDEO_PREFIX}${slug}.mp4`;
+  return { video: `${base}${slug}.mp4`, poster: `${base}${slug}.jpg`, hd };
 }
 
 function findCameraVideo(url?: string, code?: string, id?: string): CameraVideo | undefined {
@@ -75,7 +88,7 @@ export function resolveCameraMedia(
     const primary = clipUrls(known.slug, source);
     return { ...primary, fallback: clipUrls(known.slug, other).video };
   }
-  if (url && /^https?:\/\//.test(url)) return { video: url, poster: '', fallback: '' };
+  if (url && /^https?:\/\//.test(url)) return { video: url, hd: '', poster: '', fallback: '' };
 
   const seedStr = code || id || url || 'default';
   let hash = 0;

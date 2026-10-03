@@ -20,10 +20,10 @@ export const EXPIRES_IN = 3600;
 export const MAX_PATHS = 60;
 export const RATE_LIMIT = { windowMs: 60_000, max: 120 };
 
-/** bucket → allowed object-path prefix. */
-export const ALLOWLIST: Record<string, string> = {
-  golden: 'ocr_golden_v1/',
-  videos: 'mumbai/720p/',
+/** bucket → allowed object-path prefixes (videos: the 720p wall renditions and the 1080p HD ones). */
+export const ALLOWLIST: Record<string, string[]> = {
+  golden: ['ocr_golden_v1/'],
+  videos: ['mumbai/720p/', 'mumbai/1080p/'],
 };
 
 const SAFE_PATH = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,255}$/;
@@ -36,12 +36,12 @@ export interface SignBody {
 /** Validates bucket + paths; returns an error message or the de-duplicated paths. */
 export function validateSignRequest(bucket: string | null, rawPaths: string[]): { error: string } | { bucket: string; paths: string[] } {
   if (!bucket || !Object.hasOwn(ALLOWLIST, bucket)) return { error: 'bucket not allowed' };
-  const prefix = ALLOWLIST[bucket];
+  const prefixes = ALLOWLIST[bucket];
   const paths = [...new Set(rawPaths.flatMap((p) => p.split(',')).map((p) => p.trim()).filter(Boolean))];
   if (!paths.length) return { error: 'paths is required' };
   if (paths.length > MAX_PATHS) return { error: `too many paths (max ${MAX_PATHS})` };
   for (const p of paths) {
-    if (!p.startsWith(prefix) || p.length === prefix.length || !SAFE_PATH.test(p) || p.includes('..') || p.includes('//')) {
+    if (!prefixes.some((prefix) => p.startsWith(prefix) && p.length > prefix.length) || !SAFE_PATH.test(p) || p.includes('..') || p.includes('//')) {
       return { error: 'path not allowed' };
     }
   }

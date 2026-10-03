@@ -18,8 +18,12 @@ export const SUPABASE_STORAGE_BASE = String(
 ).replace(/\/?$/, '/');
 /** Folder of the Mumbai camera clips inside the bucket (<slug>.mp4 + <slug>.jpg poster). */
 export const SUPABASE_VIDEO_PREFIX = 'mumbai/720p/';
+/** HD (1920x1080) renditions for the selected feed: <slug>.mp4 under this prefix of the same bucket. */
+export const SUPABASE_HD_VIDEO_PREFIX = 'mumbai/1080p/';
 /** Local dev copies of the same clips (public/videos-local/, gitignored). */
 export const LOCAL_VIDEO_BASE = '/videos-local/';
+/** Local HD rendition sits next to the 720p file: /videos-local/<slug>.hd.mp4. */
+export const LOCAL_HD_SUFFIX = '.hd.mp4';
 
 // ── Map ───────────────────────────────────────────
 /** Fallback coordinates (Kurla, geographic centre of Mumbai) for records with no lat/lng. */

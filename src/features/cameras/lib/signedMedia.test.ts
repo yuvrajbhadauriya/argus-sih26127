@@ -28,6 +28,7 @@ afterEach(() => {
 describe('storageRef', () => {
   it('recognises public-object URLs of signable bucket prefixes only', () => {
     expect(storageRef(CLIP)).toEqual({ bucket: 'videos', path: 'mumbai/720p/mumbai_clip.mp4' });
+    expect(storageRef(`${SUPABASE_PUBLIC_OBJECT_BASE}videos/mumbai/1080p/mumbai_clip.mp4`)).toEqual({ bucket: 'videos', path: 'mumbai/1080p/mumbai_clip.mp4' });
     expect(storageRef(`${SUPABASE_PUBLIC_OBJECT_BASE}videos/other/x.mp4`)).toBeNull();
     expect(storageRef(`${SUPABASE_PUBLIC_OBJECT_BASE}secret/mumbai/720p/x.mp4`)).toBeNull();
     expect(storageRef('/videos-local/mumbai_clip.mp4')).toBeNull();

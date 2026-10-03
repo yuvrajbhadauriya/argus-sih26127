@@ -6,6 +6,9 @@ to the bucket ``videos`` under ``mumbai/720p/``. Every object is upserted with
 ``Cache-Control: max-age=31536000`` (the manifest gets a short cache instead,
 because it changes when clips are re-encoded) and the right Content-Type.
 
+``--hd`` uploads the 1080p renditions instead (``pipeline/data/videos_1080p/<slug>.mp4`` to
+``mumbai/1080p/<slug>.mp4``): the HD files the selected feed plays. No poster, no manifest.
+
 Dry run is the default: nothing is sent unless you pass ``--execute``.
 
 Credentials come from the environment or the repo-root ``.env``:
@@ -17,6 +20,7 @@ Usage::
     python3 pipeline/tools/upload_videos.py --execute        # upload
     python3 pipeline/tools/upload_videos.py --execute --create-bucket
     python3 pipeline/tools/upload_videos.py --execute --only <slug>
+    python3 pipeline/tools/upload_videos.py --hd --execute   # the 1080p HD renditions
 
 Standard library only, so any Python 3.9+ works.
 """
@@ -37,6 +41,8 @@ REPO = PIPELINE.parent
 DEFAULT_DIR = PIPELINE / "data" / "videos_720p"
 BUCKET = "videos"
 PREFIX = "mumbai/720p"
+DEFAULT_HD_DIR = PIPELINE / "data" / "videos_1080p"
+HD_PREFIX = "mumbai/1080p"
 LONG_CACHE = 31536000
 MANIFEST_CACHE = 300
 
@@ -87,6 +93,14 @@ def collect(src_dir: Path, only: list[str] | None) -> list[Path]:
     return files
 
 
+def collect_hd(src_dir: Path, only: list[str] | None) -> list[Path]:
+    """The 1080p mp4 files only (HD renditions have no poster or manifest)."""
+    files = [f for f in sorted(src_dir.glob("*.mp4")) if not f.name.startswith(".")]
+    if only:
+        files = [f for f in files if f.stem in set(only)]
+    return files
+
+
 def object_path(path: Path, prefix: str = PREFIX) -> str:
     return f"{prefix.strip('/')}/{path.name}"
 
@@ -130,16 +144,19 @@ def upload(base: str, key: str, bucket: str, obj: str, path: Path) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Upload 720p videos and posters to Supabase Storage.")
-    ap.add_argument("--dir", type=Path, default=DEFAULT_DIR)
+    ap.add_argument("--dir", type=Path, default=None, help="default pipeline/data/videos_720p (videos_1080p with --hd)")
+    ap.add_argument("--hd", action="store_true", help="upload the 1080p HD renditions to mumbai/1080p/ instead")
     ap.add_argument("--bucket", default=BUCKET)
-    ap.add_argument("--prefix", default=PREFIX)
+    ap.add_argument("--prefix", default=None, help="default mumbai/720p (mumbai/1080p with --hd)")
     ap.add_argument("--env-file", type=Path, default=REPO / ".env")
     ap.add_argument("--only", action="append", metavar="SLUG")
     ap.add_argument("--execute", action="store_true", help="actually upload (default is a dry run)")
     ap.add_argument("--create-bucket", action="store_true", help="create the bucket as public if missing")
     args = ap.parse_args(argv)
 
-    files = collect(args.dir, args.only)
+    args.dir = args.dir or (DEFAULT_HD_DIR if args.hd else DEFAULT_DIR)
+    args.prefix = args.prefix or (HD_PREFIX if args.hd else PREFIX)
+    files = collect_hd(args.dir, args.only) if args.hd else collect(args.dir, args.only)
     if not files:
         print(f"nothing to upload in {args.dir}; run prepare_videos.py first", file=sys.stderr)
         return 1

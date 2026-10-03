@@ -82,6 +82,8 @@ describe('CameraVideoPlayer', () => {
   it('shows "Feed offline" after the primary and fallback sources fail, and can retry', () => {
     render(<CameraVideoPlayer camera={camera} />);
     setVisible(true);
+    fireEvent.error(video()); // HD failed → 720p, never "offline"
+    expect(video().dataset.quality).toBe('sd');
     fireEvent.error(video()); // primary failed → fallback
     expect(screen.queryByText('Feed offline')).toBeNull();
     fireEvent.error(video()); // fallback failed → offline
@@ -94,6 +96,38 @@ describe('CameraVideoPlayer', () => {
     expect(document.querySelector('video')).not.toBeNull();
   });
 
+  describe('HD for the selected feed', () => {
+    it('the main player plays the 1080p rendition, the wall tile stays on 720p', () => {
+      const { unmount } = render(<CameraVideoPlayer camera={camera} />);
+      expect(video().dataset.quality).toBe('hd');
+      expect(video().getAttribute('src')).toMatch(/\.hd\.mp4$/);
+      unmount();
+      render(<CameraVideoPlayer camera={camera} variant="tile" />);
+      expect(video().dataset.quality).toBe('sd');
+      expect(video().getAttribute('src')).not.toMatch(/\.hd\.mp4/);
+    });
+
+    it('falls back to the 720p clip without an error state when the HD file is missing', () => {
+      const onStatusChange = vi.fn();
+      render(<CameraVideoPlayer camera={camera} onStatusChange={onStatusChange} />);
+      setVisible(true);
+      const hd = video().getAttribute('src')!;
+      fireEvent.error(video());
+      expect(video().dataset.quality).toBe('sd');
+      expect(video().getAttribute('src')).toBe(hd.replace(/\.hd\.mp4$/, '.mp4'));
+      expect(screen.queryByText('Feed offline')).toBeNull();
+      expect(onStatusChange).not.toHaveBeenCalledWith('offline');
+      fireEvent.playing(video());
+      expect(screen.getByText('LIVE')).toBeInTheDocument();
+    });
+
+    it('a camera without a registry clip has no HD to try', () => {
+      render(<CameraVideoPlayer camera={{ ...camera, code: 'ZZ-99', id: 'zz-99', video_url: 'https://cdn.example/clip.mp4' }} />);
+      expect(video().dataset.quality).toBe('sd');
+      expect(video().getAttribute('src')).toBe('https://cdn.example/clip.mp4');
+    });
+  });
+
   it('reports its <video> element and feed status to the caller', () => {
     const onVideoElement = vi.fn();
     const onStatusChange = vi.fn();
@@ -104,7 +138,8 @@ describe('CameraVideoPlayer', () => {
     fireEvent.playing(video());
     expect(onStatusChange).toHaveBeenLastCalledWith('playing');
     expect(screen.getByText('LIVE')).toBeInTheDocument();
-    fireEvent.error(video());
+    fireEvent.error(video()); // HD → 720p
+    fireEvent.error(video()); // 720p → other source
     fireEvent.error(video());
     expect(onStatusChange).toHaveBeenLastCalledWith('offline');
     expect(onVideoElement).toHaveBeenLastCalledWith(null);

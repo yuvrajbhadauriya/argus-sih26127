@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { captureVideoFrame, captureVideoFrameWithCanvas, detectCapturedFrame, DetectFrameError } from './detectFrame';
+import { captureVideoFrame, captureVideoFrameWithCanvas, detectCapturedFrame, DetectFrameError, MAX_CAPTURE_WIDTH } from './detectFrame';
 
 function fakeVideo(opts: { width?: number; height?: number; readyState?: number; currentTime?: number } = {}) {
   const video = document.createElement('video');
@@ -32,6 +32,21 @@ function jsonResponse(body: unknown, status = 200) {
 }
 
 describe('captureVideoFrame', () => {
+  it('sends the 1920x1080 HD main feed as is (live ANPR reads plates from these pixels)', () => {
+    stubCanvas(() => 'data:image/jpeg;base64,AAAA');
+    expect(MAX_CAPTURE_WIDTH).toBe(1920);
+    const frame = captureVideoFrameWithCanvas(fakeVideo({ width: 1920, height: 1080 }));
+    expect([frame.width, frame.height]).toEqual([1920, 1080]);
+    expect([frame.canvas.width, frame.canvas.height]).toEqual([1920, 1080]);
+  });
+
+  it('never downscales below 1920 px wide by default, never upscales a 720p feed, caps larger sources at 1920', () => {
+    stubCanvas(() => 'data:image/jpeg;base64,AAAA');
+    expect(captureVideoFrame(fakeVideo({ width: 1280, height: 720 })).width).toBe(1280);
+    const big = captureVideoFrame(fakeVideo({ width: 3840, height: 2160 }));
+    expect([big.width, big.height]).toEqual([1920, 1080]);
+  });
+
   it('downscales to maxWidth and encodes JPEG', () => {
     const ctx = stubCanvas(() => 'data:image/jpeg;base64,AAAA');
     const frame = captureVideoFrame(fakeVideo(), { maxWidth: 1280 });

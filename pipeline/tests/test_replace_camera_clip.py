@@ -435,7 +435,8 @@ def test_dry_run_prints_the_plan_and_writes_nothing(repo, source, ffmpeg, capsys
     assert (f"keep 0-{cam.kept:g} s" in out) and ("whole clip" in out if cam.kept < 45 else "first 45 s" in out) and f"would write public/videos-local/{cam.new}.mp4" in out
     assert "would run (web)" in out and "libx264" in out and "would run (analysis)" in out
     assert "run_remote_detection.py" in out and "would back up" in out and f"{cam.code}_{cam.old}" in out
-    assert f"would upload mumbai/720p/{cam.new}.mp4" in out
+    assert f"would upload mumbai/720p/{cam.new}.mp4" in out and f"would upload mumbai/1080p/{cam.new}.mp4" in out
+    assert f"would write public/videos-local/{cam.new}.hd.mp4" in out
     assert f"{cam.old}" in out
 
 
@@ -646,6 +647,67 @@ def test_both_swaps_one_after_the_other_with_the_same_tool(repo, tmp_path, ffmpe
     assert [c["slug"] for c in rcc.read_json(repo.web_dir / "manifest.json")["clips"]] == sorted(c.new for c in cams)
 
 
+# ── HD rendition for the selected feed ───────────────────────────────────
+
+
+def test_hd_rendition_is_made_verified_registered_and_placed_next_to_the_720p(repo, source, ffmpeg, cam, capsys):
+    runner = FakeRunner()
+    assert rcc.main(["--camera", cam.code, "--source", str(source), "--no-detect"], paths=repo, cv2=fake(cam), runner=runner) == 0
+    hd = repo.analysis_dir / f"{cam.new}.mp4"
+    local_hd = repo.local_dir / f"{cam.new}.hd.mp4"
+    assert hd.is_file() and local_hd.read_bytes() == hd.read_bytes()
+    # same file for HD and detection input: 1080p, CRF 20, High, yuv420p, faststart
+    ana = next(c for c in runner.cmds if "-vf" in c and c[c.index("-vf") + 1] == "scale=-2:1080,format=yuv420p")
+    assert ana[ana.index("-crf") + 1] == "20" and ana[ana.index("-profile:v") + 1] == "high"
+    assert ana[ana.index("-pix_fmt") + 1] == "yuv420p" and ana[ana.index("-movflags") + 1] == "+faststart"
+    # the 720p stays the same size and sits beside it (wall tiles)
+    assert (repo.local_dir / f"{cam.new}.mp4").is_file()
+    entry = json.loads((repo.web_dir / "manifest.json").read_text())["clips"][0]
+    assert entry["hd"] == {"file": f"{cam.new}.hd.mp4", "object": f"mumbai/1080p/{cam.new}.mp4",
+                           "width": 1920, "height": 1080, "bytes": hd.stat().st_size}
+    assert json.loads((repo.local_dir / "manifest.json").read_text())["clips"][0]["hd"]["file"] == f"{cam.new}.hd.mp4"
+    out = capsys.readouterr().out
+    assert "HD/analysis 1920x1080" in out and f"{cam.new}.hd.mp4" in out
+
+
+def test_a_rendition_that_is_not_1080p_is_refused_as_hd(repo, source, ffmpeg, cam, capsys):
+    class Low(FakeCv2):
+        def VideoCapture(self, path):  # noqa: N802
+            if "videos_1080p" in str(path):
+                return FakeCap({"fps": 30.0, "frames": self.out_frames, "size": (720, 1280), "fourcc": "avc1"})
+            return super().VideoCapture(path)
+
+    c = Low(source={"frames": cam.frames}, out_frames=round(cam.kept * 30))
+    assert rcc.main(["--camera", cam.code, "--source", str(source), "--no-detect"], paths=repo, cv2=c, runner=FakeRunner()) == 1
+    assert "not the expected size" in capsys.readouterr().err
+    assert not (repo.local_dir / f"{cam.new}.hd.mp4").exists()
+
+
+def test_a_source_below_1080p_gets_no_hd_and_uploads_only_720p(repo, source, ffmpeg, cam, capsys):
+    small = FakeCv2(source={"frames": 300, "size": (720, 1280)}, out_frames=300)
+    sent = []
+    runner = FakeRunner()
+    rc = rcc.main(["--camera", cam.code, "--source", str(source), "--upload", "--start", "0", "--duration", "10"], paths=repo, cv2=small,
+                  runner=runner, detect_main=fake_detect(cam), creds=lambda env: ("https://x", "k"),
+                  uploader=lambda base, key, bucket, obj, path: sent.append(obj))
+    out = capsys.readouterr().out
+    assert rc == 0, out
+    assert len(runner.cmds) == 2  # web + poster, no 1080p encode
+    assert not (repo.analysis_dir / f"{cam.new}.mp4").exists() and not (repo.local_dir / f"{cam.new}.hd.mp4").exists()
+    assert sent == [f"mumbai/720p/{cam.new}.mp4", f"mumbai/720p/{cam.new}.jpg"]
+    assert "no 1080p rendition" in out and "no HD (source below 1080p)" in out
+
+
+def test_upload_failure_of_the_hd_file_is_reported(repo, source, ffmpeg, cam, capsys):
+    def only_hd_fails(base, key, bucket, obj, path):
+        if "/1080p/" in obj:
+            raise OSError("HTTP 413")
+
+    rc = rcc.main(["--camera", cam.code, "--source", str(source), "--upload"], paths=repo, cv2=fake(cam), runner=FakeRunner(),
+                  detect_main=fake_detect(cam), creds=lambda env: ("https://x", "k"), uploader=only_hd_fails)
+    assert rc == 1 and f"upload of mumbai/1080p/{cam.new}.mp4 failed" in capsys.readouterr().err
+
+
 # ── step 4: upload ───────────────────────────────────────────────────────
 
 
@@ -663,15 +725,17 @@ def _fake_detect(argv, cam):
     return 0
 
 
-def test_upload_sends_only_clip_and_poster_and_prints_the_insert_command(repo, source, ffmpeg, capsys, cam):
+def test_upload_sends_both_renditions_and_poster_and_prints_the_insert_command(repo, source, ffmpeg, capsys, cam):
     sent = []
     rc = rcc.main(["--camera", cam.code, "--source", str(source), "--upload"], paths=repo, cv2=fake(cam), runner=FakeRunner(),
                   detect_main=fake_detect(cam), creds=lambda env: ("https://x.supabase.co", "svc-key"),
                   uploader=lambda base, key, bucket, obj, path: sent.append((base, bucket, obj, path.name)))
     out = capsys.readouterr().out
     assert rc == 0
+    # 720p clip + poster for the wall, the 1080p HD file for the selected feed (the analysis rendition)
     assert sent == [("https://x.supabase.co", "videos", f"mumbai/720p/{cam.new}.mp4", f"{cam.new}.mp4"),
-                    ("https://x.supabase.co", "videos", f"mumbai/720p/{cam.new}.jpg", f"{cam.new}.jpg")]
+                    ("https://x.supabase.co", "videos", f"mumbai/720p/{cam.new}.jpg", f"{cam.new}.jpg"),
+                    ("https://x.supabase.co", "videos", f"mumbai/1080p/{cam.new}.mp4", f"{cam.new}.mp4")]
     assert "python3 pipeline/insert_detections.py --detections_dir ./public/detections --prune" in out
     assert "PRODUCTION write" in out and "NOT touched" in out
     assert "svc-key" not in out

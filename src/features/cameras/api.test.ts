@@ -14,6 +14,7 @@ vi.mock('@/lib/supabase/client', () => ({
 const api = createFakeDataApi();
 
 import {
+  clipUrls,
   resolveCameraMedia,
   resolveSupabaseVideoUrl,
   resolveVideoUrl,
@@ -46,13 +47,21 @@ describe('resolveCameraMedia / resolveVideoUrl', () => {
     expect(resolveCameraMedia(undefined, 'VP-01', undefined, 'local')).toEqual({
       video: `${LOCAL}${vp.slug}.mp4`,
       poster: `${LOCAL}${vp.slug}.jpg`,
+      hd: `${LOCAL}${vp.slug}.hd.mp4`,
       fallback: `${BUCKET}${vp.slug}.mp4`,
     });
     expect(resolveCameraMedia(undefined, 'VP-01', undefined, 'supabase')).toEqual({
       video: `${BUCKET}${vp.slug}.mp4`,
       poster: `${BUCKET}${vp.slug}.jpg`,
+      hd: `${SUPABASE_STORAGE_BASE}mumbai/1080p/${vp.slug}.mp4`,
       fallback: `${LOCAL}${vp.slug}.mp4`,
     });
+  });
+
+  it('names the HD rendition next to the 720p one (local) and under mumbai/1080p/ (Storage); none for unknown cameras', () => {
+    expect(clipUrls(vp.slug, 'local').hd).toBe(`/videos-local/${vp.slug}.hd.mp4`);
+    expect(clipUrls(vp.slug, 'supabase').hd).toBe(`${SUPABASE_STORAGE_BASE}mumbai/1080p/${vp.slug}.mp4`);
+    expect(resolveCameraMedia('http://a.b/c.mp4', 'ZZ-99').hd).toBe('');
   });
 
   it('ignores a stale database video_url for registry cameras', () => {

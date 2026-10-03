@@ -67,7 +67,7 @@ $SUPABASE_URL/storage/v1/object/public/videos/mumbai/720p/<slug>.mp4
 $SUPABASE_URL/storage/v1/object/public/videos/mumbai/720p/<slug>.jpg
 ```
 
-The 1080p analysis files are not uploaded; the inference pipeline reads them
+The 1080p files are not uploaded by default (`--hd` uploads them as the HD rendition); the inference pipeline reads them
 from disk.
 
 ## 3. `link_local_videos.py`: play the clips in `npm run dev` without Supabase
@@ -77,6 +77,12 @@ python3 pipeline/tools/link_local_videos.py          # symlinks into public/vide
 python3 pipeline/tools/link_local_videos.py --copy   # real copies instead
 python3 pipeline/tools/link_local_videos.py --clean  # remove public/videos-local/
 ```
+
+`--hd` also exposes the existing 1080p renditions (`pipeline/data/videos_1080p/<slug>.mp4`, the detection input) as
+`/videos-local/<slug>.hd.mp4`: the HD file the selected feed plays, no transcode or detection needed. Only the clips
+in `src/config/cameraClips.json` are exposed; cameras without a 1080p file are listed and keep 720p.
+A plain run never removes `*.hd.mp4`. `upload_videos.py --hd [--execute]` uploads the same files to
+`mumbai/1080p/<slug>.mp4` (the dashboard signs that prefix like `mumbai/720p/`).
 
 Vite serves them at `/videos-local/<slug>.mp4`, `/videos-local/<slug>.jpg` and
 `/videos-local/manifest.json`. `public/videos-local/` is gitignored. Run
@@ -100,15 +106,16 @@ python3 pipeline/tools/replace_camera_clip.py --camera AN-01 --source ~/Download
 
 1. Validates the source with OpenCV (opens, size, fps, length, frames decode) and refuses what it cannot decode.
 2. Transcodes with the `prepare_videos.py` profile (720p web rendition + poster in `data/videos_720p/`,
-   1080p analysis rendition in `data/videos_1080p/`, H.264 + yuv420p + faststart, no audio) and copies the
-   web files to `public/videos-local/`. Default length: the whole clip up to 45 s (the other clips run 10-71 s,
+   1080p rendition in `data/videos_1080p/`, H.264 High + yuv420p + faststart, CRF 20 for 1080p, no audio) and copies the
+   web files plus the 1080p file as `<slug>.hd.mp4` to `public/videos-local/`. The 1080p file is both the HD the selected feed plays
+   and the detection input, so boxes match the pixels shown. A source below 1080p gets no HD. Default length: the whole clip up to 45 s (the other clips run 10-71 s,
    median ~44 s), so a 20 s clip stays whole and a 57 s clip keeps its first 45 s; `--start/--duration` pick
    another window. Each output is re-read and checked (codec, size, length, moov atom first).
 3. Runs `pipeline/detect/run_remote_detection.py` with its defaults on the analysis rendition into a staging
    folder. Only if that succeeds: the old `detections_/events_<code>.json` and `manifest.json` are copied to
    `pipeline/data/backups/<code>_<old slug>/`, the new files are installed in `public/detections/`, and the
    camera is pointed at the new slug in `src/config/cameraClips.json` and `pipeline/camera_config.json`.
-4. `--upload` only: uploads the clip + poster to the private `videos` bucket (`mumbai/720p/`) and **prints**
+4. `--upload` only: uploads the 720p clip + poster (`mumbai/720p/`) and the HD file (`mumbai/1080p/`) to the private `videos` bucket and **prints**
    the `insert_detections.py` commands for the production database; it never runs them.
 5. Prints old vs new slug, frames, duration, reads and the next commands.
 

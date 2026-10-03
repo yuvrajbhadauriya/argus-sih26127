@@ -2,7 +2,8 @@
 // Signed media URLs for the private Storage buckets.
 //
 // Camera clips / posters are addressed by their public-object URL
-// (…/storage/v1/object/public/videos/mumbai/720p/<slug>.mp4, see
+// (…/storage/v1/object/public/videos/mumbai/720p/<slug>.mp4, or the HD
+// rendition under mumbai/1080p/, see
 // cameras/api.ts clipUrls). The buckets are private, so before such a URL is
 // handed to a <video> or <img> it is exchanged for a 1-hour signed URL from
 // GET /api/media/sign (shared, batched, in-memory cache — the same one the
@@ -20,7 +21,7 @@ import { SUPABASE_PUBLIC_OBJECT_BASE } from '@/config/constants';
 import { signedUrlCache, useSignedUrls } from '@/features/golden-set/lib/signedUrls';
 
 /** Buckets (and object prefixes) that /api/media/sign will sign. */
-const SIGNABLE: Record<string, string> = { videos: 'mumbai/720p/' };
+const SIGNABLE: Record<string, string[]> = { videos: ['mumbai/720p/', 'mumbai/1080p/'] };
 export const SIGNED_REFRESH_TICK_MS = 60_000;
 
 export interface StorageRef {
@@ -36,8 +37,8 @@ export function storageRef(url: string | null | undefined): StorageRef | null {
   if (slash <= 0) return null;
   const bucket = rest.slice(0, slash);
   const path = decodeURIComponent(rest.slice(slash + 1));
-  const prefix = SIGNABLE[bucket];
-  return prefix && path.startsWith(prefix) ? { bucket, path } : null;
+  const prefixes = SIGNABLE[bucket];
+  return prefixes?.some((prefix) => path.startsWith(prefix)) ? { bucket, path } : null;
 }
 
 /**

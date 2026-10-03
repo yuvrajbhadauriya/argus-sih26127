@@ -9,6 +9,9 @@ import type { VehicleType } from '@/types';
 
 export const DETECT_ENDPOINT = '/api/detect';
 
+/** Widest frame sent to the model: the 1920x1080 HD rendition goes through untouched (plates are small). */
+export const MAX_CAPTURE_WIDTH = 1920;
+
 /** Mirrors NormalisedDetection in api/_lib/modelAdapter.ts. */
 export interface RemoteDetection {
   plate_text: string | null;
@@ -66,7 +69,11 @@ export interface CapturedFrame {
 }
 
 export interface CaptureOptions {
-  /** Downscale wider frames to this width (keeps the upload well under 4 MB). Default 1280. */
+  /**
+   * Downscale wider frames to this width (keeps the upload well under 4 MB).
+   * Default MAX_CAPTURE_WIDTH (1920): the HD main feed is sent as is, a 720p
+   * feed is never upscaled.
+   */
   maxWidth?: number;
   /** JPEG quality 0..1. Default 0.85. */
   quality?: number;
@@ -89,7 +96,7 @@ export function captureVideoFrame(video: HTMLVideoElement, options: CaptureOptio
  * moved on to while the request was in flight).
  */
 export function captureVideoFrameWithCanvas(video: HTMLVideoElement, options: CaptureOptions = {}): CapturedFrameWithCanvas {
-  const { maxWidth = 1280, quality = 0.85 } = options;
+  const { maxWidth = MAX_CAPTURE_WIDTH, quality = 0.85 } = options;
   const vw = video.videoWidth;
   const vh = video.videoHeight;
   if (!vw || !vh || video.readyState < 2) {

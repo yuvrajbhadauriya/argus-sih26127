@@ -39,6 +39,7 @@ describe('camera clip registry (src/config/cameraClips.json)', () => {
     expect(clipUrls(clipSlugFor('KR-01'), 'local')).toEqual({
       video: '/videos-local/mumbai_kurla-depot-junction_pexels12974288.mp4',
       poster: '/videos-local/mumbai_kurla-depot-junction_pexels12974288.jpg',
+      hd: '/videos-local/mumbai_kurla-depot-junction_pexels12974288.hd.mp4',
     });
   });
 

@@ -19,6 +19,12 @@ describe('validateSignRequest', () => {
   it('only allows the allowlisted bucket/prefix pairs', () => {
     expect(validateSignRequest('golden', ['ocr_golden_v1/a.jpg'])).toEqual({ bucket: 'golden', paths: ['ocr_golden_v1/a.jpg'] });
     expect(validateSignRequest('videos', ['mumbai/720p/vp01.mp4,mumbai/720p/vp01.jpg'])).toMatchObject({ paths: ['mumbai/720p/vp01.mp4', 'mumbai/720p/vp01.jpg'] });
+    // HD renditions of the selected feed are signed too, under their own prefix only
+    expect(validateSignRequest('videos', ['mumbai/1080p/vp01.mp4'])).toEqual({ bucket: 'videos', paths: ['mumbai/1080p/vp01.mp4'] });
+    expect(validateSignRequest('videos', ['mumbai/1080p/'])).toEqual({ error: 'path not allowed' });
+    expect(validateSignRequest('videos', ['mumbai/4k/vp01.mp4'])).toEqual({ error: 'path not allowed' });
+    expect(validateSignRequest('videos', ['mumbai/1080p/../720p/x.mp4'])).toEqual({ error: 'path not allowed' });
+    expect(validateSignRequest('golden', ['mumbai/1080p/vp01.mp4'])).toEqual({ error: 'path not allowed' });
     expect(validateSignRequest('private', ['ocr_golden_v1/a.jpg'])).toEqual({ error: 'bucket not allowed' });
     expect(validateSignRequest(null, ['x'])).toEqual({ error: 'bucket not allowed' });
     expect(validateSignRequest('golden', ['mumbai/720p/vp01.mp4'])).toEqual({ error: 'path not allowed' });

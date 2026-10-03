@@ -108,6 +108,15 @@ Camera clips stream from `VITE_VIDEO_SOURCE`: `local` (default in `npm run dev`)
 and `supabase` (default in production builds) plays `videos/mumbai/720p/<slug>.mp4` from Supabase
 Storage. If the chosen source fails, the player tries the other one once.
 
+**HD for the selected feed.** The video-wall tiles play the 720p clips (8 play at once); the selected
+(main) feed plays the 1080p rendition when there is one: `public/videos-local/<slug>.hd.mp4` locally,
+`videos/mumbai/1080p/<slug>.mp4` in the private bucket (same signed-URL route, `/api/media/sign` allows both
+prefixes). Without an HD file the player silently uses the 720p clip, no error. The live ANPR frames are
+grabbed from the playing main video and sent at up to 1920 px wide, so they come from the HD pixels.
+`python3 pipeline/tools/link_local_videos.py --hd` exposes the 1080p renditions that already exist in
+`pipeline/data/videos_1080p/` (no transcode, no detection re-run); `replace_camera_clip.py` makes the HD
+file of a swapped camera itself; `python3 pipeline/tools/upload_videos.py --hd --execute` uploads the HD set.
+
 ## Camera network (Mumbai)
 
 Eight cameras play real Mumbai traffic clips (Pexels; credits in
