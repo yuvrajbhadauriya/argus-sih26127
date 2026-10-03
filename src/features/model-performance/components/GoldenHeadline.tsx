@@ -43,7 +43,7 @@ export function GoldenHeadline({
     <Panel
       title={title}
       icon={<AwardIcon />}
-      actions={<Link to="/accuracy" className="text-xs font-medium text-primary hover:underline">Accuracy Proof</Link>}
+      actions={<Link to="/accuracy" className="tap text-xs font-medium text-primary hover:underline">Accuracy Proof</Link>}
       footer="Task: plate crop in, plate text out (the OCR stage only). Exact whole-plate match, no partial credit. This is not an end-to-end measurement on camera video."
     >
       <section aria-label="In-domain plate OCR accuracy" className="space-y-3">

@@ -36,7 +36,7 @@ export function KpiTile({ label, value, unit, icon, hint, tone = 'default', delt
   const body = (
     <>
       <div className="flex items-start justify-between gap-2">
-        <span className="truncate text-2xs font-semibold uppercase tracking-[0.06em] text-fg-subtle">{label}</span>
+        <span className="min-w-0 break-words text-2xs font-semibold uppercase leading-tight tracking-[0.06em] text-fg-subtle lg:truncate lg:leading-[inherit]">{label}</span>
         {icon && (
           <span className={cn('inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-sm [&>svg]:h-3.5 [&>svg]:w-3.5', ICON_TONE[tone])} aria-hidden>
             {icon}

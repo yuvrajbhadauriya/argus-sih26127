@@ -90,3 +90,27 @@
   background: transparent;
   border: none;
 }
+
+/* ── Touch / phone ── */
+@media (max-width: 1023px) {
+  .leaflet-control-attribution { font-size: 11px !important; }
+}
+@media (pointer: coarse), (max-width: 767px) {
+  .leaflet-bar a,
+  .leaflet-control-zoom a {
+    width: 40px !important;
+    height: 40px !important;
+    line-height: 40px !important;
+  }
+  /* Links are 11px text: widen the hit area without growing the control. */
+  .leaflet-control-attribution a {
+    display: inline-block;
+    padding: 14px 3px;
+    margin: -14px 0;
+    position: relative;
+  }
+}
+/* Touch screens zoom with a pinch; the +/- buttons would only cover the map. */
+@media (pointer: coarse) {
+  .leaflet-control-zoom { display: none; }
+}

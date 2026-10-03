@@ -43,8 +43,8 @@ import { TrajectoryMap } from '@/features/vehicles/components/TrajectoryMap';
 import { TrajectoryTimeline } from '@/features/vehicles/components/TrajectoryTimeline';
 import { SimulationBadge } from '@/features/vehicles/components/SimulationBadge';
 
-const MAP_HEIGHT = 'h-[max(520px,calc(100dvh-330px))]';
-const RAIL_MAX_H = 'max-h-[max(520px,calc(100dvh-330px))]';
+const MAP_HEIGHT = 'h-[max(400px,calc(100dvh-330px))] md:h-[max(520px,calc(100dvh-330px))]';
+const RAIL_MAX_H = 'max-h-[max(400px,calc(100dvh-330px))] md:max-h-[max(520px,calc(100dvh-330px))]';
 
 const ANOMALY_TITLE: Record<string, string> = {
   cloned_plate: 'Possible cloned plate',
@@ -293,7 +293,7 @@ export function VehiclesPage() {
               onBlur={() => setTimeout(() => setShowMatches(false), 150)}
               autoComplete="off"
               spellCheck={false}
-              className="w-full [&_input]:h-9 [&_input]:text-[13px] [&_input]:uppercase [&_input::placeholder]:font-sans [&_input::placeholder]:normal-case"
+              className="w-full [&_input]:h-9 [&_input]:text-[13px] max-md:[&_input]:h-11 max-md:[&_input]:text-base [&_input]:uppercase [&_input::placeholder]:font-sans [&_input::placeholder]:normal-case"
             />
             {showMatches && visibleMatches.length > 0 && (
               <ul className="absolute left-0 right-0 top-full z-[1100] mt-1 max-h-80 overflow-y-auto rounded-md border border-line bg-surface py-1 shadow-pop" role="listbox" aria-label="Matching vehicles">

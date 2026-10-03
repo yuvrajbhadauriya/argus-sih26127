@@ -23,7 +23,7 @@ const SHORTCUTS: { keys: string[]; action: string }[] = [
   { keys: ['Space'], action: 'Play / pause replay (map focused)' },
 ];
 
-const ITEM = 'flex h-8 w-full items-center gap-2 rounded-sm px-2 text-left text-[13px] text-fg hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent';
+const ITEM = 'flex h-8 w-full items-center gap-2 rounded-sm px-2 text-left text-[13px] touch:h-11 text-fg hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent';
 
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -44,7 +44,7 @@ export function UserMenu() {
       <Popover
         role="dialog"
         triggerLabel={`User menu: ${user ? `${name}, ${ROLE_LABEL[user.role]}` : 'not signed in'}`}
-        triggerClassName="flex h-9 items-center gap-2 rounded-sm px-1.5 text-left transition-colors hover:bg-surface-2"
+        triggerClassName="flex h-9 items-center gap-2 rounded-sm px-1.5 text-left transition-colors hover:bg-surface-2 touch:h-10 touch:min-w-10 max-md:justify-center max-md:px-1"
         trigger={
           <>
             <span
@@ -61,10 +61,10 @@ export function UserMenu() {
               <span className="block text-xs font-medium text-fg">{name}</span>
               <span className="block text-2xs text-fg-subtle">{sub}</span>
             </span>
-            <ChevronDownIcon size={14} className="text-fg-subtle" aria-hidden />
+            <ChevronDownIcon size={14} className="text-fg-subtle max-md:hidden" aria-hidden />
           </>
         }
-        panelClassName="w-72 p-1"
+        panelClassName="w-72 p-1 max-sm:fixed max-sm:inset-x-3 max-sm:top-[calc(env(safe-area-inset-top)+3.25rem)] max-sm:mt-0 max-sm:max-h-[calc(100dvh-8rem)] max-sm:w-auto max-sm:overflow-y-auto"
       >
         {(close) => (
           <>
