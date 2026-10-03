@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════
 // CamerasPage — video wall, selected (streaming) feed and AI detection rail.
-// Selection lives in the URL (?cam=CODE); it defaults to the first online
-// camera in the current zone. The primary feed streams with full ANPR labels;
+// Selection lives in the URL (?cam=CODE); it defaults to SC-01 when online,
+// else the first online camera in the current zone. The primary feed streams with full ANPR labels;
 // on desktop the on-screen wall tiles stream too (plate labels only), every
 // clip on its camera's live clock. Phones / data saver get poster tiles.
 // ═══════════════════════════════════════════════════

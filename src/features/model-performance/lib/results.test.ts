@@ -1,14 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { EvalSchemaError, fmtPct, parseEvalResults, parseVideoConsistency, plateDiff, verdict } from './results';
+import { EvalSchemaError, fmtPct, parseEvalResults, plateDiff } from './results';
 
 const read = (p: string) => JSON.parse(readFileSync(resolve(process.cwd(), p), 'utf8'));
 // Mock-run output (pipeline/eval/evaluate.py --mock) and whatever is currently published.
 const sample = read('src/features/model-performance/__fixtures__/sample-results.json');
-const sampleVideo = read('src/features/model-performance/__fixtures__/sample-video.json');
 const published = read('public/eval/results.json');
-const publishedVideo = read('public/eval/video_consistency.json');
 
 const minimal = (over: Record<string, unknown> = {}) => ({
   schema_version: 1,
@@ -24,7 +22,6 @@ describe('parseEvalResults', () => {
     expect(['sample', 'measured']).toContain(r.status);
     expect(r.overall.plates).toBeGreaterThan(0);
     expect(r.model_card?.model_version).toBe('deim50k+raw35');
-    expect(parseVideoConsistency(publishedVideo).per_camera.length).toBeGreaterThan(0);
   });
 
   it('parses a mock-run file and keeps it labelled as sample', () => {
@@ -34,7 +31,6 @@ describe('parseEvalResults', () => {
     expect(r.overall.plates).toBeGreaterThan(0);
     expect(r.per_dataset.length).toBeGreaterThan(0);
     expect(r.per_condition.every((c) => ['label', 'heuristic', 'mixed'].includes(c.source))).toBe(true);
-    expect(verdict(r)).toBe('not-measured'); // sample data never gets pass/fail
   });
 
   it('rejects wrong schema versions and non-objects', () => {
@@ -62,24 +58,6 @@ describe('parseEvalResults', () => {
       ],
     }));
     expect(r.samples.map((s) => s.thumb)).toEqual(['/eval/samples/00_a.jpg', null]);
-  });
-
-  it('verdict: pass at/above target, fail below, only when measured', () => {
-    expect(verdict(parseEvalResults(minimal()))).toBe('pass');
-    expect(verdict(parseEvalResults(minimal({ overall: { plates: 10, plate_accuracy: 0.899 } })))).toBe('fail');
-    expect(verdict(parseEvalResults(minimal({ overall: { plates: 0, plate_accuracy: null } })))).toBe('not-measured');
-  });
-});
-
-describe('parseVideoConsistency', () => {
-  it('parses a mock-run file', () => {
-    const v = parseVideoConsistency(sampleVideo);
-    expect(v.status).toBe('sample');
-    expect(v.per_camera.length).toBeGreaterThan(0);
-    expect(v.overall.mean_stability).not.toBeNull();
-  });
-  it('throws on garbage', () => {
-    expect(() => parseVideoConsistency({ schema_version: 1 })).toThrow(EvalSchemaError);
   });
 });
 

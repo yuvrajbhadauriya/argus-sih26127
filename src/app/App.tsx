@@ -7,7 +7,7 @@
 import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { DashboardLayout } from '@/shared/layout/DashboardLayout';
-import { routes, loginRoute, prefetchRoutesWhenIdle } from './routes';
+import { routes, devRoutes, loginRoute, prefetchRoutesWhenIdle } from './routes';
 import { NotFoundPage } from './NotFoundPage';
 
 export default function App() {
@@ -20,6 +20,9 @@ export default function App() {
         <Route path={loginRoute.path} element={<loginRoute.page.Component />} />
         <Route element={<DashboardLayout />}>
           {routes.map(({ path, page: { Component } }) => (
+            <Route key={path} path={path} element={<Component />} />
+          ))}
+          {devRoutes.map(({ path, page: { Component } }) => (
             <Route key={path} path={path} element={<Component />} />
           ))}
           <Route path="*" element={<NotFoundPage />} />

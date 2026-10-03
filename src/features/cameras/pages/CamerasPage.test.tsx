@@ -14,7 +14,7 @@ vi.mock('@/features/cameras/api', () => ({ getCameras: api.getCameras }));
 vi.mock('@/features/cameras/components/CameraVideoPlayer', () => ({ CameraVideoPlayer: () => <div data-testid="player" /> }));
 
 import { CamerasPage } from './CamerasPage';
-import { pickCamera } from '../lib/pickCamera';
+import { DEFAULT_CAMERA_CODE, pickCamera } from '../lib/pickCamera';
 import { useCameras, clearCamerasCache, prefetchCameras } from '@/features/cameras/hooks/useCameras';
 
 const cam = (over: Partial<Camera>): Camera => ({
@@ -127,6 +127,28 @@ describe('CamerasPage', () => {
     expect(pickCamera([a, b], null)).toBe(b);
     expect(pickCamera([a, b], 'A')).toBe(a);
     expect(pickCamera([a], 'missing')).toBe(a);
+  });
+
+  it('pickCamera prefers the default camera (SC-01) when it is online', () => {
+    expect(DEFAULT_CAMERA_CODE).toBe('SC-01');
+    const first = cam({ id: 'f', code: 'AA-01' });
+    const sc = cam({ id: 's', code: 'SC-01' });
+    expect(pickCamera([first, sc], null)).toBe(sc);
+    expect(pickCamera([first, sc], 'AA-01')).toBe(first); // explicit ?cam= still wins
+    expect(pickCamera([first, sc], 'missing')).toBe(sc);
+    const scOffline = cam({ id: 's', code: 'SC-01', status: 'offline' });
+    expect(pickCamera([scOffline, first], null)).toBe(first); // offline -> first online
+    expect(pickCamera([scOffline], null)).toBe(scOffline); // nothing online -> first
+  });
+
+  it('opens on SC-01 without ?cam= when it is online', async () => {
+    api.getCameras.mockResolvedValue([
+      cam({ id: 'c1', name: 'Online First', code: 'ON-01' }),
+      cam({ id: 'c2', name: 'Santacruz Airport Approach', code: 'SC-01' }),
+    ]);
+    render(<MemoryRouter><CamerasPage /></MemoryRouter>);
+    await screen.findByRole('heading', { name: /Santacruz Airport Approach/ });
+    expect(screen.getByRole('button', { name: 'Open feed SC-01 Santacruz Airport Approach' })).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('shows the empty message when there are no cameras', async () => {

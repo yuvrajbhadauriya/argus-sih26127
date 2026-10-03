@@ -23,7 +23,8 @@ import { ConfidenceBar, CropImage, PlateRead, VerdictIcon } from './parts';
 
 export const PAGE_SIZE = 48;
 
-function Tile({ it, urls, onOpen }: { it: GoldenItem; urls: CropUrls; onOpen: (it: GoldenItem) => void }) {
+/** One plate: crop, the model's read, confidence and verdict (`showTruth` adds the human label). */
+export function Tile({ it, urls, onOpen, showTruth = false }: { it: GoldenItem; urls: CropUrls; onOpen: (it: GoldenItem) => void; showTruth?: boolean }) {
   return (
     <li>
       <button
@@ -37,6 +38,12 @@ function Tile({ it, urls, onOpen }: { it: GoldenItem; urls: CropUrls; onOpen: (i
           <PlateRead text={it.pred || '—'} variant={plateVariant(it)} size="sm" marks={it.correct ? undefined : diffMarks(it.gt, it.pred).pred} className="min-w-0 max-w-full" />
           <VerdictIcon correct={it.correct} />
         </div>
+        {showTruth && (
+          <div className="flex items-center justify-between gap-1.5 text-2xs text-fg-subtle">
+            <span>Label</span>
+            <span className="min-w-0 truncate font-mono text-xs tracking-wide text-fg">{it.gt}</span>
+          </div>
+        )}
         <div className="flex items-center gap-2">
           <ConfidenceBar value={it.confidence} thin className="flex-1" />
           <span className="font-mono text-2xs tabular-nums text-fg-muted">{it.confidence.toFixed(0)}%</span>

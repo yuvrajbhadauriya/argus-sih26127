@@ -6,11 +6,11 @@ import { Badge } from '@/shared/ui/Badge';
 import { cn } from '@/shared/lib/cn';
 import { BREAKDOWN_GROUPS, fmtInt, otherGroups, PS_TARGET, SMALL_SAMPLE, type GoldenResults } from '../lib/results';
 
-export function Breakdown({ r }: { r: GoldenResults }) {
+export function Breakdown({ r, title = 'Accuracy by condition', subtitle = 'light, plate type, layout and side' }: { r: GoldenResults; title?: string; subtitle?: string }) {
   const cards = BREAKDOWN_GROUPS.map((g) => ({ ...g, t: r.breakdown[g.key] })).filter((g) => g.t && g.t.n > 0);
   const others = otherGroups(r);
   return (
-    <Panel title="Accuracy by condition" subtitle="light, plate type, layout and side" icon={<ChartColumnIcon />}>
+    <Panel title={title} subtitle={subtitle} icon={<ChartColumnIcon />}>
       <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
         {cards.map(({ key, label, hint, t }) => {
           const acc = t.n ? t.correct / t.n : 0;
