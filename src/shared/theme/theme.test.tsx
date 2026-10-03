@@ -37,14 +37,25 @@ afterEach(() => {
 });
 
 describe('theme store', () => {
-  it('defaults to system preference and resolves light when matchMedia is missing (jsdom)', async () => {
+  it('opens light even when the OS prefers dark; choosing System follows the OS', async () => {
+    mockMatchMedia(true);
     const t = await load();
-    expect(t.getPreference()).toBe('system');
+    expect(t.getPreference()).toBe('light');
+    expect(t.getResolvedTheme()).toBe('light');
+    expect(document.documentElement.dataset.theme).toBe('light');
+    t.setPreference('system');
+    expect(t.getResolvedTheme()).toBe('dark');
+  });
+
+  it('defaults to the light theme and resolves light when matchMedia is missing (jsdom)', async () => {
+    const t = await load();
+    expect(t.getPreference()).toBe('light');
     expect(t.getResolvedTheme()).toBe('light');
     expect(document.documentElement.dataset.theme).toBe('light');
   });
 
   it('follows the OS dark preference in system mode and reacts to changes', async () => {
+    localStorage.setItem('nero.theme', 'system');
     const mm = mockMatchMedia(true);
     const t = await load();
     expect(t.getResolvedTheme()).toBe('dark');
@@ -86,7 +97,7 @@ describe('theme store', () => {
     expect(t.getPreference()).toBe('dark');
     localStorage.setItem('nero.theme', 'purple');
     t = await load();
-    expect(t.getPreference()).toBe('system');
+    expect(t.getPreference()).toBe('light');
   });
 
   it('toggle flips between light and dark', async () => {
@@ -106,7 +117,7 @@ describe('theme store', () => {
       throw new Error('denied');
     });
     const t = await load();
-    expect(t.getPreference()).toBe('system');
+    expect(t.getPreference()).toBe('light');
     expect(() => t.setPreference('dark')).not.toThrow();
     expect(t.getResolvedTheme()).toBe('dark');
   });
@@ -123,6 +134,7 @@ describe('theme store', () => {
 
 describe('ThemeToggle', () => {
   it('icon variant toggles the theme and updates its label', async () => {
+    localStorage.setItem('nero.theme', 'system');
     await load();
     const { ThemeToggle } = await import('@/shared/layout/ThemeToggle');
     render(<ThemeToggle />);
@@ -137,7 +149,7 @@ describe('ThemeToggle', () => {
     const t = await load();
     const { ThemeToggle } = await import('@/shared/layout/ThemeToggle');
     render(<ThemeToggle variant="segmented" />);
-    expect(screen.getByRole('radio', { name: 'System' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('radio', { name: 'Light' })).toHaveAttribute('aria-checked', 'true');
     await userEvent.click(screen.getByRole('radio', { name: 'Dark' }));
     expect(screen.getByRole('radio', { name: 'Dark' })).toHaveAttribute('aria-checked', 'true');
     expect(t.getPreference()).toBe('dark');

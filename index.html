@@ -12,7 +12,7 @@
     <link rel="preconnect" href="https://ngwrbxiaeressvmhfopb.supabase.co" crossorigin />
     <script>
       /* Resolve the theme before first paint (no flash). Mirrors src/shared/theme/theme.ts. */
-      (function(){var p='system';try{p=localStorage.getItem('nero.theme')||'system'}catch(e){}
+      (function(){var p='light';try{p=localStorage.getItem('nero.theme')||'light'}catch(e){}
       var d=p==='dark'||(p!=='light'&&!!window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches);
       var r=document.documentElement;r.setAttribute('data-theme',d?'dark':'light');r.style.colorScheme=d?'dark':'light';
       var m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute('content',d?'#0B0F14':'#F4F6F9');})();

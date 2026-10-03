@@ -21,12 +21,13 @@ function isPreference(v: unknown): v is ThemePreference {
   return v === 'light' || v === 'dark' || v === 'system';
 }
 
+/** First visit (nothing stored) opens in the light theme; 'dark' and 'system' are explicit choices. */
 function readStored(): ThemePreference {
   try {
     const v = typeof localStorage !== 'undefined' ? localStorage.getItem(THEME_STORAGE_KEY) : null;
-    return isPreference(v) ? v : 'system';
+    return isPreference(v) ? v : 'light';
   } catch {
-    return 'system';
+    return 'light';
   }
 }
 
@@ -141,7 +142,7 @@ export function useTheme(): {
   setPreference: (p: ThemePreference) => void;
   toggle: () => void;
 } {
-  const pref = useSyncExternalStore(subscribe, getPreference, () => 'system' as ThemePreference);
+  const pref = useSyncExternalStore(subscribe, getPreference, () => 'light' as ThemePreference);
   const resolved = useSyncExternalStore(subscribe, getResolvedTheme, getServerSnapshot);
   const set = useCallback((p: ThemePreference) => setPreference(p), []);
   return { preference: pref, resolved, setPreference: set, toggle: toggleTheme };
