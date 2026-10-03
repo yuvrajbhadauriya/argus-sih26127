@@ -548,7 +548,7 @@ export function TrajectoryMap({ trajectory, activeIndex = null, onActiveIndexCha
 
       {canReplay && (
         <MapPanel position="bottom-center" className="w-[min(460px,calc(100%-24px))] px-2 py-1.5">
-          <div className="flex items-center gap-1" role="group" aria-label="Journey replay controls">
+          <div className="flex flex-wrap items-center gap-1 sm:flex-nowrap" role="group" aria-label="Journey replay controls">
             {!reduced && (
               <IconButton
                 size="sm"
@@ -570,15 +570,15 @@ export function TrajectoryMap({ trajectory, activeIndex = null, onActiveIndexCha
               onChange={(e) => scrub(Number(e.target.value))}
               aria-label="Replay position"
               aria-valuetext={`${clock} IST`}
-              className="mx-1 h-1 min-w-0 flex-1 cursor-pointer accent-[var(--primary)]"
+              className="mx-1 h-1 min-w-0 flex-1 cursor-pointer accent-[var(--primary)] max-sm:order-last max-sm:mx-0 max-sm:basis-[calc(100%-5.5rem)]"
             />
-            <span className="shrink-0 font-mono text-xs font-medium tabular-nums text-fg" aria-live="off">{clock} IST</span>
+            <span className="shrink-0 font-mono text-xs font-medium tabular-nums text-fg max-sm:ml-auto" aria-live="off">{clock} IST</span>
             {!reduced && (
               <select
                 value={speed}
                 onChange={(e) => setSpeed(Number(e.target.value))}
                 aria-label="Replay speed"
-                className="ml-1 h-7 shrink-0 cursor-pointer rounded-sm border border-line-strong bg-surface px-1 text-xs tabular-nums text-fg"
+                className="ml-1 h-7 shrink-0 max-sm:order-last max-sm:ml-auto cursor-pointer rounded-sm border border-line-strong bg-surface px-1 text-xs tabular-nums text-fg touch:h-10"
               >
                 {REPLAY_SPEEDS.map((s) => (
                   <option key={s} value={s}>{s}×</option>

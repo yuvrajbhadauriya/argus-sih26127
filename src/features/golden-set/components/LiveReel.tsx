@@ -193,11 +193,11 @@ export function LiveReel({ results }: { results: GoldenResults }) {
                 }}
               />
             )}
-            <div className="pointer-events-none absolute inset-x-3 top-2 flex items-center justify-between font-mono text-[10px] font-semibold uppercase tracking-[0.08em]" style={{ color: VIDEO_OVERLAY.box }}>
+            <div className="pointer-events-none absolute inset-x-3 top-2 flex items-center justify-between font-mono text-[10px] max-lg:text-2xs font-semibold uppercase tracking-[0.08em]" style={{ color: VIDEO_OVERLAY.box }}>
               <span className="px-3">{s.phase === 'scan' && !reduced ? 'Scanning…' : 'Plate crop'}</span>
               <span className="px-3 tabular-nums">#{fmtInt(idx + 1)}</span>
             </div>
-            <div className="pointer-events-none absolute inset-x-3 bottom-2 flex items-center justify-between px-3 font-mono text-[10px] uppercase tracking-[0.08em] text-white/60">
+            <div className="pointer-events-none absolute inset-x-3 bottom-2 flex items-center justify-between px-3 font-mono text-[10px] max-lg:text-2xs uppercase tracking-[0.08em] text-white/60">
               <span>{it.side} · {it.rowCount === 2 ? '2 rows' : '1 row'}</span>
               <span className="tabular-nums">{it.width}×{it.height}px</span>
             </div>

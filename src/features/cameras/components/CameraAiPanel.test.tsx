@@ -84,10 +84,10 @@ describe('CameraAiPanel live ANPR', () => {
     expect(screen.getByText('Analysing live frames…')).toBeInTheDocument();
   });
 
-  it('falls back to the recorded reads with an honest note when the GPU model is unreachable', () => {
+  it('falls back to the recorded reads, labelled as replayed, without an error line when the GPU model is unreachable', () => {
     mocks.live.mockReturnValue(state({ status: 'unavailable', reason: 'LAN/VPN-only' }));
     renderPanel();
-    expect(screen.getByText(/Live GPU model not reachable from here/)).toBeInTheDocument();
+    expect(screen.queryByText(/not reachable/)).toBeNull();
     expect(screen.getByText(/Real reads by the AI ANPR engine on this clip/)).toBeInTheDocument();
     expect(screen.queryByText(/GPU live/)).toBeNull();
   });

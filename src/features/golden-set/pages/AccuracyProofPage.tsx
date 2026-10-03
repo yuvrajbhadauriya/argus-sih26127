@@ -34,7 +34,7 @@ export function AccuracyProofPage() {
         icon={BadgeCheckIcon}
         description="Our trained Indian-plate ANPR model, scored plate by plate against the team's human-labelled golden set."
         actions={
-          <Link to="/model" className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline">
+          <Link to="/model" className="tap inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline">
             <ScanTextIcon size={14} aria-hidden /> Model Performance
           </Link>
         }

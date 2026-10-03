@@ -29,7 +29,7 @@ export function ThemeToggle({ variant = 'icon', className }: { variant?: 'icon' 
               aria-checked={checked}
               onClick={() => setPreference(id)}
               className={cn(
-                'inline-flex h-6 items-center gap-1.5 rounded-xs px-2 text-xs font-medium transition-colors',
+                'inline-flex h-6 items-center gap-1.5 rounded-xs px-2 text-xs font-medium transition-colors touch:h-10',
                 checked ? 'bg-surface text-fg shadow-sm dark:bg-surface-3' : 'text-fg-muted hover:text-fg',
               )}
             >

@@ -119,3 +119,26 @@ describe('DashboardLayout shell', () => {
     act(() => resetReplay());
   });
 });
+
+describe('DashboardLayout on phones', () => {
+  it('swaps the sidebar rail for the bottom tab bar and the compact header', async () => {
+    const original = window.matchMedia;
+    window.matchMedia = ((q: string) => ({
+      matches: q.includes('max-width: 767px'),
+      media: q,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    })) as unknown as typeof window.matchMedia;
+    try {
+      renderShell();
+      const nav = screen.getByRole('navigation', { name: 'Primary' });
+      expect(nav.closest('aside')).toBeNull();
+      expect(document.querySelector('aside')).toBeNull();
+      expect(screen.getByRole('button', { name: 'More' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Search vehicle plate' })).toBeInTheDocument();
+      expect(screen.queryByRole('searchbox')).not.toBeInTheDocument();
+    } finally {
+      window.matchMedia = original;
+    }
+  });
+});

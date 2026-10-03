@@ -395,7 +395,7 @@ export function AlertsPage() {
         actions={<ReplayControls />}
       />
 
-      <Toolbar>{filters}</Toolbar>
+      <Toolbar className="max-sm:grid max-sm:grid-cols-2">{filters}</Toolbar>
 
       {error ? (
         <ErrorState message={error} onRetry={load} />

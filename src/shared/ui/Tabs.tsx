@@ -4,6 +4,7 @@
 
 import { useRef, type KeyboardEvent, type ReactNode } from 'react';
 import { cn } from '@/shared/lib/cn';
+import { useScrollFade } from '@/shared/lib/useScrollFade';
 
 export interface TabItem {
   id: string;
@@ -30,6 +31,7 @@ export function Tabs({
   className?: string;
 }) {
   const refs = useRef<Array<HTMLButtonElement | null>>([]);
+  const { attach: fadeRef, style: fadeStyle } = useScrollFade<HTMLDivElement>();
 
   const onKeyDown = (e: KeyboardEvent<HTMLButtonElement>, i: number) => {
     let next = -1;
@@ -46,11 +48,15 @@ export function Tabs({
   const line = variant === 'line';
   return (
     <div
+      ref={fadeRef}
+      style={fadeStyle}
       role="tablist"
       aria-label={ariaLabel}
       className={cn(
         'flex min-w-0 items-center',
-        line ? cn('gap-4 overflow-x-auto border-b border-line', size === 'sm' ? 'h-9' : 'h-10') : 'inline-flex gap-0.5 rounded-sm bg-surface-2 p-0.5',
+        line
+          ? cn('gap-4 overflow-x-auto border-b border-line [scrollbar-width:none] [&::-webkit-scrollbar]:hidden', size === 'sm' ? 'h-9 touch:h-11' : 'h-10 touch:h-11')
+          : 'inline-flex max-w-full gap-0.5 overflow-x-auto rounded-sm bg-surface-2 p-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
         className,
       )}
     >
@@ -75,14 +81,14 @@ export function Tabs({
               size === 'sm' ? 'text-xs' : 'text-[13px]',
               line
                 ? cn(
-                    'h-full px-0.5',
+                    'h-full px-0.5 touch:px-1',
                     active
                       ? 'text-fg after:absolute after:inset-x-0 after:-bottom-px after:h-0.5 after:rounded-full after:bg-primary'
                       : 'text-fg-muted hover:text-fg',
                   )
                 : cn(
                     'rounded-xs px-2.5',
-                    size === 'sm' ? 'h-6' : 'h-7',
+                    size === 'sm' ? 'h-6 touch:h-10' : 'h-7 touch:h-10',
                     active ? 'bg-surface text-fg shadow-sm dark:bg-surface-3' : 'text-fg-muted hover:text-fg',
                   ),
             )}
@@ -92,7 +98,7 @@ export function Tabs({
             {t.count != null && (
               <span
                 className={cn(
-                  'inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold tabular-nums leading-none',
+                  'inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] max-lg:text-2xs font-semibold tabular-nums leading-none',
                   active ? 'bg-primary/12 text-primary' : 'bg-surface-3 text-fg-muted',
                 )}
               >
