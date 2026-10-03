@@ -1,29 +1,27 @@
 // ═══════════════════════════════════════════════════
-// ModelPerformancePage — accuracy of the ANPR model, from three honest sources:
-// 1. the model team's own plate-OCR benchmarks (labelled as such),
-// 2. what this dashboard's harness measured end-to-end (pipeline/eval →
-//    public/eval/results.json; sample/mock runs get a banner, no verdict),
-// 3. the high-confidence read rate on the 8 Mumbai clips, computed from the
+// ModelPerformancePage — accuracy of the ANPR model, from honest sources:
+// 1. headline: in-domain plate OCR accuracy on the golden set
+//    (public/golden/results_golden_v1.json) vs the PS target (public/eval/results.json),
+// 2. robustness: the out-of-distribution stress test on public internet images
+//    (pipeline/eval → public/eval/results.json; sample/mock runs get a banner),
+// 3. real reads: actual crops with the model's OCR text and the ground truth,
+// 4. the high-confidence read rate on the 8 Mumbai clips, computed from the
 //    real per-vehicle event files (public/detections/events_<code>.json).
 // Model architecture / checkpoint names are never rendered (redactModelNames).
 // ═══════════════════════════════════════════════════
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
 import {
-  CircleCheckIcon,
-  CircleDashedIcon,
-  CircleXIcon,
   CpuIcon,
   FlaskConicalIcon,
   GaugeIcon,
   ScanTextIcon,
+  ScaleIcon,
   TargetIcon,
   TimerIcon,
   TriangleAlertIcon,
   TypeIcon,
   VideoIcon,
-  AwardIcon,
   ScanLineIcon,
 } from 'lucide-react';
 import { Page, PageHeader } from '@/shared/layout/Page';
@@ -35,16 +33,19 @@ import { EmptyState } from '@/shared/ui/EmptyState';
 import { ErrorState } from '@/shared/ui/ErrorState';
 import { SkeletonPanel } from '@/shared/ui/Skeleton';
 import { fetchEvalResults, fetchVideoConsistency } from '../api';
-import { fmtMs, fmtPct, verdict, type DatasetRow, type EvalResults, type Verdict, type VideoCamera, type VideoConsistency } from '../lib/results';
+import { fmtMs, fmtPct, type DatasetRow, type EvalResults, type VideoCamera, type VideoConsistency } from '../lib/results';
 import { ConditionChart } from '../components/ConditionChart';
-import { SampleGallery } from '../components/SampleGallery';
+import { GoldenHeadline } from '../components/GoldenHeadline';
+import { RealReads } from '../components/RealReads';
+import { Breakdown } from '@/features/golden-set/components/Breakdown';
+import { GoldenStyles } from '@/features/golden-set/components/parts';
+import { useGoldenResults } from '@/features/golden-set/api';
 import { fetchAllCameraEvents } from '@/features/detections/api';
 import {
   GENERIC_ENGINE_NAME,
   GOOD_READ_CONFIDENCE,
   GENERIC_MODEL_NAME,
   HIGH_CONFIDENCE,
-  TEAM_BENCHMARKS,
   readRateStats,
   redactModelNames,
   type ReadRateRow,
@@ -96,12 +97,6 @@ function useEval() {
   return { ...state, retry: useCallback(() => setNonce((n) => n + 1), []) };
 }
 
-const VERDICT: Record<Verdict, { label: string; tone: 'success' | 'danger' | 'neutral'; icon: ReactNode }> = {
-  pass: { label: 'Meets target', tone: 'success', icon: <CircleCheckIcon /> },
-  fail: { label: 'Below target', tone: 'danger', icon: <CircleXIcon /> },
-  'not-measured': { label: 'Not measured', tone: 'neutral', icon: <CircleDashedIcon /> },
-};
-
 function SampleBanner({ note }: { note: string }) {
   return (
     <div role="status" className="flex items-start gap-3 rounded-md border border-warning/50 bg-warning/10 p-3 text-[13px]">
@@ -119,18 +114,12 @@ function SampleBanner({ note }: { note: string }) {
   );
 }
 
-function TargetMarker({ v, target, accuracy }: { v: Verdict; target: number; accuracy: number | null }) {
-  const meta = VERDICT[v];
+/** Neutral domain label: the stress test is out-of-domain, so it is never judged against the PS in-domain target. */
+function DomainLabel() {
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <Badge tone={meta.tone} variant={v === 'not-measured' ? 'outline' : 'solid'} size="md" icon={meta.icon}>
-        {meta.label}
-      </Badge>
-      <span className="text-xs text-fg-muted">
-        target &gt; {Math.round(target * 100)}%
-        {v !== 'not-measured' && accuracy != null && ` · ${accuracy >= target ? '+' : ''}${((accuracy - target) * 100).toFixed(1)} pts`}
-      </span>
-    </div>
+    <Badge tone="neutral" variant="outline" size="md" icon={<ScaleIcon />}>
+      Different domain - not comparable to the PS in-domain target
+    </Badge>
   );
 }
 
@@ -222,7 +211,7 @@ function ModelCard({ r }: { r: EvalResults }) {
 export function ModelPerformancePage() {
   const { results: r, video, error, loading, retry } = useEval();
   const rates = useReadRates();
-  const v = r ? verdict(r) : 'not-measured';
+  const golden = useGoldenResults();
   const sample = r?.status !== 'measured';
 
   return (
@@ -230,11 +219,14 @@ export function ModelPerformancePage() {
       <PageHeader
         title="Model Performance"
         icon={ScanTextIcon}
-        description="Accuracy of the trained Indian-plate ANPR model: the model team's OCR benchmarks, this dashboard's own end-to-end measurement, and read confidence on the Mumbai camera clips."
+        description="Accuracy of the trained Indian-plate ANPR model: in-domain plate OCR on the team's golden set, a separate out-of-distribution stress test, real crop-to-text reads, and read confidence on the Mumbai camera clips."
         meta={r && (sample ? <Badge tone="warning" variant="solid">Sample data</Badge> : <Badge tone="info">Measured</Badge>)}
       />
 
-      <TeamBenchmarkPanel />
+      <GoldenStyles />
+      <GoldenHeadline golden={golden.data} target={r?.target ?? null} loading={golden.loading} error={golden.error} onRetry={golden.retry} />
+      {golden.data && <Breakdown r={golden.data} title="Accuracy by condition: in-domain golden set" subtitle={`${golden.data.set} · light, plate type, layout and side`} />}
+      {!loading && !golden.loading && <RealReads golden={golden.data} samples={r?.samples ?? []} />}
       <ReadRatePanel stats={rates.stats} loading={rates.loading} />
 
       {error ? (
@@ -248,22 +240,22 @@ export function ModelPerformancePage() {
           {sample && <SampleBanner note={r.note} />}
 
           <div className="space-y-1">
-            <h2 className="text-[13px] font-semibold text-fg">Out-of-distribution stress test — public internet plate images</h2>
+            <h2 className="text-[13px] font-semibold text-fg">Robustness: out-of-distribution stress test (public internet images)</h2>
             <p className="text-xs text-fg-muted">
-              Full image in, plate text out (detection + OCR), measured by this dashboard's harness on public phone photos and
-              plate crops scraped from the internet — a deliberately different domain from the CCTV-style data the model was
-              trained for (BEL PS SIH26127 target &gt; 90% refers to in-domain plates). End-to-end accuracy on the camera video
-              has not been measured yet.
+              Full image in, plate text out (detection + OCR), measured by this dashboard's harness on {r.overall.images.toLocaleString('en-IN')} public
+              phone photos and plate crops from the internet ({r.overall.plates.toLocaleString('en-IN')} plates, {r.generated_at ? new Date(r.generated_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'date unknown'}) — a deliberately
+              different domain from the CCTV-style data the model was trained for. The PS target (&gt; 90% OCR recognition accuracy) refers to in-domain
+              plates, so these numbers are not compared with it. End-to-end accuracy on the camera video has not been measured yet.
             </p>
+            <DomainLabel />
           </div>
 
           <KpiStrip cols={4}>
             <KpiTile
               label="Stress-test plate accuracy"
               icon={<TargetIcon />}
-              tone={v === 'pass' ? 'success' : v === 'fail' ? 'danger' : 'default'}
               value={fmtPct(r.overall.plate_accuracy)}
-              hint={<TargetMarker v={v} target={r.target.plate_accuracy} accuracy={r.overall.plate_accuracy} />}
+              hint={`exact whole-plate match · n = ${r.overall.plates.toLocaleString('en-IN')} plates, out-of-domain`}
               className={sample ? 'border-dashed' : undefined}
             />
             <KpiTile
@@ -291,7 +283,7 @@ export function ModelPerformancePage() {
           </KpiStrip>
 
           <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-            <Panel title="Accuracy by condition" subtitle="lighting, weather, blur, angle, plate state" icon={<TriangleAlertIcon />}>
+            <Panel title="Stress test: accuracy by condition" subtitle="lighting, weather, blur, angle, plate state" icon={<TriangleAlertIcon />}>
               {r.per_condition.length ? (
                 <ConditionChart rows={r.per_condition} target={r.target.plate_accuracy} />
               ) : (
@@ -326,12 +318,6 @@ export function ModelPerformancePage() {
             <DataTable columns={datasetColumns} rows={r.per_dataset} rowKey={(d) => d.id} caption="Accuracy per dataset" />
           </Panel>
 
-          {r.samples.length > 0 && (
-            <Panel title="Sample predictions" subtitle="errors first · red = misread character">
-              <SampleGallery samples={r.samples} />
-            </Panel>
-          )}
-
           <Panel
             title="Video read stability"
             subtitle="Mumbai camera clips · label-free proxy"
@@ -356,43 +342,6 @@ export function ModelPerformancePage() {
         </>
       )}
     </Page>
-  );
-}
-
-function TeamBenchmarkPanel() {
-  const headline = TEAM_BENCHMARKS.find((b) => b.headline) ?? TEAM_BENCHMARKS[0];
-  const rest = TEAM_BENCHMARKS.filter((b) => b !== headline);
-  return (
-    <Panel
-      title="Plate OCR accuracy (team golden set, measured)"
-      icon={<AwardIcon />}
-      actions={<Link to="/accuracy" className="text-xs font-medium text-primary hover:underline">Details</Link>}
-      footer="Plate crop in, plate text out — the OCR stage only. The golden set was measured through the live OCR endpoint (see Details); the benchmark and two-row figures are the model team's own reported numbers."
-    >
-      <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] sm:items-center">
-        <div>
-          <div className="text-2xs font-semibold uppercase tracking-[0.06em] text-fg-subtle">{headline.label}</div>
-          <Link to="/accuracy" className="block text-3xl font-semibold tabular-nums text-success hover:underline">{fmtPct(headline.accuracy, 2)}</Link>
-          <div className="text-xs text-fg-muted">
-            {headline.correct != null && headline.plates != null
-              ? `${headline.correct.toLocaleString('en-IN')} / ${headline.plates.toLocaleString('en-IN')} plates exactly right`
-              : 'exact plate match'}
-            {' · live OCR endpoint'}
-          </div>
-        </div>
-        <ul className="divide-y divide-line text-[13px]" aria-label="Team OCR benchmarks">
-          {rest.map((b) => (
-            <li key={b.id} className="flex items-baseline justify-between gap-3 py-1.5">
-              <span className="min-w-0 text-fg-muted">
-                {b.label}
-                {b.plates != null && <span className="text-fg-subtle"> · {b.plates.toLocaleString('en-IN')} plates</span>}
-              </span>
-              <span className="shrink-0 font-semibold tabular-nums text-fg">{fmtPct(b.accuracy)}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </Panel>
   );
 }
 

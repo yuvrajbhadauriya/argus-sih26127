@@ -1,7 +1,6 @@
 // ═══════════════════════════════════════════════════
 // What the Model Performance page may show:
 // - model architecture / checkpoint names never reach the UI (redactModelNames)
-// - the model team's own OCR benchmark figures (TEAM_BENCHMARKS), labelled as such
 // - the high-confidence read rate on the Mumbai clips, computed from the real
 //   per-vehicle event files (readRateStats)
 // ═══════════════════════════════════════════════════
@@ -32,29 +31,6 @@ export function containsModelName(text: string): boolean {
   MODEL_NAME_RE.lastIndex = 0;
   return hit;
 }
-
-export interface TeamBenchmark {
-  id: string;
-  label: string;
-  accuracy: number;
-  plates: number | null;
-  /** Exactly-correct plates, when known. */
-  correct?: number;
-  headline?: boolean;
-}
-
-/**
- * Headline: the team's 1,419-plate golden set, measured through the live
- * OCR endpoint (details on /accuracy). The other two are the model team's
- * own reported benchmark figures.
- */
-export const GOLDEN_SET: TeamBenchmark = { id: 'golden', label: 'Team golden set', accuracy: 1403 / 1419, plates: 1419, correct: 1403, headline: true };
-
-export const TEAM_BENCHMARKS: TeamBenchmark[] = [
-  GOLDEN_SET,
-  { id: 'bench951', label: 'Benchmark set (team figure)', accuracy: 0.964, plates: 951 },
-  { id: 'two-row', label: 'Two-row plates (team figure)', accuracy: 0.925, plates: null },
-];
 
 export const HIGH_CONFIDENCE = 0.8;
 /** App-wide "good read" rule: OCR confidence ≥ 0.75 and a valid Indian plate format. */

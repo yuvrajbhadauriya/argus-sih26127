@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { containsModelName, readRateStats, redactModelNames, TEAM_BENCHMARKS } from './publicCopy';
+import { containsModelName, readRateStats, redactModelNames } from './publicCopy';
 import type { CameraEvents, PlateEvent } from '@/features/detections/api';
 
 const ev = (plate_confidence: number | null, grammar_valid = false): PlateEvent => ({
@@ -22,14 +22,6 @@ describe('redactModelNames', () => {
   });
   it('leaves ordinary text alone', () => {
     expect(redactModelNames('OCR latency per crop')).toBe('OCR latency per crop');
-  });
-});
-
-describe('TEAM_BENCHMARKS', () => {
-  it('uses the golden set as the headline', () => {
-    expect(TEAM_BENCHMARKS.find((b) => b.headline)).toMatchObject({ plates: 1419, correct: 1403 });
-    expect(TEAM_BENCHMARKS[0].accuracy).toBeCloseTo(0.9887, 4);
-    expect(TEAM_BENCHMARKS.slice(1).map((b) => b.accuracy)).toEqual([0.964, 0.925]);
   });
 });
 
