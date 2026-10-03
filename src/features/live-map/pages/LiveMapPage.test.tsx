@@ -1,6 +1,6 @@
 // LiveMapPage: KPIs from the sim summary + alerts, rail tabs, ?cam= selection.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, within, waitFor } from '@testing-library/react';
+import { render, screen, within, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { useEffect, type ReactNode } from 'react';
@@ -29,6 +29,9 @@ vi.mock('@/features/detections/api', async (orig) => ({
 import { LiveMapPage } from './LiveMapPage';
 import { clearCamerasCache } from '@/features/cameras/hooks/useCameras';
 import { clearSimSummaryCache } from '../api';
+import { resetDetectionsManifest } from '@/features/detections/api';
+import { resetTrafficRows } from '../hooks/useTrafficIndex';
+import { resetReadCrops } from '@/features/detections/lib/readCrops';
 
 const cam = (over: Partial<Camera>): Camera => ({
   id: 'cam-001', name: 'Jogeshwari JVLR Junction', code: 'JG-01', latitude: 19.14, longitude: 72.85,
@@ -36,6 +39,25 @@ const cam = (over: Partial<Camera>): Camera => ({
 });
 
 const SUMMARY = { simulated: true, stats: { vehicles: 2577, journeys: 1, sightings: 1, hop_speed_kmph: { mean: 22.3 }, sightings_per_hour: new Array(24).fill(321) } };
+
+// Fixture figures, deliberately not the real ones: the tile must show whatever the file says.
+const GOLDEN = { set: 'ocr_golden_v1', measured_at: '2026-09-30T22:17:01+05:30', overall: { n: 200, correct: 150, accuracy: 0.75 }, items: [{ key: 'a', gt: 'MH02AB1234', pred: 'MH02AB1234', correct: true, confidence: 99 }, { key: 'b', gt: 'MH03CD5678', pred: 'MH03CD5679', correct: false, confidence: 80 }] };
+const CROPS = { crops: { 'JG-01_trk_3_3000': { vehicle: 'JG-01/JG-01_trk_3_3000_vehicle.jpg', plate: 'JG-01/JG-01_trk_3_3000_plate.jpg' } } };
+
+// 5 fps overlay rows of the camera: 3 vehicles in view over the whole 30 s clip.
+const ROWS = ['v1', 'v2', 'v3'].flatMap((id) => Array.from({ length: 150 }, (_, i) => ({ tracked_vehicle_id: id, frame_timestamp_sec: i * 0.2 })));
+
+function stubFetch(over: Record<string, () => Response> = {}) {
+  vi.stubGlobal('fetch', vi.fn((url: string) => {
+    const hit = Object.entries(over).find(([k]) => String(url).includes(k));
+    if (hit) return Promise.resolve(hit[1]());
+    if (String(url).endsWith('/detections/manifest.json')) return Promise.resolve(new Response(JSON.stringify({ cameras: ['JG-01'] })));
+    if (String(url).includes('/detections/detections_')) return Promise.resolve(new Response(JSON.stringify(ROWS)));
+    if (String(url).includes('/golden/')) return Promise.resolve(new Response(JSON.stringify(GOLDEN)));
+    if (String(url).includes('/detections/crops/')) return Promise.resolve(new Response(JSON.stringify(CROPS)));
+    return Promise.resolve(new Response(JSON.stringify(SUMMARY)));
+  }));
+}
 
 let location = '';
 function LocationSpy() {
@@ -56,6 +78,11 @@ const renderAt = (url: string) =>
   );
 
 beforeEach(() => {
+  try {
+    localStorage.clear();
+  } catch { /* ignore */ }
+  resetTrafficRows();
+  resetDetectionsManifest();
   clearCamerasCache();
   clearSimSummaryCache();
   h.flyTo.mockReset();
@@ -65,7 +92,8 @@ beforeEach(() => {
     { id: 'a2', plate_text: 'MH43BM3816', camera_id: 'cam-002', camera_name: 'Andheri Flyover', priority: 'high', timestamp: '2026-09-30T11:00:00Z', lat: 19.12, lng: 72.85, acknowledged: false },
     { id: 'a3', plate_text: 'GJ01JK6763', camera_id: 'cam-002', camera_name: 'Andheri Flyover', priority: 'low', timestamp: '2026-09-30T11:00:00Z', lat: 19.12, lng: 72.85, acknowledged: true },
   ]);
-  vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(JSON.stringify(SUMMARY)))));
+  resetReadCrops();
+  stubFetch();
   const ev = (t: number, plate: string | null, conf: number) => ({
     camera_code: 'JG-01', tracked_vehicle_id: `trk_${t}`, plate_text: plate, plate_read: null, plate_confidence: conf, grammar_valid: !!plate,
     vehicle_type: 'car', vehicle_class: 'Car', time_sec: t, bbox: { x: 0, y: 0, width: 10, height: 10 },
@@ -130,6 +158,137 @@ describe('LiveMapPage', () => {
     expect(within(list).queryByText('MH 01 AB 1234')).toBeNull(); // below 75 %
     expect(screen.getByText('Real ANPR reads')).toBeInTheDocument();
     await waitFor(() => expect(within(list).getAllByText('Critical').length).toBeGreaterThan(0));
+  });
+
+  it('shows real vehicle + plate crops on rows that have them, the plain row otherwise', async () => {
+    renderAt('/');
+    await screen.findByText('1/2');
+    const list = await screen.findByRole('list', { name: 'Latest plate reads' });
+    await waitFor(() => expect(within(list).getAllByRole('img', { name: /Plate crop for MH 02 GB 4920/ }).length).toBeGreaterThan(0));
+    expect(within(list).getAllByRole('img', { name: /Vehicle MH 02 GB 4920/ })[0]).toHaveAttribute('src', '/detections/crops/JG-01/JG-01_trk_3_3000_vehicle.jpg');
+    expect(within(list).getAllByText('MH 02 GB 4920').length).toBeGreaterThan(0); // OCR text kept
+    expect(screen.getByText('Real ANPR reads')).toBeInTheDocument();
+  });
+
+  it('lists only reads that have a plate crop: without a manifest there are no camera rows at all', async () => {
+    stubFetch({ '/detections/crops/manifest.json': () => new Response('', { status: 404 }) });
+    renderAt('/');
+    await screen.findByText('1/2');
+    const list = await screen.findByRole('list', { name: 'Latest plate reads' });
+    await waitFor(() => expect(within(list).queryAllByLabelText(/^Golden set plate:/).length).toBeGreaterThan(0));
+    expect(within(list).queryByText('MH 02 GB 4920')).toBeNull();
+    expect(within(list).queryAllByRole('img', { name: /^(Plate crop for|Vehicle )/ })).toHaveLength(0);
+    expect(within(list).queryByText('no crop')).toBeNull();
+  });
+
+  it('leaves the vehicle slot out when the read has no vehicle crop, and when its image fails', async () => {
+    stubFetch({ '/detections/crops/manifest.json': () => new Response(JSON.stringify({ crops: { 'JG-01_trk_3_3000': { vehicle: null, plate: 'JG-01/p.jpg' } } })) });
+    renderAt('/');
+    const list = await screen.findByRole('list', { name: 'Latest plate reads' });
+    await within(list).findAllByRole('img', { name: /Plate crop for MH 02 GB 4920/ });
+    expect(within(list).queryAllByRole('img', { name: /^Vehicle / })).toHaveLength(0);
+    expect(within(list).queryByText('no crop')).toBeNull();
+  });
+
+  it('hides a crop whose file fails to load (no broken image, no placeholder)', async () => {
+    renderAt('/');
+    const list = await screen.findByRole('list', { name: 'Latest plate reads' });
+    const veh = (await within(list).findAllByRole('img', { name: /^Vehicle MH 02 GB 4920/ }))[0];
+    fireEvent.error(veh);
+    await waitFor(() => expect(veh.isConnected).toBe(false));
+    expect(within(list).queryByText('no crop')).toBeNull();
+  });
+
+  it('shows the golden-set plate OCR accuracy read from the results file, linking to /accuracy', async () => {
+    renderAt('/');
+    expect(await screen.findByText('75.00%')).toBeInTheDocument();
+    expect(screen.getByText('Model accuracy')).toBeInTheDocument();
+    expect(screen.getByText(/Plate OCR accuracy · golden set · readable plates · n = 200/)).toBeInTheDocument();
+    expect(screen.getByText(/Measured 30 Sept 2026 · exact match/)).toBeInTheDocument();
+    expect(screen.queryByText(/end-to-end/i)).toBeNull();
+    expect(screen.getByTitle(/150 of 200 readable plate crops read exactly right/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /Model accuracy/ }));
+    expect(location).toBe('/accuracy');
+  });
+
+  it('shows a dash instead of a figure when the golden results are not published', async () => {
+    stubFetch({ '/golden/': () => new Response('', { status: 404 }) });
+    renderAt('/');
+    expect(await screen.findByText('Golden-set results unavailable')).toBeInTheDocument();
+    expect(screen.queryByText('75.00%')).toBeNull();
+  });
+
+  it('mixes clearly separate golden-set rows into the feed and filters All / Cameras / Golden set', async () => {
+    renderAt('/');
+    await screen.findByText('1/2');
+    const list = await screen.findByRole('list', { name: 'Latest plate reads' });
+    const goldenRows = () => within(list).queryAllByLabelText(/^Golden set plate:/);
+    await waitFor(() => expect(goldenRows().length).toBeGreaterThan(0));
+    const row = goldenRows()[0];
+    expect(within(row).getByText('Golden set')).toBeInTheDocument();
+    expect(within(row).getByText('Read')).toBeInTheDocument();
+    expect(within(row).getByText('Truth')).toBeInTheDocument();
+    expect(within(row).getByRole('img', { name: /^(Correct|Wrong)$/ })).toBeInTheDocument();
+    expect(row.textContent).not.toMatch(/JG-01|Jogeshwari|ago|live/i);   // no camera, no live wording
+    expect(within(list).getAllByText('MH 02 GB 4920').length).toBeGreaterThan(0); // camera reads still there
+
+    await userEvent.click(screen.getByRole('button', { name: 'Feed: Cameras' }));
+    expect(goldenRows()).toHaveLength(0);
+    expect(within(list).getAllByText('MH 02 GB 4920').length).toBeGreaterThan(0);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Feed: Golden set' }));
+    await waitFor(() => expect(goldenRows().length).toBeGreaterThan(0));
+    expect(within(list).queryByText('MH 02 GB 4920')).toBeNull();
+    expect(screen.queryByText('Real ANPR reads')).toBeNull();
+  });
+
+  it('marks a wrong golden-set read, highlighting the ground truth next to it', async () => {
+    renderAt('/');
+    await screen.findByText('1/2');
+    await userEvent.click(await screen.findByRole('button', { name: 'Feed: Golden set' }));
+    const list = await screen.findByRole('list', { name: 'Latest plate reads' });
+    await waitFor(() => expect(within(list).queryAllByLabelText(/ground truth MH03CD5678, wrong/).length).toBeGreaterThan(0));
+    const row = within(list).getAllByLabelText(/ground truth MH03CD5678, wrong/)[0];
+    expect(within(row).getByRole('img', { name: 'Model read MH03CD5679' })).toBeInTheDocument();
+    expect(within(row).getByRole('img', { name: 'Wrong' })).toBeInTheDocument();
+  });
+
+  it('Traffic toggle: off by default, aria-pressed, glow per camera with a name and Light/Moderate/Heavy word, legend ramp, state kept', async () => {
+    const view = renderAt('/');
+    await screen.findByText('1/2');
+    const btn = screen.getByRole('button', { name: 'Traffic' });
+    expect(btn).toHaveAttribute('aria-pressed', 'false');
+    expect(btn).toHaveAttribute('title', expect.stringMatching(/Traffic density from the camera feeds: vehicles in view, recorded clips replayed on a live clock/));
+    expect(screen.queryAllByRole('img', { name: /in view \(last 5 s\)/ })).toHaveLength(0);
+    expect(screen.queryByText('Heavy')).toBeNull();
+
+    btn.focus();
+    await userEvent.keyboard('{Enter}'); // keyboard accessible
+    expect(btn).toHaveAttribute('aria-pressed', 'true');
+    const glow = await screen.findAllByText(/JG-01 Jogeshwari JVLR Junction: 3 vehicles in view \(last 5 s\) · (Light|Moderate|Heavy) traffic/);
+    expect(glow.length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Traffic density from the camera feeds: vehicles in view, recorded clips replayed on a live clock/).length).toBeGreaterThan(0);
+    expect(screen.getByText('Light')).toBeInTheDocument(); // legend ramp ends
+    expect(screen.getByText('Heavy')).toBeInTheDocument();
+    expect(screen.queryAllByTestId('hotspot').length).toBeGreaterThan(0); // alert rings are a separate layer
+
+    view.unmount(); // navigating away and back keeps the choice
+    renderAt('/');
+    await screen.findByText('1/2');
+    expect(screen.getByRole('button', { name: 'Traffic' })).toHaveAttribute('aria-pressed', 'true');
+    await userEvent.click(screen.getByRole('button', { name: 'Traffic' }));
+    expect(screen.getByRole('button', { name: 'Traffic' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryAllByRole('img', { name: /in view \(last 5 s\)/ })).toHaveLength(0);
+  });
+
+  it('Traffic degrades quietly when a camera file is missing (no glow, no error)', async () => {
+    stubFetch({ '/detections/detections_': () => new Response('', { status: 404 }) });
+    renderAt('/');
+    await screen.findByText('1/2');
+    await userEvent.click(screen.getByRole('button', { name: 'Traffic' }));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.queryAllByRole('img', { name: /in view \(last 5 s\)/ })).toHaveLength(0);
+    expect(screen.getByRole('button', { name: 'Traffic' })).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('popup links open the feed', async () => {

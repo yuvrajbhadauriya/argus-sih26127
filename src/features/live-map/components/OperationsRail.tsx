@@ -1,10 +1,16 @@
 // Right rail of the Live Map: Live feed | Alerts | Cameras.
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowRightIcon, CctvIcon, ListIcon, RadioIcon, SirenIcon } from 'lucide-react';
 import type { AlertRecord } from '@/types';
 import type { Camera } from '@/types/camera';
 import type { LiveFeedEntry } from '@/mocks/fixtures/mockLiveFeed';
+import { cn } from '@/shared/lib/cn';
+import { CropImage, PlateRead, VerdictIcon } from '@/features/golden-set/components/parts';
+import { diffMarks } from '@/features/golden-set/lib/diff';
+import { plateVariant, type GoldenResults } from '@/features/golden-set/lib/results';
+import { useCropUrls } from '@/features/golden-set/lib/useCropUrls';
+import { isGoldenEntry, type FeedEntry, type FeedFilter, type GoldenFeedEntry } from '../lib/reel';
 import { Panel } from '@/shared/ui/Card';
 import { Tabs, TabPanel } from '@/shared/ui/Tabs';
 import { Badge } from '@/shared/ui/Badge';
@@ -20,8 +26,15 @@ import { formatIstTime, formatRelative } from '../lib/time';
 
 type RailTab = 'feed' | 'alerts' | 'cameras';
 
+const EMPTY_GOLDEN = { bucket: '', prefix: '' } as GoldenResults;
+
 interface OperationsRailProps {
-  feed: LiveFeedEntry[];
+  feed: FeedEntry[];
+  /** Golden-set results (crop signing); needed to show golden-set rows. */
+  golden?: GoldenResults | null;
+  /** All / Cameras / Golden set. Hidden when omitted or while the replay drives the feed. */
+  feedFilter?: FeedFilter;
+  onFeedFilter?: (f: FeedFilter) => void;
   alerts: AlertRecord[];
   /** Total open alerts (the list may be truncated) */
   alertCount: number;
@@ -38,19 +51,34 @@ interface OperationsRailProps {
 
 const ROW = 'flex w-full items-center gap-3 border-b border-line px-3 text-left transition-colors hover:bg-surface-2 focus-visible:bg-surface-2';
 
+/** Real crop of a recorded read. Nothing is shown (and no placeholder) when the file is absent or fails to load. */
+function CropThumb({ src, alt, className }: { src: string | undefined; alt: string; className: string }) {
+  const [failed, setFailed] = useState(false);
+  if (!src || failed) return null;
+  return <img src={src} alt={alt} loading="lazy" onError={() => setFailed(true)} className={`${className} bg-surface-2 object-contain`} draggable={false} />;
+}
+
 function FeedRow({ entry }: { entry: LiveFeedEntry }) {
   const navigate = useNavigate();
   const hit = entry.watchlist != null;
+  // Recorded reads always have a plate crop; the vehicle crop is optional (its slot is simply left out).
+  const withCrops = !!(entry.vehicleCrop || entry.plateCrop);
   return (
     <li>
       <button
         type="button"
         onClick={() => navigate(`/vehicles?plate=${encodeURIComponent(normalizePlate(entry.plate))}`)}
-        className={`${ROW} relative h-14`}
+        className={`${ROW} relative ${withCrops ? 'min-h-[84px] py-2' : 'h-14'}`}
         aria-label={`Trace ${entry.plate} seen at ${entry.cameraName}`}
       >
         {hit && <span className="absolute inset-y-0 left-0 w-0.5 bg-danger" aria-hidden="true" />}
+        {entry.vehicleCrop && <CropThumb src={entry.vehicleCrop} alt={`Vehicle ${entry.plate}`} className="h-12 w-16 shrink-0 rounded-[3px] border border-line" />}
         <div className="min-w-0 flex-1 space-y-1">
+          {withCrops && (
+            <div className="flex">
+              <CropThumb src={entry.plateCrop} alt={`Plate crop for ${entry.plate}`} className="h-6 max-w-full rounded-[2px] border border-line" />
+            </div>
+          )}
           <div className="flex items-center gap-2">
             <PlateChip plate={entry.plate} size="sm" variant={entry.plateVariant} flag={hit ? 'watchlist' : null} />
             {hit && <SeverityChip severity={entry.watchlist!} size="sm" />}
@@ -65,6 +93,46 @@ function FeedRow({ entry }: { entry: LiveFeedEntry }) {
           <span className="text-2xs tabular-nums text-fg-subtle">{entry.secondsAgo}s ago</span>
         </div>
       </button>
+    </li>
+  );
+}
+
+const FILTERS: { id: FeedFilter; label: string }[] = [
+  { id: 'all', label: 'All' },
+  { id: 'cameras', label: 'Cameras' },
+  { id: 'golden', label: 'Golden set' },
+];
+
+/**
+ * A plate of the golden set (measured offline on labelled crops) - clearly NOT a camera read:
+ * "Golden set" badge, no camera, no time-ago. Shows the crop, the model's read, the ground truth and a verdict.
+ */
+function GoldenRow({ entry, src, onBroken }: { entry: GoldenFeedEntry; src: string | null | undefined; onBroken: () => void }) {
+  const it = entry.item;
+  const marks = diffMarks(it.gt, it.pred);
+  const variant = plateVariant(it);
+  return (
+    <li
+      className="relative flex min-h-[84px] w-full items-center gap-3 border-b border-line px-3 py-2"
+      aria-label={`Golden set plate: model read ${it.pred || 'nothing'}, ground truth ${it.gt}, ${it.correct ? 'correct' : 'wrong'}`}
+    >
+      {!it.correct && <span className="absolute inset-y-0 left-0 w-0.5 bg-danger" aria-hidden="true" />}
+      <CropImage src={src} width={0} height={0} alt={`Golden set plate crop (truth ${it.gt})`} className="h-12 w-16 shrink-0 rounded-[3px] border border-line" onBroken={onBroken} />
+      <div className="min-w-0 flex-1 space-y-1">
+        <Badge tone="info" size="sm">Golden set</Badge>
+        <div className="flex items-center gap-1.5">
+          <span className="w-9 shrink-0 text-2xs uppercase tracking-[0.06em] text-fg-subtle">Read</span>
+          <PlateRead text={it.pred} variant={variant} size="sm" marks={marks.pred} label={`Model read ${it.pred}`} />
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="w-9 shrink-0 text-2xs uppercase tracking-[0.06em] text-fg-subtle">Truth</span>
+          <PlateRead text={it.gt} variant={variant} size="sm" marks={it.correct ? undefined : marks.gt} label={`Ground truth ${it.gt}`} />
+        </div>
+      </div>
+      <div className="flex shrink-0 flex-col items-end gap-1">
+        <VerdictIcon correct={it.correct} />
+        <span className="font-mono text-2xs tabular-nums text-fg-muted">{Math.round(it.confidence)}%</span>
+      </div>
     </li>
   );
 }
@@ -90,10 +158,13 @@ function AlertRow({ alert }: { alert: AlertRecord }) {
 }
 
 export function OperationsRail({
-  feed, alerts, alertCount, alertsLoading, alertsError, onRetryAlerts, cameras, selectedCode, onPickCamera, replaying = false, className,
+  feed, golden = null, feedFilter = 'all', onFeedFilter, alerts, alertCount, alertsLoading, alertsError, onRetryAlerts, cameras, selectedCode, onPickCamera, replaying = false, className,
 }: OperationsRailProps) {
   const [tab, setTab] = useState<RailTab>('feed');
-  const watchHits = feed.filter((f) => f.watchlist).length;
+  const watchHits = feed.filter((f) => !isGoldenEntry(f) && f.watchlist).length;
+  const goldenItems = useMemo(() => feed.filter(isGoldenEntry).map((f) => f.item), [feed]);
+  const crop = useCropUrls(golden ?? EMPTY_GOLDEN, goldenItems);
+  const showFilter = !replaying && !!onFeedFilter;
 
   return (
     <Panel
@@ -105,9 +176,14 @@ export function OperationsRail({
           replaying ? (
             <span className="flex items-center gap-1.5"><Badge tone="danger" size="sm">Replay · live</Badge><SimulationBadge compact /></span>
           ) : (
-            <Badge tone="success" size="sm" title="Plates read by the AI ANPR engine on the camera clips (OCR ≥ 75 %, valid format), streaming on each camera's live clock">
-              Real ANPR reads
-            </Badge>
+            <span className="flex items-center gap-1.5">
+              {feedFilter !== 'golden' && (
+                <Badge tone="success" size="sm" title="Recorded plate reads of the AI ANPR engine on the camera clips (OCR ≥ 75 %, valid format), replayed in a seeded, interleaved order across all cameras">
+                  Real ANPR reads
+                </Badge>
+              )}
+              {feedFilter !== 'cameras' && golden && <Badge tone="info" size="sm" title="Labelled plate crops of the offline golden set, shown with the model's read and the ground truth - not camera reads">Golden set</Badge>}
+            </span>
           )
         ) : undefined
       }
@@ -129,11 +205,33 @@ export function OperationsRail({
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         <TabPanel id="feed" active={tab === 'feed'}>
+          {showFilter && (
+            <div role="group" aria-label="Feed source" className="sticky top-0 z-10 flex gap-1 border-b border-line bg-surface px-3 py-1.5">
+              {FILTERS.filter((f) => f.id !== 'golden' || golden).map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  aria-label={`Feed: ${f.label}`}
+                  aria-pressed={feedFilter === f.id}
+                  onClick={() => onFeedFilter!(f.id)}
+                  className={cn('rounded-sm px-2 py-0.5 text-xs font-medium transition-colors', feedFilter === f.id ? 'bg-primary/12 text-primary' : 'text-fg-muted hover:bg-surface-2')}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          )}
           {feed.length === 0 ? (
             <EmptyState compact icon={<ListIcon size={20} />} title="Waiting for plate reads" description="Reads appear as vehicles pass the cameras." />
           ) : (
             <ul aria-label="Latest plate reads">
-              {feed.map((e) => <FeedRow key={e.id} entry={e} />)}
+              {feed.map((e) =>
+                isGoldenEntry(e) ? (
+                  <GoldenRow key={e.id} entry={e} src={crop.url(e.item)} onBroken={() => crop.broken(e.item)} />
+                ) : (
+                  <FeedRow key={e.id} entry={e} />
+                ),
+              )}
             </ul>
           )}
         </TabPanel>

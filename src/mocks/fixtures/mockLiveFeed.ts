@@ -21,6 +21,10 @@ export interface LiveFeedEntry {
   /** 0–100 */
   confidence: number;
   secondsAgo: number;
+  /** Real vehicle crop cut from the clip frame of this read (recorded reads only; absent when not produced). */
+  vehicleCrop?: string;
+  /** Real plate crop cut from the same frame. */
+  plateCrop?: string;
   /** Watchlist priority when the plate is on the watchlist, else null */
   watchlist: AlertPriority | null;
 }

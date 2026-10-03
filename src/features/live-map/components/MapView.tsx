@@ -12,7 +12,9 @@ import { useThemeTokens } from '@/shared/theme/tokens';
 import { DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM } from '@/config/constants';
 import type { Camera } from '@/types/camera';
 import type { AlertHotspot } from '../lib/alerts';
+import type { TrafficReading } from '../lib/trafficDensity';
 import { CameraMarker } from './CameraMarker';
+import { TrafficLayer } from './TrafficLayer';
 
 /** Zoom from which camera code labels are shown. */
 export const LABEL_ZOOM = 13;
@@ -25,6 +27,8 @@ interface MapViewProps {
   showCameras?: boolean;
   showLabels?: boolean;
   hotspots?: AlertHotspot[];
+  /** Traffic heat glow per camera code; omitted / empty = layer off. */
+  traffic?: ReadonlyMap<string, TrafficReading> | null;
   /** Increment to fit the map to all cameras again. */
   recenterNonce?: number;
   /** Increment to fly to the selected camera (e.g. picked from a list). */
@@ -96,6 +100,7 @@ export function MapView({
   showCameras = true,
   showLabels = true,
   hotspots = [],
+  traffic = null,
   recenterNonce = 0,
   focusNonce = 0,
   className = '',
@@ -128,6 +133,8 @@ export function MapView({
           </Tooltip>
         </CircleMarker>
       ))}
+
+      {traffic && <TrafficLayer cameras={cameras} readings={traffic} />}
 
       {showCameras &&
         cameras.map((camera) => (

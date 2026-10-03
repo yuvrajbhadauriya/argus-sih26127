@@ -5,13 +5,17 @@
 
 import { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { CarIcon, CctvIcon, GaugeIcon, LocateFixedIcon, ScanLineIcon, SirenIcon, TagIcon, TargetIcon } from 'lucide-react';
+import { CarIcon, CctvIcon, GaugeIcon, LocateFixedIcon, FlameIcon, ScanLineIcon, ScanTextIcon, SirenIcon, TagIcon, TargetIcon } from 'lucide-react';
 import type { Camera } from '@/types/camera';
 import { useCameras } from '@/features/cameras/hooks/useCameras';
-import type { LiveFeedEntry } from '@/mocks/fixtures/mockLiveFeed';
-import { useLiveReads } from '@/features/detections/hooks/useLiveReads';
+import type { CameraEvents } from '@/features/detections/api';
+import { goodReads } from '@/features/detections/lib/liveReads';
+import { useCameraEventsDocs, useNowSeconds } from '@/features/detections/hooks/useLiveReads';
 import { useWatchlistIndex } from '@/features/detections/hooks/useWatchlistKeys';
 import { plateKey } from '@/features/detections/lib/log';
+import { useGoldenResults } from '@/features/golden-set/api';
+import { fmtInt, fmtMeasuredDate, pct } from '@/features/golden-set/lib/results';
+import { eventKey, useReadCrops } from '@/features/detections/lib/readCrops';
 import { DEFAULT_MAP_CENTER, SECTOR_LABEL } from '@/config/constants';
 import { SimulationBadge } from '@/features/vehicles/components/SimulationBadge';
 import { ReplayControls } from '@/features/replay/ReplayControls';
@@ -28,19 +32,23 @@ import { SkeletonPanel } from '@/shared/ui/Skeleton';
 import { MapView } from '../components/MapView';
 import { OperationsRail } from '../components/OperationsRail';
 import { useLiveMapData } from '../hooks/useLiveMapData';
+import { useTrafficIndex } from '../hooks/useTrafficIndex';
+import { TRAFFIC_LABEL, trafficAt } from '../lib/trafficDensity';
+import { clockDuration } from '@/features/detections/lib/liveReads';
 import { alertHotspots, topOpenAlerts } from '../lib/alerts';
 import { istHour } from '../lib/time';
+import { isGoldenEntry, reelRows, type FeedEntry, type FeedFilter } from '../lib/reel';
 
 const nf = new Intl.NumberFormat('en-IN');
 
-function LayerToggle({ label, pressed, onToggle, icon }: { label: string; pressed: boolean; onToggle: () => void; icon: React.ReactNode }) {
+function LayerToggle({ label, title, pressed, onToggle, icon }: { label: string; title?: string; pressed: boolean; onToggle: () => void; icon: React.ReactNode }) {
   return (
     <Button
       size="sm"
       variant={pressed ? 'secondary' : 'ghost'}
       aria-pressed={pressed}
       aria-label={label}
-      title={label}
+      title={title ?? label}
       icon={icon}
       onClick={onToggle}
       className={pressed ? 'text-fg' : 'text-fg-subtle'}
@@ -50,15 +58,40 @@ function LayerToggle({ label, pressed, onToggle, icon }: { label: string; presse
   );
 }
 
+const TRAFFIC_KEY = 'nero.livemap.traffic';
+
+/** On/off flag kept across navigation and reloads (localStorage; silently in-memory when unavailable). */
+function usePersistedFlag(key: string): [boolean, () => void] {
+  const [on, setOn] = useState(() => {
+    try {
+      return localStorage.getItem(key) === '1';
+    } catch {
+      return false;
+    }
+  });
+  const toggle = () =>
+    setOn((v) => {
+      try {
+        localStorage.setItem(key, v ? '0' : '1');
+      } catch {
+        /* ignore */
+      }
+      return !v;
+    });
+  return [on, toggle];
+}
+
 export function LiveMapPage() {
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const { cameras, loading, error, refetch } = useCameras();
   const { summary, alerts } = useLiveMapData();
+  const golden = useGoldenResults();
 
   const [showCameras, setShowCameras] = useState(true);
   const [showLabels, setShowLabels] = useState(true);
   const [showHotspots, setShowHotspots] = useState(true);
+  const [showTraffic, toggleTraffic] = usePersistedFlag(TRAFFIC_KEY);
   const [recenterNonce, setRecenterNonce] = useState(0);
   // Deep link (?cam=) flies to the camera on first render.
   const [focusNonce, setFocusNonce] = useState(() => (params.get('cam') ? 1 : 0));
@@ -84,27 +117,46 @@ export function LiveMapPage() {
   const alertsSimulated = (alerts.data ?? []).some((a) => (a as { simulated?: boolean }).simulated);
   const hotspots = useMemo(() => (showHotspots ? alertHotspots(alerts.data ?? []) : []), [alerts.data, showHotspots]);
   const replay = useReplayView(12);
-  // Real model reads on the camera clips, streaming on each camera's live clock.
-  const { reads: liveReads, now } = useLiveReads(null, { limit: 40 });
+  // The Live feed replays RECORDED reads of all cameras' clips (and golden-set plates) in a seeded, interleaved order.
+  const [feedFilter, setFeedFilter] = useState<FeedFilter>('all');
+  const { docs } = useCameraEventsDocs(null);
+  const now = useNowSeconds(true);
   const watch = useWatchlistIndex();
-  const realFeed = useMemo<LiveFeedEntry[]>(() => {
+  const crops = useReadCrops();
+  const goldenItems = golden.data?.items;
+  // Camera rows are only reads that have a real plate crop in the manifest (no crop, no row).
+  const cropped = useMemo<CameraEvents[]>(
+    () => docs.map((d) => ({ ...d, events: goodReads(d).filter((e) => crops.has(eventKey(d.camera_code, e.tracked_vehicle_id, e.time_sec))) })),
+    [docs, crops],
+  );
+  const realFeed = useMemo<FeedEntry[]>(() => {
     const names = new Map(cameras.map((c) => [c.code, c.name]));
-    return liveReads.map((r) => ({
-      id: r.key,
-      plate: r.event.plate_text!,
-      cameraCode: r.camera_code,
-      cameraName: names.get(r.camera_code) ?? r.camera_code,
-      confidence: Math.round((r.event.plate_confidence ?? 0) * 100),
-      secondsAgo: Math.max(0, Math.round((now - r.at) / 1000)),
-      watchlist: watch.get(plateKey(r.event.plate_text!)) ?? null,
-    }));
-  }, [liveReads, now, cameras, watch]);
+    return reelRows(cropped, now, { filter: feedFilter, limit: 40, goldenCount: goldenItems?.length ?? 0, goldenPlate: (i) => goldenItems?.[i]?.gt ?? '' }).map((r): FeedEntry => {
+      if (r.kind === 'golden') return { kind: 'golden', id: r.key, item: goldenItems![r.itemIndex] };
+      const crop = crops.get(eventKey(r.camera_code, r.event.tracked_vehicle_id, r.event.time_sec));
+      return {
+        id: r.key,
+        plate: r.event.plate_text!,
+        cameraCode: r.camera_code,
+        cameraName: names.get(r.camera_code) ?? r.camera_code,
+        confidence: Math.round((r.event.plate_confidence ?? 0) * 100),
+        secondsAgo: Math.max(0, Math.round((now - r.at) / 1000)),
+        watchlist: watch.get(plateKey(r.event.plate_text!)) ?? null,
+        ...(crop ? { vehicleCrop: crop.vehicle ?? undefined, plateCrop: crop.plate } : {}),
+      };
+    });
+  }, [cropped, now, cameras, watch, crops, feedFilter, goldenItems]);
   const feed = replay.feed ?? realFeed;
+  // Traffic glow: vehicles in view over the last 5 s of each camera's replay clock, updated every second.
+  const durations = useMemo(() => new Map(docs.map((d) => [d.camera_code, clockDuration(d)])), [docs]);
+  const trafficIndex = useTrafficIndex(showTraffic, durations);
+  const traffic = useMemo(() => (showTraffic ? trafficAt(trafficIndex, now) : null), [showTraffic, trafficIndex, now]);
   // Marker popups: each camera's latest read (replay clock during a replay).
   const plates = useMemo(() => {
     const byCode = new Map(cameras.map((c) => [c.code, c.id]));
     const out: Record<string, string | undefined> = {};
     for (const f of [...feed].reverse()) {
+      if (isGoldenEntry(f)) continue;
       const id = byCode.get(f.cameraCode);
       if (id) out[id] = f.plate;
     }
@@ -118,7 +170,7 @@ export function LiveMapPage() {
   return (
     <Page fullBleed>
       <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(420px,1fr)] gap-3 lg:grid-cols-[minmax(0,1fr)_360px] lg:grid-rows-[auto_minmax(0,1fr)]">
-        <KpiStrip className="lg:col-span-2">
+        <KpiStrip cols={6} className="lg:col-span-2">
           <KpiTile
             label="Cameras online"
             value={`${online}/${total}`}
@@ -167,6 +219,31 @@ export function LiveMapPage() {
             hint={summary.error ? 'Summary unavailable' : simHint}
             loading={summary.loading}
           />
+          <div
+            className="min-w-0 [&>*]:h-full"
+            title={
+              golden.data
+                ? `Measured ${fmtMeasuredDate(golden.data.measuredAt)} on the ${golden.data.set} golden set: ${fmtInt(golden.data.overall.correct)} of ${fmtInt(golden.data.overall.n)} readable plate crops read exactly right (whole plate, spaces ignored; one wrong character = wrong). Plate crops only - not accuracy on camera video. Click for the full proof.`
+                : 'Plate OCR accuracy on the golden set - see /accuracy'
+            }
+          >
+            <KpiTile
+              label="Model accuracy"
+              value={golden.data ? `${pct(golden.data.overall.accuracy)}%` : '—'}
+              icon={<ScanTextIcon size={16} />}
+              tone="info"
+              hint={
+                golden.data ? (
+                  <span className="flex flex-col">
+                    <span>Plate OCR accuracy · golden set · readable plates · n = {fmtInt(golden.data.overall.n)}</span>
+                    <span className="text-2xs text-fg-subtle">Measured {fmtMeasuredDate(golden.data.measuredAt)} · exact match</span>
+                  </span>
+                ) : golden.error ? 'Golden-set results unavailable' : undefined
+              }
+              loading={golden.loading}
+              onClick={() => navigate('/accuracy')}
+            />
+          </div>
         </KpiStrip>
 
         <Panel flush className="min-h-[420px]" bodyClassName="relative">
@@ -186,6 +263,7 @@ export function LiveMapPage() {
                 showCameras={showCameras}
                 showLabels={showLabels}
                 hotspots={hotspots}
+                traffic={traffic}
                 recenterNonce={recenterNonce}
                 focusNonce={focusNonce}
               />
@@ -202,6 +280,7 @@ export function LiveMapPage() {
                   <LayerToggle label="Cameras" pressed={showCameras} onToggle={() => setShowCameras((v) => !v)} icon={<CctvIcon size={14} strokeWidth={1.75} />} />
                   <LayerToggle label="Labels" pressed={showLabels} onToggle={() => setShowLabels((v) => !v)} icon={<TagIcon size={14} strokeWidth={1.75} />} />
                   <LayerToggle label="Alert hotspots" pressed={showHotspots} onToggle={() => setShowHotspots((v) => !v)} icon={<TargetIcon size={14} strokeWidth={1.75} />} />
+                  <LayerToggle label="Traffic" title={TRAFFIC_LABEL} pressed={showTraffic} onToggle={toggleTraffic} icon={<FlameIcon size={14} strokeWidth={1.75} />} />
                 </div>
                 <span className="mx-0.5 h-5 w-px bg-line" aria-hidden="true" />
                 <IconButton size="sm" label="Recenter" icon={<LocateFixedIcon size={16} strokeWidth={1.75} />} onClick={() => setRecenterNonce((n) => n + 1)} />
@@ -213,6 +292,7 @@ export function LiveMapPage() {
 
               <MapLegend
                 title="Legend"
+                ramp={showTraffic ? { label: TRAFFIC_LABEL, stops: ['hsl(120 90% 48% / 0.3)', 'hsl(60 90% 48% / 0.55)', 'hsl(0 90% 48% / 0.8)'], min: 'Light', max: 'Heavy' } : undefined}
                 position="bottom-left"
                 items={[
                   { label: 'Online', color: 'var(--map-cam-online)', shape: 'dot' },
@@ -235,6 +315,9 @@ export function LiveMapPage() {
         <OperationsRail
           className="min-h-[420px] lg:min-h-0"
           feed={feed}
+          golden={golden.data}
+          feedFilter={feedFilter}
+          onFeedFilter={setFeedFilter}
           replaying={replay.active}
           alerts={openAlerts.slice(0, 8)}
           alertCount={openAlerts.length}
