@@ -8,6 +8,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CarIcon, CctvIcon, GaugeIcon, LocateFixedIcon, ScanLineIcon, ScanTextIcon, SirenIcon, TagIcon, TargetIcon } from 'lucide-react';
 import type { Camera } from '@/types/camera';
 import { useCameras } from '@/features/cameras/hooks/useCameras';
+import type { CameraEvents } from '@/features/detections/api';
+import { goodReads } from '@/features/detections/lib/liveReads';
 import { useCameraEventsDocs, useNowSeconds } from '@/features/detections/hooks/useLiveReads';
 import { useWatchlistIndex } from '@/features/detections/hooks/useWatchlistKeys';
 import { plateKey } from '@/features/detections/lib/log';
@@ -95,9 +97,14 @@ export function LiveMapPage() {
   const watch = useWatchlistIndex();
   const crops = useReadCrops();
   const goldenItems = golden.data?.items;
+  // Camera rows are only reads that have a real plate crop in the manifest (no crop, no row).
+  const cropped = useMemo<CameraEvents[]>(
+    () => docs.map((d) => ({ ...d, events: goodReads(d).filter((e) => crops.has(eventKey(d.camera_code, e.tracked_vehicle_id, e.time_sec))) })),
+    [docs, crops],
+  );
   const realFeed = useMemo<FeedEntry[]>(() => {
     const names = new Map(cameras.map((c) => [c.code, c.name]));
-    return reelRows(docs, now, { filter: feedFilter, limit: 40, goldenCount: goldenItems?.length ?? 0 }).map((r): FeedEntry => {
+    return reelRows(cropped, now, { filter: feedFilter, limit: 40, goldenCount: goldenItems?.length ?? 0, goldenPlate: (i) => goldenItems?.[i]?.gt ?? '' }).map((r): FeedEntry => {
       if (r.kind === 'golden') return { kind: 'golden', id: r.key, item: goldenItems![r.itemIndex] };
       const crop = crops.get(eventKey(r.camera_code, r.event.tracked_vehicle_id, r.event.time_sec));
       return {
@@ -111,7 +118,7 @@ export function LiveMapPage() {
         ...(crop ? { vehicleCrop: crop.vehicle ?? undefined, plateCrop: crop.plate } : {}),
       };
     });
-  }, [docs, now, cameras, watch, crops, feedFilter, goldenItems]);
+  }, [cropped, now, cameras, watch, crops, feedFilter, goldenItems]);
   const feed = replay.feed ?? realFeed;
   // Marker popups: each camera's latest read (replay clock during a replay).
   const plates = useMemo(() => {

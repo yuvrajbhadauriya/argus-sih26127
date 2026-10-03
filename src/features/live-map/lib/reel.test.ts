@@ -2,8 +2,9 @@ import { describe, it, expect } from 'vitest';
 import type { CameraEvents, PlateEvent } from '@/features/detections/api';
 import { GOLDEN_SHARE, REEL_INTERVAL_MS, reelRows, seeded, shuffled, isGoldenSlot, type ReelRow } from './reel';
 
+const camera_cc = (cam: string) => cam.slice(0, 2);
 const ev = (cam: string, i: number): PlateEvent => ({
-  camera_code: cam, tracked_vehicle_id: `trk_${i}`, plate_text: `MH 01 AA ${1000 + i}`, plate_read: null, plate_confidence: 0.9, grammar_valid: true,
+  camera_code: cam, tracked_vehicle_id: `trk_${i}`, plate_text: `MH 01 ${camera_cc(cam)} ${1000 + i}`, plate_read: null, plate_confidence: 0.9, grammar_valid: true,
   vehicle_type: 'unknown', vehicle_class: 'Vehicle', time_sec: i, bbox: { x: 0, y: 0, width: 10, height: 10 },
 });
 const CODES = ['AN-01', 'BH-01', 'DD-01', 'JG-01', 'KR-01', 'SC-01', 'SN-01', 'VP-01'];
@@ -104,5 +105,33 @@ describe('reelRows', () => {
     expect(reelRows([], T, { limit: 8 })).toEqual([]);
     expect(reelRows(docs(), T, { filter: 'golden', limit: 8 })).toEqual([]);
     expect(reelRows([{ camera_code: 'X', duration_sec: 1, events: [] }], T, { limit: 8 })).toEqual([]);
+  });
+});
+
+describe('no plate directly after itself', () => {
+  // Cameras sharing plates and a tiny golden set: plenty of chances for repeats.
+  const dup = (): CameraEvents[] =>
+    ['A-1', 'B-1', 'C-1'].map((c, k) => ({
+      camera_code: c, duration_sec: 10,
+      events: Array.from({ length: 3 }, (_, i) => ({ ...ev(c, i), plate_text: `MH 01 AA ${1000 + ((i + k) % 4)}` })),
+    }));
+  const plate = (r: ReelRow) => (r.kind === 'camera' ? r.event.plate_text!.replace(/ /g, '') : ['MH01AA1000', 'MH01AA1001', 'XX00XX0000'][r.itemIndex]);
+  const gp = (i: number) => ['MH01AA1000', 'MH01AA1001', 'XX00XX0000'][i];
+
+  it('holds in All, Cameras and Golden set views over many hours', () => {
+    for (const filter of ['all', 'cameras', 'golden'] as const) {
+      for (let h = 0; h < 40; h++) {
+        const rows = reelRows(dup(), T + h * 977_000, { filter, limit: 40, goldenCount: 3, goldenPlate: gp });
+        expect(rows.length).toBe(40);
+        for (let i = 1; i < rows.length; i++) expect({ filter, h, i, p: plate(rows[i]) }).not.toEqual({ filter, h, i, p: plate(rows[i - 1]) });
+      }
+    }
+  });
+
+  it('keeps every row stable as time advances (a row never changes once emitted)', () => {
+    const opts = { limit: 30, goldenCount: 3, goldenPlate: gp };
+    const a = reelRows(dup(), T, opts);
+    const b = reelRows(dup(), T + 5 * REEL_INTERVAL_MS, opts);
+    expect(b.slice(5, 30).map((r) => r.key)).toEqual(a.slice(0, 25).map((r) => r.key));
   });
 });

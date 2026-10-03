@@ -47,7 +47,7 @@ function stubFetch(over: Record<string, () => Response> = {}) {
     const hit = Object.entries(over).find(([k]) => String(url).includes(k));
     if (hit) return Promise.resolve(hit[1]());
     if (String(url).includes('/golden/')) return Promise.resolve(new Response(JSON.stringify(GOLDEN)));
-    if (String(url).includes('/detections/crops/')) return Promise.resolve(new Response('', { status: 404 }));
+    if (String(url).includes('/detections/crops/')) return Promise.resolve(new Response(JSON.stringify(CROPS)));
     return Promise.resolve(new Response(JSON.stringify(SUMMARY)));
   }));
 }
@@ -149,7 +149,6 @@ describe('LiveMapPage', () => {
   });
 
   it('shows real vehicle + plate crops on rows that have them, the plain row otherwise', async () => {
-    stubFetch({ '/detections/crops/manifest.json': () => new Response(JSON.stringify(CROPS)) });
     renderAt('/');
     await screen.findByText('1/2');
     const list = await screen.findByRole('list', { name: 'Latest plate reads' });
@@ -159,22 +158,33 @@ describe('LiveMapPage', () => {
     expect(screen.getByText('Real ANPR reads')).toBeInTheDocument();
   });
 
-  it('renders the plain rows (no images) when the crop manifest is missing', async () => {
+  it('lists only reads that have a plate crop: without a manifest there are no camera rows at all', async () => {
+    stubFetch({ '/detections/crops/manifest.json': () => new Response('', { status: 404 }) });
     renderAt('/');
     await screen.findByText('1/2');
     const list = await screen.findByRole('list', { name: 'Latest plate reads' });
-    expect(within(list).getAllByText('MH 02 GB 4920').length).toBeGreaterThan(0);
+    await waitFor(() => expect(within(list).queryAllByLabelText(/^Golden set plate:/).length).toBeGreaterThan(0));
+    expect(within(list).queryByText('MH 02 GB 4920')).toBeNull();
     expect(within(list).queryAllByRole('img', { name: /^(Plate crop for|Vehicle )/ })).toHaveLength(0);
     expect(within(list).queryByText('no crop')).toBeNull();
   });
 
-  it('falls back to the no-crop tile when a crop file fails to load', async () => {
-    stubFetch({ '/detections/crops/manifest.json': () => new Response(JSON.stringify(CROPS)) });
+  it('leaves the vehicle slot out when the read has no vehicle crop, and when its image fails', async () => {
+    stubFetch({ '/detections/crops/manifest.json': () => new Response(JSON.stringify({ crops: { 'JG-01_trk_3_3000': { vehicle: null, plate: 'JG-01/p.jpg' } } })) });
     renderAt('/');
     const list = await screen.findByRole('list', { name: 'Latest plate reads' });
-    const img = (await within(list).findAllByRole('img', { name: /Plate crop/ }))[0];
-    fireEvent.error(img);
-    await waitFor(() => expect(within(list).getAllByText('no crop').length).toBeGreaterThan(0));
+    await within(list).findAllByRole('img', { name: /Plate crop for MH 02 GB 4920/ });
+    expect(within(list).queryAllByRole('img', { name: /^Vehicle / })).toHaveLength(0);
+    expect(within(list).queryByText('no crop')).toBeNull();
+  });
+
+  it('hides a crop whose file fails to load (no broken image, no placeholder)', async () => {
+    renderAt('/');
+    const list = await screen.findByRole('list', { name: 'Latest plate reads' });
+    const veh = (await within(list).findAllByRole('img', { name: /^Vehicle MH 02 GB 4920/ }))[0];
+    fireEvent.error(veh);
+    await waitFor(() => expect(veh.isConnected).toBe(false));
+    expect(within(list).queryByText('no crop')).toBeNull();
   });
 
   it('shows the golden-set plate OCR accuracy read from the results file, linking to /accuracy', async () => {

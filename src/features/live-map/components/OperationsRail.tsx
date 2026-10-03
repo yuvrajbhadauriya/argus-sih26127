@@ -51,19 +51,17 @@ interface OperationsRailProps {
 
 const ROW = 'flex w-full items-center gap-3 border-b border-line px-3 text-left transition-colors hover:bg-surface-2 focus-visible:bg-surface-2';
 
-/** Real crop of a recorded read; a file that fails to load falls back to the "no crop" tile. */
+/** Real crop of a recorded read. Nothing is shown (and no placeholder) when the file is absent or fails to load. */
 function CropThumb({ src, alt, className }: { src: string | undefined; alt: string; className: string }) {
   const [failed, setFailed] = useState(false);
-  if (!src || failed) {
-    return <span aria-hidden="true" className={`${className} flex items-center justify-center bg-surface-2 text-[9px] text-fg-subtle`}>no crop</span>;
-  }
+  if (!src || failed) return null;
   return <img src={src} alt={alt} loading="lazy" onError={() => setFailed(true)} className={`${className} bg-surface-2 object-contain`} draggable={false} />;
 }
 
 function FeedRow({ entry }: { entry: LiveFeedEntry }) {
   const navigate = useNavigate();
   const hit = entry.watchlist != null;
-  // Rows without crops (no manifest, or this read has none) keep the compact layout.
+  // Recorded reads always have a plate crop; the vehicle crop is optional (its slot is simply left out).
   const withCrops = !!(entry.vehicleCrop || entry.plateCrop);
   return (
     <li>
@@ -74,7 +72,7 @@ function FeedRow({ entry }: { entry: LiveFeedEntry }) {
         aria-label={`Trace ${entry.plate} seen at ${entry.cameraName}`}
       >
         {hit && <span className="absolute inset-y-0 left-0 w-0.5 bg-danger" aria-hidden="true" />}
-        {withCrops && <CropThumb src={entry.vehicleCrop} alt={`Vehicle ${entry.plate}`} className="h-12 w-16 shrink-0 rounded-[3px] border border-line" />}
+        {entry.vehicleCrop && <CropThumb src={entry.vehicleCrop} alt={`Vehicle ${entry.plate}`} className="h-12 w-16 shrink-0 rounded-[3px] border border-line" />}
         <div className="min-w-0 flex-1 space-y-1">
           {withCrops && (
             <div className="flex">

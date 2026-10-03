@@ -48,8 +48,10 @@ Config: DETECTION_API_URL / DETECTION_API_KEY ... exactly like run_remote_detect
 
 Clips: --video-dir (default pipeline/data/videos_1080p) holds <clip.file> of each
 events file; --video CAM=PATH points one camera at another file (e.g. the 4K
-source in ~/Downloads). Event boxes refer to clip.width x clip.height; they are
-rescaled to the frame actually decoded, so a 4K source gives sharper crops.
+source in ~/Downloads). The stored event boxes are NOT in clip pixels: they are on the
+640x360 overlay canvas (letterboxed for non-16:9 clips, plate-only boxes padded to
+26 px - overlay_transform() in run_remote_detection.py). They are mapped back to the
+decoded frame with the inverse transform, so a 4K source gives sharper crops.
 There is NO fallback: a missing file, a file under videos-local/ or videos_720p/,
 or a frame smaller than clip.width x clip.height is reported and its events are
 not processed.
@@ -78,6 +80,8 @@ _PIPELINE = os.path.dirname(_HERE)
 _ROOT = os.path.dirname(_PIPELINE)
 if _PIPELINE not in sys.path:  # allow `python pipeline/detect/make_read_crops.py`
     sys.path.insert(0, _PIPELINE)
+
+from detect.run_remote_detection import overlay_transform  # noqa: E402  (same letterbox as the overlay)
 
 DEFAULT_EVENTS_DIR = os.path.join(_ROOT, "public", "detections")
 DEFAULT_OUT_DIR = os.path.join(DEFAULT_EVENTS_DIR, "crops")
@@ -134,6 +138,19 @@ def pad_box(box: dict, frame_w: int, frame_h: int, pad: dict) -> dict | None:
 
 def scale_box(box: dict, sx: float, sy: float) -> dict:
     return {"x": box["x"] * sx, "y": box["y"] * sy, "width": box["width"] * sx, "height": box["height"] * sy}
+
+
+def canvas_to_frame(box: dict, frame_w: int, frame_h: int) -> dict:
+    """Event boxes live on the 640x360 overlay canvas (letterboxed, see overlay_transform() in
+    run_remote_detection.py): frame = (canvas - offset) / scale."""
+    s, ox, oy = overlay_transform(frame_w, frame_h)
+    return {"x": (box["x"] - ox) / s, "y": (box["y"] - oy) / s, "width": box["width"] / s, "height": box["height"] / s}
+
+
+def frame_to_canvas(box: dict, frame_w: int, frame_h: int) -> dict:
+    """Forward overlay transform (frame pixels -> 640x360 canvas), without the overlay's min-size padding."""
+    s, ox, oy = overlay_transform(frame_w, frame_h)
+    return {"x": box["x"] * s + ox, "y": box["y"] * s + oy, "width": box["width"] * s, "height": box["height"] * s}
 
 
 def iou(a: dict, b: dict) -> float:
@@ -252,7 +269,6 @@ def process_event(
     frame,
     frame_index: int,
     detect: Callable[[Any], dict],
-    clip_size: tuple[int, int],
     key: str,
     cam_dir: str,
     write: Callable[[str, bytes], None],
@@ -261,7 +277,7 @@ def process_event(
 
     ``detect(frame)`` returns the normalised /v1/frame answer for the frame
     (boxes in pixels of ``answer["image"]``; ``frame`` itself is full resolution).
-    ``clip_size`` is the (width, height) the stored event boxes refer to.
+    The stored event boxes are on the 640x360 overlay canvas (letterboxed), NOT in clip pixels.
     """
     fh, fw = frame.shape[:2]
     answer = detect(frame)
@@ -274,7 +290,7 @@ def process_event(
         if d.get("plate_bbox"):
             d["plate_bbox"] = scale_box(d["plate_bbox"], *to_frame)
         dets.append(d)
-    event_box = scale_box(event["bbox"], fw / clip_size[0], fh / clip_size[1])
+    event_box = canvas_to_frame(event["bbox"], fw, fh)
     det = pick_detection(event, dets, event_box)
     if det is None:
         return {"status": "skipped", "reason": "no confident match in the model answer"}
@@ -290,7 +306,7 @@ def process_event(
     if vehicle is not None:
         entry["vehicle"] = f"{rel_dir}/{key}_vehicle.jpg"
         write(os.path.join(cam_dir, f"{key}_vehicle.jpg"), encode_thumb(vehicle))
-    pb = scale_box(det["plate_bbox"], clip_size[0] / fw, clip_size[1] / fh)  # back to the events' pixel space
+    pb = frame_to_canvas(det["plate_bbox"], fw, fh)  # manifest: same space as the events' bbox (overlay canvas)
     entry["plate_bbox"] = {k: round(v, 1) for k, v in pb.items()}
     entry["frame_time_sec"] = event["time_sec"]
     entry["frame_index"] = frame_index
@@ -424,7 +440,7 @@ def run(
                     continue
                 frame, idx = got
                 try:
-                    res = process_event(event, frame, idx, detect, clip_size, key, cam_dir, write)
+                    res = process_event(event, frame, idx, detect, key, cam_dir, write)
                 except Exception as e:  # network / API error: keep what is done, report, go on
                     log(f"{tag}: model API error: {e}")
                     failed += 1

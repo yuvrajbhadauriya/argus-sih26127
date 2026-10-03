@@ -68,36 +68,72 @@ def fake_jpeg(monkeypatch):
     monkeypatch.setattr(M, "encode_thumb", lambda img, *a, **k: b"JPEG%dx%d" % (img.shape[1], img.shape[0]))
 
 
-def test_process_event_scales_boxes_and_cuts_both_crops(fake_jpeg):
-    frame = np.zeros((720, 1280, 3), np.uint8)  # a 720p clip; events and the model are in 1080p space
-    ev = _event(bbox={"x": 300, "y": 300, "width": 300, "height": 150})
-    # model answered for a 1280x720 frame sent as-is
-    ans = {"image": {"width": 1280, "height": 720},
-           "detections": [_det("MH 02 GB 4920", {"x": 200, "y": 200, "width": 200, "height": 100}, {"x": 260, "y": 260, "width": 60, "height": 15})]}
+def _canvas(box, fw, fh):
+    """Forward overlay transform, written out independently of the code under test."""
+    s = min(640 / fw, 360 / fh)
+    ox, oy = (640 - fw * s) / 2, (360 - fh * s) / 2
+    return {"x": box["x"] * s + ox, "y": box["y"] * s + oy, "width": box["width"] * s, "height": box["height"] * s}
+
+
+@pytest.mark.parametrize("fw,fh", [(1920, 1080), (1440, 1080), (1080, 1920), (3840, 2160)])
+def test_event_boxes_are_on_the_letterboxed_overlay_canvas(fake_jpeg, monkeypatch, fw, fh):
+    """16:9, 4:3 (pillar-boxed), portrait and a 4K source: the crop is cut where the vehicle really is."""
+    frame = np.zeros((fh, fw, 3), np.uint8)
+    vbox = {"x": 0.30 * fw, "y": 0.40 * fh, "width": 0.20 * fw, "height": 0.20 * fh}
+    pbox = {"x": 0.34 * fw, "y": 0.55 * fh, "width": 0.06 * fw, "height": 0.02 * fh}
+    ev = _event(bbox=_canvas(vbox, fw, fh))
+    ans = {"image": {"width": fw, "height": fh}, "detections": [_det("MH 02 GB 4920", vbox, pbox)]}
+    cuts = []
+    orig = M.cut
+    monkeypatch.setattr(M, "cut", lambda frame_, box, pad: (cuts.append(box), orig(frame_, box, pad))[1])
     w = Writer()
-    res = M.process_event(ev, frame, 12, lambda f: ans, CLIP, "K", "/out/VP-01", w)
+    res = M.process_event(ev, frame, 12, lambda f: ans, "K", "/out/VP-01", w)
     assert res["status"] == "ok"
     e = res["entry"]
     assert e["plate"] == "VP-01/K_plate.jpg" and e["vehicle"] == "VP-01/K_vehicle.jpg"
     assert set(w.files) == {"/out/VP-01/K_plate.jpg", "/out/VP-01/K_vehicle.jpg"}
-    assert e["plate_bbox"] == {"x": 390.0, "y": 390.0, "width": 90.0, "height": 22.5}  # back in 1080p space
-    assert e["frame_time_sec"] == 0.4 and e["frame_index"] == 12
+    assert e["source_size"] == [fw, fh] and e["frame_time_sec"] == 0.4 and e["frame_index"] == 12
+    # the manifest plate box is back on the overlay canvas
+    want = _canvas(pbox, fw, fh)
+    assert {k: e["plate_bbox"][k] for k in want} == pytest.approx({k: round(v, 1) for k, v in want.items()}, abs=0.06)
+    # and the pixels cut are the detection's, not somewhere else
+    assert cuts[0] == pytest.approx(pbox) and cuts[1] == pytest.approx(vbox)
+
+
+def test_canvas_round_trip_and_wrong_scale_would_miss():
+    for fw, fh in [(1920, 1080), (1440, 1080), (1080, 1920)]:
+        box = {"x": 0.3 * fw, "y": 0.4 * fh, "width": 0.2 * fw, "height": 0.1 * fh}
+        back = M.canvas_to_frame(M.frame_to_canvas(box, fw, fh), fw, fh)
+        assert back == pytest.approx(box)
+    # a 4:3 frame is pillar-boxed (offset 80 px): scaling by clip size instead would be 80 canvas px off
+    assert M.frame_to_canvas({"x": 0, "y": 0, "width": 10, "height": 10}, 1440, 1080)["x"] == pytest.approx(80)
+
+
+def test_no_match_when_the_stored_box_is_elsewhere(fake_jpeg):
+    """A vehicle on the left of a 4:3 frame is not matched by a stored box on the right (no fabricated crop)."""
+    fw, fh = 1440, 1080
+    frame = np.zeros((fh, fw, 3), np.uint8)
+    far = {"x": 1000, "y": 700, "width": 200, "height": 100}
+    ev = _event(bbox=_canvas(far, fw, fh))
+    near = {"x": 100, "y": 100, "width": 200, "height": 100}
+    ans = {"image": {"width": fw, "height": fh}, "detections": [_det(None, near, {"x": 120, "y": 160, "width": 40, "height": 10})]}
+    assert M.process_event(ev, frame, 1, lambda f: ans, "K", "/o/C", Writer())["status"] == "skipped"
 
 
 def test_process_event_plate_only_detection_gives_no_vehicle_crop(fake_jpeg):
     frame = np.zeros((1080, 1920, 3), np.uint8)
-    ev = _event(bbox={"x": 100, "y": 100, "width": 60, "height": 30})
-    ans = {"image": {"width": 1920, "height": 1080},
-           "detections": [_det("MH 02 GB 4920", {"x": 100, "y": 100, "width": 60, "height": 30}, {"x": 100, "y": 100, "width": 60, "height": 30}, "plate")]}
+    plate = {"x": 300, "y": 300, "width": 78, "height": 78}
+    ev = _event(bbox=_canvas(plate, 1920, 1080))
+    ans = {"image": {"width": 1920, "height": 1080}, "detections": [_det("MH 02 GB 4920", plate, plate, "plate")]}
     w = Writer()
-    res = M.process_event(ev, frame, 1, lambda f: ans, CLIP, "K", "/o/C", w)
+    res = M.process_event(ev, frame, 1, lambda f: ans, "K", "/o/C", w)
     assert res["entry"]["vehicle"] is None and list(w.files) == ["/o/C/K_plate.jpg"]
 
 
 def test_process_event_without_match_is_skipped_and_writes_nothing(fake_jpeg):
     frame = np.zeros((1080, 1920, 3), np.uint8)
     w = Writer()
-    res = M.process_event(_event(), frame, 1, lambda f: {"image": {"width": 1920, "height": 1080}, "detections": []}, CLIP, "K", "/o/C", w)
+    res = M.process_event(_event(), frame, 1, lambda f: {"image": {"width": 1920, "height": 1080}, "detections": []}, "K", "/o/C", w)
     assert res["status"] == "skipped" and not w.files
 
 
