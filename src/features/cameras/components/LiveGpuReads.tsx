@@ -97,10 +97,6 @@ export function LiveGpuReads({ camera, live }: { camera: Camera; live: LiveAnprS
           ))}
         </ol>
       )}
-      <p className="border-t border-line px-3 py-2 text-2xs text-fg-subtle">
-        Frames of this feed are sent to the GPU ANPR model about once a second. Each crop is the region the model read in that frame
-        (OCR ≥ {MIN_PCT} %, valid Indian plate format).
-      </p>
     </Panel>
   );
 }

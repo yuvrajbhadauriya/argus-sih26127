@@ -68,6 +68,7 @@ describe('CameraAiPanel live ANPR', () => {
     expect(screen.getByRole('img', { name: /Plate MH 02 DJ 8770/ })).toBeInTheDocument();
     expect(screen.getByText('94%')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Trace MH 02 DJ 8770' })).toBeInTheDocument();
+    expect(screen.queryByText(/Frames of this feed are sent/)).toBeNull();
   });
 
   it('shows a placeholder instead of a crop when the model gave no box, and flags watchlist plates', () => {
@@ -82,6 +83,7 @@ describe('CameraAiPanel live ANPR', () => {
     mocks.live.mockReturnValue(state({ reads: [], frames: 2, latencyMs: 700 }));
     renderPanel();
     expect(screen.getByText('Analysing live frames…')).toBeInTheDocument();
+    expect(screen.queryByText(/Frames of this feed are sent/)).toBeNull();
   });
 
   it('falls back to the recorded reads, labelled as replayed, without an error line when the GPU model is unreachable', () => {
