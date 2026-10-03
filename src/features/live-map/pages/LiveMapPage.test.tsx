@@ -1,6 +1,6 @@
 // LiveMapPage: KPIs from the sim summary + alerts, rail tabs, ?cam= selection.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, within, waitFor } from '@testing-library/react';
+import { render, screen, within, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { useEffect, type ReactNode } from 'react';
@@ -29,6 +29,7 @@ vi.mock('@/features/detections/api', async (orig) => ({
 import { LiveMapPage } from './LiveMapPage';
 import { clearCamerasCache } from '@/features/cameras/hooks/useCameras';
 import { clearSimSummaryCache } from '../api';
+import { resetReadCrops } from '@/features/detections/lib/readCrops';
 
 const cam = (over: Partial<Camera>): Camera => ({
   id: 'cam-001', name: 'Jogeshwari JVLR Junction', code: 'JG-01', latitude: 19.14, longitude: 72.85,
@@ -36,6 +37,20 @@ const cam = (over: Partial<Camera>): Camera => ({
 });
 
 const SUMMARY = { simulated: true, stats: { vehicles: 2577, journeys: 1, sightings: 1, hop_speed_kmph: { mean: 22.3 }, sightings_per_hour: new Array(24).fill(321) } };
+
+// Fixture figures, deliberately not the real ones: the tile must show whatever the file says.
+const GOLDEN = { set: 'ocr_golden_v1', measured_at: '2026-09-30T22:17:01+05:30', overall: { n: 200, correct: 150, accuracy: 0.75 }, items: [{ key: 'a', gt: 'MH02AB1234', pred: 'MH02AB1234' }] };
+const CROPS = { crops: { 'JG-01_trk_3_3000': { vehicle: 'JG-01/JG-01_trk_3_3000_vehicle.jpg', plate: 'JG-01/JG-01_trk_3_3000_plate.jpg' } } };
+
+function stubFetch(over: Record<string, () => Response> = {}) {
+  vi.stubGlobal('fetch', vi.fn((url: string) => {
+    const hit = Object.entries(over).find(([k]) => String(url).includes(k));
+    if (hit) return Promise.resolve(hit[1]());
+    if (String(url).includes('/golden/')) return Promise.resolve(new Response(JSON.stringify(GOLDEN)));
+    if (String(url).includes('/detections/crops/')) return Promise.resolve(new Response('', { status: 404 }));
+    return Promise.resolve(new Response(JSON.stringify(SUMMARY)));
+  }));
+}
 
 let location = '';
 function LocationSpy() {
@@ -65,7 +80,8 @@ beforeEach(() => {
     { id: 'a2', plate_text: 'MH43BM3816', camera_id: 'cam-002', camera_name: 'Andheri Flyover', priority: 'high', timestamp: '2026-09-30T11:00:00Z', lat: 19.12, lng: 72.85, acknowledged: false },
     { id: 'a3', plate_text: 'GJ01JK6763', camera_id: 'cam-002', camera_name: 'Andheri Flyover', priority: 'low', timestamp: '2026-09-30T11:00:00Z', lat: 19.12, lng: 72.85, acknowledged: true },
   ]);
-  vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(JSON.stringify(SUMMARY)))));
+  resetReadCrops();
+  stubFetch();
   const ev = (t: number, plate: string | null, conf: number) => ({
     camera_code: 'JG-01', tracked_vehicle_id: `trk_${t}`, plate_text: plate, plate_read: null, plate_confidence: conf, grammar_valid: !!plate,
     vehicle_type: 'car', vehicle_class: 'Car', time_sec: t, bbox: { x: 0, y: 0, width: 10, height: 10 },
@@ -130,6 +146,54 @@ describe('LiveMapPage', () => {
     expect(within(list).queryByText('MH 01 AB 1234')).toBeNull(); // below 75 %
     expect(screen.getByText('Real ANPR reads')).toBeInTheDocument();
     await waitFor(() => expect(within(list).getAllByText('Critical').length).toBeGreaterThan(0));
+  });
+
+  it('shows real vehicle + plate crops on rows that have them, the plain row otherwise', async () => {
+    stubFetch({ '/detections/crops/manifest.json': () => new Response(JSON.stringify(CROPS)) });
+    renderAt('/');
+    await screen.findByText('1/2');
+    const list = await screen.findByRole('list', { name: 'Latest plate reads' });
+    await waitFor(() => expect(within(list).getAllByRole('img', { name: /Plate crop for MH 02 GB 4920/ }).length).toBeGreaterThan(0));
+    expect(within(list).getAllByRole('img', { name: /Vehicle MH 02 GB 4920/ })[0]).toHaveAttribute('src', '/detections/crops/JG-01/JG-01_trk_3_3000_vehicle.jpg');
+    expect(within(list).getAllByText('MH 02 GB 4920').length).toBeGreaterThan(0); // OCR text kept
+    expect(screen.getByText('Real ANPR reads')).toBeInTheDocument();
+  });
+
+  it('renders the plain rows (no images) when the crop manifest is missing', async () => {
+    renderAt('/');
+    await screen.findByText('1/2');
+    const list = await screen.findByRole('list', { name: 'Latest plate reads' });
+    expect(within(list).getAllByText('MH 02 GB 4920').length).toBeGreaterThan(0);
+    expect(within(list).queryAllByRole('img', { name: /^(Plate crop for|Vehicle )/ })).toHaveLength(0);
+    expect(within(list).queryByText('no crop')).toBeNull();
+  });
+
+  it('falls back to the no-crop tile when a crop file fails to load', async () => {
+    stubFetch({ '/detections/crops/manifest.json': () => new Response(JSON.stringify(CROPS)) });
+    renderAt('/');
+    const list = await screen.findByRole('list', { name: 'Latest plate reads' });
+    const img = (await within(list).findAllByRole('img', { name: /Plate crop/ }))[0];
+    fireEvent.error(img);
+    await waitFor(() => expect(within(list).getAllByText('no crop').length).toBeGreaterThan(0));
+  });
+
+  it('shows the golden-set plate OCR accuracy read from the results file, linking to /accuracy', async () => {
+    renderAt('/');
+    expect(await screen.findByText('75.00%')).toBeInTheDocument();
+    expect(screen.getByText('Model accuracy')).toBeInTheDocument();
+    expect(screen.getByText(/Plate OCR accuracy · golden set · readable plates · n = 200/)).toBeInTheDocument();
+    expect(screen.getByText(/Measured 30 Sept 2026 · exact match/)).toBeInTheDocument();
+    expect(screen.queryByText(/end-to-end/i)).toBeNull();
+    expect(screen.getByTitle(/150 of 200 readable plate crops read exactly right/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /Model accuracy/ }));
+    expect(location).toBe('/accuracy');
+  });
+
+  it('shows a dash instead of a figure when the golden results are not published', async () => {
+    stubFetch({ '/golden/': () => new Response('', { status: 404 }) });
+    renderAt('/');
+    expect(await screen.findByText('Golden-set results unavailable')).toBeInTheDocument();
+    expect(screen.queryByText('75.00%')).toBeNull();
   });
 
   it('popup links open the feed', async () => {

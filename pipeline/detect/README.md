@@ -182,3 +182,13 @@ key rejected — there is no silent fallback.
 python3 pipeline/detect/mock_model_server.py --port 8766 --api_key dev-key
 DETECTION_API_URL=http://127.0.0.1:8766/v1/frame DETECTION_API_KEY=dev-key npm run dev
 ```
+
+## Crops for the recorded reads (`make_read_crops.py`)
+
+The Live Map feed replays the good reads of `public/detections/events_<CAM>.json`, which carry no crops.
+`make_read_crops.py` decodes each good read's frame from the local clip (`public/videos-local/`, see
+`pipeline/tools/link_local_videos.py`), asks the model API (`/v1/frame`) for the plate box, and writes real
+vehicle + plate JPEGs to `public/detections/crops/<CAM>/` plus `public/detections/crops/manifest.json`.
+Event key: `<CAM>_<tracked_vehicle_id>_<round(time_sec*1000)>` (same rule in `src/features/detections/lib/readCrops.ts`).
+Resumable (re-runs only what is missing), `--dry-run`, `--camera VP-01`, `--force`, `--retry-skipped`.
+Review the crops before committing them; the front-end shows no crop for reads without one.

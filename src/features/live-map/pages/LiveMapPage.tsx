@@ -5,13 +5,16 @@
 
 import { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { CarIcon, CctvIcon, GaugeIcon, LocateFixedIcon, ScanLineIcon, SirenIcon, TagIcon, TargetIcon } from 'lucide-react';
+import { CarIcon, CctvIcon, GaugeIcon, LocateFixedIcon, ScanLineIcon, ScanTextIcon, SirenIcon, TagIcon, TargetIcon } from 'lucide-react';
 import type { Camera } from '@/types/camera';
 import { useCameras } from '@/features/cameras/hooks/useCameras';
 import type { LiveFeedEntry } from '@/mocks/fixtures/mockLiveFeed';
 import { useLiveReads } from '@/features/detections/hooks/useLiveReads';
 import { useWatchlistIndex } from '@/features/detections/hooks/useWatchlistKeys';
 import { plateKey } from '@/features/detections/lib/log';
+import { useGoldenResults } from '@/features/golden-set/api';
+import { fmtInt, fmtMeasuredDate, pct } from '@/features/golden-set/lib/results';
+import { eventKey, useReadCrops } from '@/features/detections/lib/readCrops';
 import { DEFAULT_MAP_CENTER, SECTOR_LABEL } from '@/config/constants';
 import { SimulationBadge } from '@/features/vehicles/components/SimulationBadge';
 import { ReplayControls } from '@/features/replay/ReplayControls';
@@ -55,6 +58,7 @@ export function LiveMapPage() {
   const [params, setParams] = useSearchParams();
   const { cameras, loading, error, refetch } = useCameras();
   const { summary, alerts } = useLiveMapData();
+  const golden = useGoldenResults();
 
   const [showCameras, setShowCameras] = useState(true);
   const [showLabels, setShowLabels] = useState(true);
@@ -87,18 +91,23 @@ export function LiveMapPage() {
   // Real model reads on the camera clips, streaming on each camera's live clock.
   const { reads: liveReads, now } = useLiveReads(null, { limit: 40 });
   const watch = useWatchlistIndex();
+  const crops = useReadCrops();
   const realFeed = useMemo<LiveFeedEntry[]>(() => {
     const names = new Map(cameras.map((c) => [c.code, c.name]));
-    return liveReads.map((r) => ({
-      id: r.key,
-      plate: r.event.plate_text!,
-      cameraCode: r.camera_code,
-      cameraName: names.get(r.camera_code) ?? r.camera_code,
-      confidence: Math.round((r.event.plate_confidence ?? 0) * 100),
-      secondsAgo: Math.max(0, Math.round((now - r.at) / 1000)),
-      watchlist: watch.get(plateKey(r.event.plate_text!)) ?? null,
-    }));
-  }, [liveReads, now, cameras, watch]);
+    return liveReads.map((r) => {
+      const crop = crops.get(eventKey(r.camera_code, r.event.tracked_vehicle_id, r.event.time_sec));
+      return {
+        id: r.key,
+        plate: r.event.plate_text!,
+        cameraCode: r.camera_code,
+        cameraName: names.get(r.camera_code) ?? r.camera_code,
+        confidence: Math.round((r.event.plate_confidence ?? 0) * 100),
+        secondsAgo: Math.max(0, Math.round((now - r.at) / 1000)),
+        watchlist: watch.get(plateKey(r.event.plate_text!)) ?? null,
+        ...(crop ? { vehicleCrop: crop.vehicle ?? undefined, plateCrop: crop.plate } : {}),
+      };
+    });
+  }, [liveReads, now, cameras, watch, crops]);
   const feed = replay.feed ?? realFeed;
   // Marker popups: each camera's latest read (replay clock during a replay).
   const plates = useMemo(() => {
@@ -118,7 +127,7 @@ export function LiveMapPage() {
   return (
     <Page fullBleed>
       <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(420px,1fr)] gap-3 lg:grid-cols-[minmax(0,1fr)_360px] lg:grid-rows-[auto_minmax(0,1fr)]">
-        <KpiStrip className="lg:col-span-2">
+        <KpiStrip cols={6} className="lg:col-span-2">
           <KpiTile
             label="Cameras online"
             value={`${online}/${total}`}
@@ -167,6 +176,31 @@ export function LiveMapPage() {
             hint={summary.error ? 'Summary unavailable' : simHint}
             loading={summary.loading}
           />
+          <div
+            className="min-w-0 [&>*]:h-full"
+            title={
+              golden.data
+                ? `Measured ${fmtMeasuredDate(golden.data.measuredAt)} on the ${golden.data.set} golden set: ${fmtInt(golden.data.overall.correct)} of ${fmtInt(golden.data.overall.n)} readable plate crops read exactly right (whole plate, spaces ignored; one wrong character = wrong). Plate crops only - not accuracy on camera video. Click for the full proof.`
+                : 'Plate OCR accuracy on the golden set - see /accuracy'
+            }
+          >
+            <KpiTile
+              label="Model accuracy"
+              value={golden.data ? `${pct(golden.data.overall.accuracy)}%` : '—'}
+              icon={<ScanTextIcon size={16} />}
+              tone="info"
+              hint={
+                golden.data ? (
+                  <span className="flex flex-col">
+                    <span>Plate OCR accuracy · golden set · readable plates · n = {fmtInt(golden.data.overall.n)}</span>
+                    <span className="text-2xs text-fg-subtle">Measured {fmtMeasuredDate(golden.data.measuredAt)} · exact match</span>
+                  </span>
+                ) : golden.error ? 'Golden-set results unavailable' : undefined
+              }
+              loading={golden.loading}
+              onClick={() => navigate('/accuracy')}
+            />
+          </div>
         </KpiStrip>
 
         <Panel flush className="min-h-[420px]" bodyClassName="relative">
