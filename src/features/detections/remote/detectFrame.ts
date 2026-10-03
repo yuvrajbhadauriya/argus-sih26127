@@ -72,8 +72,23 @@ export interface CaptureOptions {
   quality?: number;
 }
 
+/** A captured frame plus the canvas it was drawn on (the exact pixels that are sent to the model). */
+export interface CapturedFrameWithCanvas extends CapturedFrame {
+  canvas: HTMLCanvasElement;
+}
+
 /** Draws the current video frame onto a canvas and encodes it as JPEG. */
 export function captureVideoFrame(video: HTMLVideoElement, options: CaptureOptions = {}): CapturedFrame {
+  const { canvas: _canvas, ...frame } = captureVideoFrameWithCanvas(video, options);
+  return frame;
+}
+
+/**
+ * Like captureVideoFrame, but keeps the canvas so plate crops can be cut from
+ * the very frame the model analysed (not from a later frame the video has
+ * moved on to while the request was in flight).
+ */
+export function captureVideoFrameWithCanvas(video: HTMLVideoElement, options: CaptureOptions = {}): CapturedFrameWithCanvas {
   const { maxWidth = 1280, quality = 0.85 } = options;
   const vw = video.videoWidth;
   const vh = video.videoHeight;
@@ -107,7 +122,7 @@ export function captureVideoFrame(video: HTMLVideoElement, options: CaptureOptio
   if (!dataUrl.startsWith('data:image/jpeg')) {
     throw new DetectFrameError('encode', 'This browser could not encode the frame as JPEG.');
   }
-  return { dataUrl, width, height, timestampSec: Math.round(video.currentTime * 1000) / 1000 };
+  return { dataUrl, width, height, timestampSec: Math.round(video.currentTime * 1000) / 1000, canvas };
 }
 
 export interface DetectFrameOptions extends CaptureOptions {

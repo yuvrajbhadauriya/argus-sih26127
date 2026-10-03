@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { captureVideoFrame, detectCapturedFrame, DetectFrameError } from './detectFrame';
+import { captureVideoFrame, captureVideoFrameWithCanvas, detectCapturedFrame, DetectFrameError } from './detectFrame';
 
 function fakeVideo(opts: { width?: number; height?: number; readyState?: number; currentTime?: number } = {}) {
   const video = document.createElement('video');
@@ -37,6 +37,16 @@ describe('captureVideoFrame', () => {
     const frame = captureVideoFrame(fakeVideo(), { maxWidth: 1280 });
     expect(frame).toEqual({ dataUrl: 'data:image/jpeg;base64,AAAA', width: 1280, height: 720, timestampSec: 2.5 });
     expect(ctx.drawImage).toHaveBeenCalled();
+  });
+
+  it('can also hand back the canvas of the frame that was encoded (for plate crops)', () => {
+    stubCanvas(() => 'data:image/jpeg;base64,AAAA');
+    const frame = captureVideoFrameWithCanvas(fakeVideo(), { maxWidth: 1280 });
+    expect(frame.canvas).toBeInstanceOf(HTMLCanvasElement);
+    expect([frame.canvas.width, frame.canvas.height]).toEqual([1280, 720]);
+    expect(frame).toMatchObject({ dataUrl: 'data:image/jpeg;base64,AAAA', width: 1280, height: 720, timestampSec: 2.5 });
+    // the plain capture stays canvas-free
+    expect(captureVideoFrame(fakeVideo())).not.toHaveProperty('canvas');
   });
 
   it('rejects videos that are not ready', () => {

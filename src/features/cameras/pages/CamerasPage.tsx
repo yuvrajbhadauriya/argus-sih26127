@@ -301,6 +301,7 @@ function CameraWorkspace({ camera, wall, watchlist }: { camera: Camera; wall: Re
         detections={detections}
         resolution={resolution}
         lastFrameAt={lastFrameAt}
+        video={video}
       />
     </div>
   );

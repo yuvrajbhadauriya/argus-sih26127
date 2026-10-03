@@ -15,11 +15,13 @@ import { StatusPill } from '@/shared/ui/StatusPill';
 import { normalizePlate } from '@/shared/lib/plate';
 import { AiEngineStatusPill } from '@/features/ai-engine/components/AiEngineStatus';
 import { useLiveReads } from '@/features/detections/hooks/useLiveReads';
+import { useLiveAnpr, type LiveAnprState } from '@/features/detections/hooks/useLiveAnpr';
 import { useWatchlistIndex } from '@/features/detections/hooks/useWatchlistKeys';
 import { DISPLAY_READ_MIN_CONFIDENCE } from '@/features/detections/api';
 import { plateKey } from '@/features/detections/lib/log';
 import { formatIstTime } from '@/features/live-map/lib/time';
 import type { FeedStatus } from './CameraVideoPlayer';
+import { LiveGpuReads } from './LiveGpuReads';
 
 interface CameraAiPanelProps {
   camera: Camera;
@@ -27,6 +29,8 @@ interface CameraAiPanelProps {
   detections: Detection[];
   resolution: string | null;
   lastFrameAt: number | null;
+  /** The playing <video>; live GPU ANPR analyses its frames. */
+  video?: HTMLVideoElement | null;
 }
 
 function HealthRow({ label, children }: { label: string; children: React.ReactNode }) {
@@ -40,7 +44,14 @@ function HealthRow({ label, children }: { label: string; children: React.ReactNo
 
 const MIN_PCT = Math.round(DISPLAY_READ_MIN_CONFIDENCE * 100);
 
-export function LivePlateReads({ camera }: { camera: Camera }) {
+/** One line telling why the recorded reads are shown instead of the live GPU reads. */
+function liveNotice(live: LiveAnprState): string | null {
+  if (live.status === 'connecting') return 'Connecting to the live GPU model…';
+  if (live.status === 'unavailable') return 'Live GPU model not reachable from here — showing the recorded reads of this clip.';
+  return null;
+}
+
+export function LivePlateReads({ camera, notice }: { camera: Camera; notice?: string | null }) {
   const navigate = useNavigate();
   const watch = useWatchlistIndex();
   const { reads, docs, loading, now } = useLiveReads(camera.code, { limit: 25 });
@@ -100,6 +111,7 @@ export function LivePlateReads({ camera }: { camera: Camera }) {
           })}
         </ol>
       )}
+      {notice && <p className="border-t border-line px-3 py-2 text-2xs text-warning">{notice}</p>}
       <p className="border-t border-line px-3 py-2 text-2xs text-fg-subtle">
         Real reads by the AI ANPR engine on this clip (OCR ≥ {MIN_PCT} %, valid Indian plate format), replayed on the camera&apos;s live clock.
       </p>
@@ -107,15 +119,17 @@ export function LivePlateReads({ camera }: { camera: Camera }) {
   );
 }
 
-export function CameraAiPanel({ camera, feedStatus, detections, resolution, lastFrameAt }: CameraAiPanelProps) {
+export function CameraAiPanel({ camera, feedStatus, detections, resolution, lastFrameAt, video = null }: CameraAiPanelProps) {
   const vehicles = useMemo(() => new Set(detections.map((d) => d.tracked_vehicle_id ?? d.event_id)).size, [detections]);
   const status = feedStatus === 'offline' ? 'offline' : feedStatus === 'playing' ? 'live' : 'connecting';
+  // Real-time ANPR on the playing feed; falls back to the recorded reads when the GPU model cannot be reached.
+  const live = useLiveAnpr(feedStatus === 'playing' ? video : null, camera.code);
 
   return (
     <div className="flex min-w-0 flex-col gap-4">
       <AiEngineStatusPill variant="panel" />
 
-      <LivePlateReads camera={camera} />
+      {live.status === 'live' ? <LiveGpuReads camera={camera} live={live} /> : <LivePlateReads camera={camera} notice={liveNotice(live)} />}
 
       <Panel title="Camera health">
         <dl className="divide-y divide-line">

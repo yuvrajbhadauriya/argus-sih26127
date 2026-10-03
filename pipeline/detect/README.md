@@ -89,6 +89,27 @@ remain as a fallback for other servers.
 | `DETECTION_API_HEALTH_URL` | `<origin>/health` | Probe used by `/api/health` |
 | `DETECTION_API_REQUEST_FORMAT` | `raw` | Legacy servers only: `multipart` · `json` |
 
+## Live ANPR on the Cameras page (real-time crops + OCR)
+
+While the selected feed plays, the Cameras page runs **real-time ANPR on it**: it captures the
+current frame, posts it to `/api/detect` (→ the GPU model), and every good read (OCR ≥ 75 % **and**
+valid plate grammar) comes back with its plate box. The **plate is cropped from that same frame**
+(`src/features/detections/remote/plateCrop.ts`) and shown next to the vehicle crop, the OCR text and
+the confidence in the *Live plate reads* panel. Details:
+
+- One request in flight at a time (the GPU is shared), started at most once a second, only while the
+  video is playing in a visible tab (`useLiveAnpr.ts`). Only the selected feed is analysed, not the wall.
+- One row per vehicle: repeat sightings of a plate (one character of OCR jitter allowed) within 20 s
+  are merged and the most confident crop is kept (`liveAnpr.ts`).
+- When `/api/detect` cannot reach the model (503/502/network — e.g. the Vercel deployment) the panel
+  falls back to the **recorded reads** of the clip with a visible note, and retries slowly
+  (60 s when it is simply not configured), so it recovers by itself when the GPU box is reachable.
+- Crops are cut from the 720p stream the browser plays. Plates that are tiny in that frame stay
+  small; the offline pipeline (below) analyses the 1080p originals.
+
+To demo it you must run the dashboard where the model API is reachable (`npm run dev` on the team
+network / Tailscale, see below) — a Vercel deployment cannot reach it.
+
 ## Local dev: Live detect
 
 `npm run dev` mounts `/api/detect` and `/api/health` through
@@ -106,7 +127,7 @@ curl -s localhost:5173/api/health     # {"ok":true,"engine":"lpu_on_gpu",…}
 
 **Vercel:** functions run in Vercel's cloud and cannot reach a Tailscale-only
 host, so the variables stay unset there; `/api/detect` answers 503 and the
-Live-detect panel reports "the ANPR model API is LAN/VPN-only". Only set them on
+Live plate reads panel falls back to the recorded reads ("Live GPU model not reachable from here"). Only set them on
 Vercel if the team runs a private, authenticated tunnel it controls.
 
 ## Batch pipeline → `public/detections`
